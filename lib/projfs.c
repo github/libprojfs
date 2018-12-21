@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>  // TODO: remove unless using strsignal()
+#include <errno.h>
 
 #include <fuse3/fuse_opt.h>
 
@@ -42,9 +43,10 @@
 static void projfs_ll_lookup(fuse_req_t req, fuse_ino_t parent,
 			     const char *name)
 {
-	(void) req;
 	(void) parent;
 	(void) name;
+
+  fuse_reply_err(req, ENOENT);
 }
 
 static struct fuse_lowlevel_ops ll_ops = {
