@@ -25,8 +25,10 @@ test_expect_success 'create source tree' '
 '
 
 test_expect_success 'check target tree structure' '
-	test_path_is_dir target/d1
+	test_path_is_dir target/d1 &&
+	test_path_is_dir target/d1/d2
 '
+
 projfs_stop || exit 1
 
 test_done
