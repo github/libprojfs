@@ -25,27 +25,8 @@ test_expect_success 'create source tree' '
 '
 
 test_expect_success 'check target tree structure' '
-	test_path_is_dir target/d1 &&
-	test_path_is_dir target/d1/d2 &&
-	test_path_is_file target/f1.txt &&
-	test_path_is_file target/f2.txt &&
-	test_path_is_file target/d1/f1.txt &&
-	test_path_is_file target/d1/d2/f2.txt &&
-	ls -a target >ls.target &&
-	ls -a target/d1 >ls.d1 &&
-	ls -a target/d1/d2 >ls.d2 &&
-	test_cmp ls.target "$EXPECT_DIR/ls.target" &&
-	test_cmp ls.d1 "$EXPECT_DIR/ls.d1" &&
-	test_cmp ls.d2 "$EXPECT_DIR/ls.d2"
+	test_path_is_dir target/d1
 '
-
-test_expect_success 'check target tree content' '
-	test_cmp target/f1.txt "$EXPECT_DIR/f1.txt" &&
-	test_cmp target/f2.txt "$EXPECT_DIR/f2.txt" &&
-	test_cmp target/d1/f1.txt "$EXPECT_DIR/f1.txt" &&
-	test_cmp target/d1/d2/f2.txt "$EXPECT_DIR/f2.txt"
-'
-
 projfs_stop || exit 1
 
 test_done

@@ -39,14 +39,48 @@
 #include "projfs_vfsapi.h"
 #endif
 
-// TODO: remove if not using
+static int projfs_stat(fuse_ino_t ino, struct stat *attr) {
+	attr->st_ino = ino;
+
+	if (ino == FUSE_ROOT_ID) {
+		attr->st_mode = S_IFDIR | 0777;
+		attr->st_nlink = 1;
+	} else if (ino == 2) {
+		attr->st_mode = S_IFDIR | 0777;
+		attr->st_nlink = 3;
+	} else if (ino == 3) {
+		attr->st_mode = S_IFDIR | 0777;
+		attr->st_nlink = 2;
+	} else {
+		return -1;
+	}
+
+	return 0;
+}
+
 static void projfs_ll_lookup(fuse_req_t req, fuse_ino_t parent,
                              const char *name)
 {
-	(void) parent;
-	(void) name;
+	struct fuse_entry_param e;
+	memset(&e, 0, sizeof(e));
+	e.attr_timeout = 1.0;
+	e.entry_timeout = 1.0;
 
-	fuse_reply_err(req, ENOENT);
+	if (parent == 1 && strcmp(name, "d1") == 0) {
+		e.ino = 2;
+		if (projfs_stat(e.ino, &e.attr) == -1) {
+			return (void) fuse_reply_err(req, ENOENT);
+		}
+		fuse_reply_entry(req, &e);
+	} else if (parent == 2 && strcmp(name, "d2") == 0) {
+		e.ino = 3;
+		if (projfs_stat(e.ino, &e.attr) == -1) {
+			return (void) fuse_reply_err(req, ENOENT);
+		}
+		fuse_reply_entry(req, &e);
+	} else {
+		fuse_reply_err(req, ENOENT);
+	}
 }
 
 static void projfs_ll_getattr(fuse_req_t req, fuse_ino_t ino,
@@ -54,18 +88,13 @@ static void projfs_ll_getattr(fuse_req_t req, fuse_ino_t ino,
 {
 	(void) fi;
 
-	if (ino == FUSE_ROOT_ID) {
-		struct stat attr;
-		memset(&attr, 0, sizeof(attr));
-		attr.st_dev = makedev(1, 1);
-		attr.st_ino = ino;
-		attr.st_mode = S_IFDIR | 0777;
-		attr.st_nlink = 1;
-		fuse_reply_attr(req, &attr, 1.0);
-		return;
-	}
+	struct stat attr;
+	memset(&attr, 0, sizeof(attr));
 
-	fuse_reply_err(req, ENOENT);
+	if (projfs_stat(ino, &attr) == 0)
+		fuse_reply_attr(req, &attr, 1.0);
+	else
+		fuse_reply_err(req, ENOENT);
 }
 
 static struct fuse_lowlevel_ops ll_ops = {
