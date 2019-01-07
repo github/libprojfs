@@ -41,16 +41,36 @@
 
 // TODO: remove if not using
 static void projfs_ll_lookup(fuse_req_t req, fuse_ino_t parent,
-			     const char *name)
+                             const char *name)
 {
 	(void) parent;
 	(void) name;
 
-  fuse_reply_err(req, ENOENT);
+	fuse_reply_err(req, ENOENT);
+}
+
+static void projfs_ll_getattr(fuse_req_t req, fuse_ino_t ino,
+                              struct fuse_file_info *fi)
+{
+	(void) fi;
+
+	if (ino == FUSE_ROOT_ID) {
+		struct stat attr;
+		memset(&attr, 0, sizeof(attr));
+		attr.st_dev = makedev(1, 1);
+		attr.st_ino = ino;
+		attr.st_mode = S_IFDIR | 0777;
+		attr.st_nlink = 1;
+		fuse_reply_attr(req, &attr, 1.0);
+		return;
+	}
+
+	fuse_reply_err(req, ENOENT);
 }
 
 static struct fuse_lowlevel_ops ll_ops = {
-	.lookup		= projfs_ll_lookup
+	.lookup		= projfs_ll_lookup,
+	.getattr	= projfs_ll_getattr,
 };
 
 #ifdef PROJFS_DEBUG
