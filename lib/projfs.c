@@ -67,26 +67,6 @@ static struct projfs_node *find_node(struct projfs *fs, ino_t ino, dev_t dev)
 	return node;
 }
 
-static int projfs_stat(fuse_ino_t ino, struct stat *attr)
-{
-	attr->st_ino = ino;
-
-	if (ino == FUSE_ROOT_ID) {
-		attr->st_mode = S_IFDIR | 0777;
-		attr->st_nlink = 1;
-	} else if (ino == 2) {
-		attr->st_mode = S_IFDIR | 0777;
-		attr->st_nlink = 3;
-	} else if (ino == 3) {
-		attr->st_mode = S_IFDIR | 0777;
-		attr->st_nlink = 2;
-	} else {
-		return -1;
-	}
-
-	return 0;
-}
-
 static void projfs_ll_lookup(fuse_req_t req, fuse_ino_t parent,
                              const char *name)
 {
@@ -147,15 +127,17 @@ static void projfs_ll_lookup(fuse_req_t req, fuse_ino_t parent,
 static void projfs_ll_getattr(fuse_req_t req, fuse_ino_t ino,
                               struct fuse_file_info *fi)
 {
+	int fd = ino_node(req, ino)->fd;
+	int res;
+	struct stat attr;
+
 	(void) fi;
 
-	struct stat attr;
-	memset(&attr, 0, sizeof(attr));
+	res = fstatat(fd, "", &attr, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
+	if (res == -1)
+		return (void)fuse_reply_err(req, errno);
 
-	if (projfs_stat(ino, &attr) == 0)
-		fuse_reply_attr(req, &attr, 1.0);
-	else
-		fuse_reply_err(req, ENOENT);
+	fuse_reply_attr(req, &attr, 1.0);
 }
 
 static struct fuse_lowlevel_ops ll_ops = {
