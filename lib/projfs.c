@@ -67,51 +67,47 @@ static struct projfs_node *find_node(struct projfs *fs, ino_t ino, dev_t dev)
 	return node;
 }
 
-static void projfs_ll_lookup(fuse_req_t req, fuse_ino_t parent,
-                             const char *name)
+static int lookup_param(fuse_req_t req, fuse_ino_t parent, char const *name,
+                        struct fuse_entry_param *e)
 {
+
 	int err;
-	struct fuse_entry_param e;
 	struct projfs_node *node;
 	struct projfs *fs = req_fs(req);
 
-	memset(&e, 0, sizeof(e));
-	e.attr_timeout = 1.0;
-	e.entry_timeout = 1.0;
+	memset(e, 0, sizeof(*e));
+	e->attr_timeout = 1.0;
+	e->entry_timeout = 1.0;
 
 	int fd = openat(ino_node(req, parent)->fd, name, O_PATH | O_NOFOLLOW);
 	if (fd == -1) {
-		fuse_reply_err(req, errno);
-		return;
+		return errno;
 	}
 
-	err = fstatat(fd, "", &e.attr, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
+	err = fstatat(fd, "", &e->attr, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
 	if (err == -1) {
 		err = errno;
 		close(fd);
-		fuse_reply_err(req, err);
-		return;
+		return err;
 	}
 
-	node = find_node(fs, e.attr.st_ino, e.attr.st_dev);
+	node = find_node(fs, e->attr.st_ino, e->attr.st_dev);
 	if (node) {
 		close(fd);
-		e.ino = (uintptr_t)node;
-		fuse_reply_entry(req, &e);
-		return;
+		e->ino = (uintptr_t)node;
+		return 0;
 	}
 
 	node = calloc(1, sizeof(*node));
 	if (!node) {
 		close(fd);
-		fuse_reply_err(req, ENOMEM);
-		return;
+		return ENOMEM;
 	}
 
-	e.ino = (uintptr_t)node;
+	e->ino = (uintptr_t)node;
 	node->fd = fd;
-	node->ino = e.attr.st_ino;
-	node->dev = e.attr.st_dev;
+	node->ino = e->attr.st_ino;
+	node->dev = e->attr.st_dev;
 
 	pthread_mutex_lock(&fs->mutex);
 	node->next = fs->root.next;
@@ -121,7 +117,18 @@ static void projfs_ll_lookup(fuse_req_t req, fuse_ino_t parent,
 	node->prev = &fs->root;
 	pthread_mutex_unlock(&fs->mutex);
 	
-	fuse_reply_entry(req, &e);
+	return 0;
+}
+
+static void projfs_ll_lookup(fuse_req_t req, fuse_ino_t parent,
+                             const char *name)
+{
+	struct fuse_entry_param e;
+	int res = lookup_param(req, parent, name, &e);
+	if (res == 0)
+		fuse_reply_entry(req, &e);
+	else
+		fuse_reply_err(req, res);
 }
 
 static void projfs_ll_getattr(fuse_req_t req, fuse_ino_t ino,
@@ -172,6 +179,20 @@ static void projfs_ll_release(fuse_req_t req, fuse_ino_t ino,
 	(void)ino;
 	close(fi->fh);
 	fuse_reply_err(req, 0);
+}
+
+static void projfs_ll_mkdir(fuse_req_t req, fuse_ino_t parent,
+                            char const *name, mode_t mode)
+{
+	struct fuse_entry_param e;
+	int res = mkdirat(ino_node(req, parent)->fd, name, mode);
+	if (res == -1)
+		return (void)fuse_reply_err(req, errno);
+	res = lookup_param(req, parent, name, &e);
+	if (res == 0)
+		fuse_reply_entry(req, &e);
+	else
+		fuse_reply_err(req, res);
 }
 
 static void projfs_ll_opendir(fuse_req_t req, fuse_ino_t ino,
@@ -279,7 +300,7 @@ static struct fuse_lowlevel_ops ll_ops = {
 // 	.write		= projfs_ll_write,
 	.release	= projfs_ll_release,
 // 	.unlink		= projfs_ll_unlink,
-// 	.mkdir		= projfs_ll_mkdir,
+	.mkdir		= projfs_ll_mkdir,
 // 	.rmdir		= projfs_ll_rmdir,
 	.opendir	= projfs_ll_opendir,
 	.readdir	= projfs_ll_readdir,
