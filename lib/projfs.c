@@ -147,6 +147,26 @@ static void projfs_ll_getattr(fuse_req_t req, fuse_ino_t ino,
 	fuse_reply_attr(req, &attr, 1.0);
 }
 
+static void projfs_ll_create(fuse_req_t req, fuse_ino_t parent,
+                             char const *name, mode_t mode,
+                             struct fuse_file_info *fi)
+{
+	struct fuse_entry_param e;
+	int fd, res;
+
+	fd = openat(ino_node(req, parent)->fd, name,
+	            (fi->flags | O_CREAT) & ~O_NOFOLLOW, mode);
+	if (fd == -1)
+		return (void)fuse_reply_err(req, errno);
+
+	fi->fh = fd;
+	res = lookup_param(req, parent, name, &e);
+	if (res == 0)
+		fuse_reply_create(req, &e, fi);
+	else
+		fuse_reply_err(req, res);
+}
+
 static void projfs_ll_open(fuse_req_t req, fuse_ino_t ino,
                            struct fuse_file_info *fi)
 {
@@ -294,7 +314,7 @@ static struct fuse_lowlevel_ops ll_ops = {
 // 	.fsync		= projfs_ll_fsync,
 // 	.forget		= projfs_ll_forget,
 // 	.forget_multi	= projfs_ll_forget_multi,
-// 	.create		= projfs_ll_create,
+	.create		= projfs_ll_create,
 	.open		= projfs_ll_open,
 	.read		= projfs_ll_read,
 // 	.write		= projfs_ll_write,
