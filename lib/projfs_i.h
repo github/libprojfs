@@ -22,6 +22,8 @@
 #ifndef PROJFS_I_H
 #define PROJFS_I_H
 
+#include <dirent.h>
+
 struct projfs_node {
 	struct projfs_node *prev, *next;
 	int fd;
@@ -29,6 +31,12 @@ struct projfs_node {
 	// underlying
 	ino_t ino;
 	dev_t dev;
+};
+
+struct projfs_dir {
+	DIR *dir;
+	long loc;
+	struct dirent *d;
 };
 
 /** Private projfs filesystem handle */

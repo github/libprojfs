@@ -140,6 +140,44 @@ static void projfs_ll_getattr(fuse_req_t req, fuse_ino_t ino,
 	fuse_reply_attr(req, &attr, 1.0);
 }
 
+static void projfs_ll_opendir(fuse_req_t req, fuse_ino_t ino,
+                              struct fuse_file_info *fi)
+{
+	int err, fd;
+
+	struct projfs_dir *d = calloc(1, sizeof(*d));
+	if (!d)
+		return (void)fuse_reply_err(req, errno);
+
+	fd = openat(ino_node(req, ino)->fd, ".", O_RDONLY);
+	if (fd == -1) {
+		err = errno;
+		free(d);
+		return (void)fuse_reply_err(req, err);
+	}
+
+	d->dir = fdopendir(fd);
+	if (!d->dir) {
+		err = errno;
+		close(fd);
+		free(d);
+		return (void)fuse_reply_err(req, err);
+	}
+
+	fi->fh = (uintptr_t)d;
+	fuse_reply_open(req, fi);
+}
+
+static void projfs_ll_releasedir(fuse_req_t req, fuse_ino_t ino,
+                                 struct fuse_file_info *fi)
+{
+	(void) ino;
+	struct projfs_dir *d = (struct projfs_dir *)fi->fh;
+	closedir(d->dir);
+	free(d);
+	fuse_reply_err(req, 0);
+}
+
 static struct fuse_lowlevel_ops ll_ops = {
 	.lookup		= projfs_ll_lookup,
 	.getattr	= projfs_ll_getattr,
@@ -157,9 +195,9 @@ static struct fuse_lowlevel_ops ll_ops = {
 // 	.unlink		= projfs_ll_unlink,
 // 	.mkdir		= projfs_ll_mkdir,
 // 	.rmdir		= projfs_ll_rmdir,
-// 	.opendir	= projfs_ll_opendir,
+	.opendir	= projfs_ll_opendir,
 // 	.readdir	= projfs_ll_readdir,
-// 	.releasedir	= projfs_ll_releasedir
+	.releasedir	= projfs_ll_releasedir
 };
 
 #ifdef PROJFS_DEBUG
