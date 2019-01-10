@@ -140,6 +140,28 @@ static void projfs_ll_getattr(fuse_req_t req, fuse_ino_t ino,
 	fuse_reply_attr(req, &attr, 1.0);
 }
 
+static void projfs_ll_open(fuse_req_t req, fuse_ino_t ino,
+                           struct fuse_file_info *fi)
+{
+	int fd = ino_node(req, ino)->fd;
+	char path[sizeof("/proc/self/fd/") + sizeof(int)*3];
+	sprintf(path, "/proc/self/fd/%d", fd);
+	fd = open(path, fi->flags & ~O_NOFOLLOW);
+	if (fd == -1)
+		return (void)fuse_reply_err(req, errno);
+
+	fi->fh = fd;
+	fuse_reply_open(req, fi);
+}
+
+static void projfs_ll_release(fuse_req_t req, fuse_ino_t ino,
+                              struct fuse_file_info *fi)
+{
+	(void) ino;
+	close(fi->fh);
+	fuse_reply_err(req, 0);
+}
+
 static void projfs_ll_opendir(fuse_req_t req, fuse_ino_t ino,
                               struct fuse_file_info *fi)
 {
@@ -149,11 +171,9 @@ static void projfs_ll_opendir(fuse_req_t req, fuse_ino_t ino,
 	if (!d)
 		return (void)fuse_reply_err(req, errno);
 
-	fd = openat(ino_node(req, ino)->fd, ".", O_RDONLY);
+	fd = openat(ino_node(req, ino)->fd, ".", O_RDONLY | O_DIRECTORY);
 	if (fd == -1) {
-		err = errno;
-		free(d);
-		return (void)fuse_reply_err(req, err);
+		return (void)fuse_reply_err(req, errno);
 	}
 
 	d->dir = fdopendir(fd);
@@ -197,7 +217,7 @@ static void projfs_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 		}
 
 		struct stat attr = {
-			.st_ino = d->ent->d_ino,
+			.st_ino  = d->ent->d_ino,
 			.st_mode = d->ent->d_type << 12,
 		};
 		entsize = fuse_add_direntry(req, p, rem, d->ent->d_name,
@@ -242,10 +262,10 @@ static struct fuse_lowlevel_ops ll_ops = {
 // 	.forget		= projfs_ll_forget,
 // 	.forget_multi	= projfs_ll_forget_multi,
 // 	.create		= projfs_ll_create,
-// 	.open		= projfs_ll_open,
+	.open		= projfs_ll_open,
 // 	.read		= projfs_ll_read,
 // 	.write		= projfs_ll_write,
-// 	.release	= projfs_ll_release,
+	.release	= projfs_ll_release,
 // 	.unlink		= projfs_ll_unlink,
 // 	.mkdir		= projfs_ll_mkdir,
 // 	.rmdir		= projfs_ll_rmdir,
