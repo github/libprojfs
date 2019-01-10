@@ -168,6 +168,60 @@ static void projfs_ll_opendir(fuse_req_t req, fuse_ino_t ino,
 	fuse_reply_open(req, fi);
 }
 
+static void projfs_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
+                              off_t off, struct fuse_file_info *fi)
+{
+	(void) ino;
+
+	struct projfs_dir *d = (struct projfs_dir *)fi->fh;
+	char *buf, *p;
+	size_t rem = size, entsize;
+
+	buf = calloc(1, size);
+	if (!buf)
+		return (void)fuse_reply_err(req, errno);
+	p = buf;
+
+	if (off != d->loc) {
+		seekdir(d->dir, off);
+		d->ent = NULL;
+		d->loc = off;
+	}
+
+	while (1) {
+		if (!d->ent) {
+			errno = 0;
+			d->ent = readdir(d->dir);
+			if (!d->ent)
+				break;
+		}
+
+		struct stat attr = {
+			.st_ino = d->ent->d_ino,
+			.st_mode = d->ent->d_type << 12,
+		};
+		entsize = fuse_add_direntry(req, p, rem, d->ent->d_name,
+		                            &attr, d->ent->d_off);
+
+		if (entsize > rem) {
+			errno = 0;
+			break;
+		}
+
+		p += entsize;
+		rem -= entsize;
+
+		d->loc = d->ent->d_off;
+		d->ent = NULL;
+	}
+
+	if (errno && rem == size)
+		fuse_reply_err(req, errno);
+	else
+		fuse_reply_buf(req, buf, size - rem);
+	free(buf);
+}
+
 static void projfs_ll_releasedir(fuse_req_t req, fuse_ino_t ino,
                                  struct fuse_file_info *fi)
 {
@@ -196,7 +250,7 @@ static struct fuse_lowlevel_ops ll_ops = {
 // 	.mkdir		= projfs_ll_mkdir,
 // 	.rmdir		= projfs_ll_rmdir,
 	.opendir	= projfs_ll_opendir,
-// 	.readdir	= projfs_ll_readdir,
+	.readdir	= projfs_ll_readdir,
 	.releasedir	= projfs_ll_releasedir
 };
 

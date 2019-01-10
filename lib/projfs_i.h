@@ -27,8 +27,6 @@
 struct projfs_node {
 	struct projfs_node *prev, *next;
 	int fd;
-
-	// underlying
 	ino_t ino;
 	dev_t dev;
 };
@@ -36,7 +34,7 @@ struct projfs_node {
 struct projfs_dir {
 	DIR *dir;
 	long loc;
-	struct dirent *d;
+	struct dirent *ent;
 };
 
 /** Private projfs filesystem handle */
