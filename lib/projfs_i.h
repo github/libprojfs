@@ -22,6 +22,15 @@
 #ifndef PROJFS_I_H
 #define PROJFS_I_H
 
+struct projfs_node {
+	struct projfs_node *prev, *next;
+	int fd;
+
+	// underlying
+	ino_t ino;
+	dev_t dev;
+};
+
 /** Private projfs filesystem handle */
 struct projfs {
 	char *lowerdir;
@@ -32,6 +41,8 @@ struct projfs {
 	struct fuse_session *session;
 	pthread_t thread_id;
 	int error;
+
+	struct projfs_node root;
 };
 
 /** Private event handler type */
