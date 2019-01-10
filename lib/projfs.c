@@ -131,7 +131,7 @@ static void projfs_ll_getattr(fuse_req_t req, fuse_ino_t ino,
 	int res;
 	struct stat attr;
 
-	(void) fi;
+	(void)fi;
 
 	res = fstatat(fd, "", &attr, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
 	if (res == -1)
@@ -154,10 +154,22 @@ static void projfs_ll_open(fuse_req_t req, fuse_ino_t ino,
 	fuse_reply_open(req, fi);
 }
 
+static void projfs_ll_read(fuse_req_t req, fuse_ino_t ino, size_t size,
+                           off_t off, struct fuse_file_info *fi)
+{
+	(void)ino;
+
+	struct fuse_bufvec buf = FUSE_BUFVEC_INIT(size);
+	buf.buf[0].flags = FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK;
+	buf.buf[0].fd = fi->fh;
+	buf.buf[0].pos = off;
+	fuse_reply_data(req, &buf, FUSE_BUF_SPLICE_MOVE);
+}
+
 static void projfs_ll_release(fuse_req_t req, fuse_ino_t ino,
                               struct fuse_file_info *fi)
 {
-	(void) ino;
+	(void)ino;
 	close(fi->fh);
 	fuse_reply_err(req, 0);
 }
@@ -191,7 +203,7 @@ static void projfs_ll_opendir(fuse_req_t req, fuse_ino_t ino,
 static void projfs_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
                               off_t off, struct fuse_file_info *fi)
 {
-	(void) ino;
+	(void)ino;
 
 	struct projfs_dir *d = (struct projfs_dir *)fi->fh;
 	char *buf, *p;
@@ -245,7 +257,7 @@ static void projfs_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 static void projfs_ll_releasedir(fuse_req_t req, fuse_ino_t ino,
                                  struct fuse_file_info *fi)
 {
-	(void) ino;
+	(void)ino;
 	struct projfs_dir *d = (struct projfs_dir *)fi->fh;
 	closedir(d->dir);
 	free(d);
@@ -263,7 +275,7 @@ static struct fuse_lowlevel_ops ll_ops = {
 // 	.forget_multi	= projfs_ll_forget_multi,
 // 	.create		= projfs_ll_create,
 	.open		= projfs_ll_open,
-// 	.read		= projfs_ll_read,
+	.read		= projfs_ll_read,
 // 	.write		= projfs_ll_write,
 	.release	= projfs_ll_release,
 // 	.unlink		= projfs_ll_unlink,
@@ -316,7 +328,7 @@ struct projfs *projfs_new(const char *lowerdir, const char *mountdir,
 		handlers_size = sizeof(struct projfs_handlers);
 	}
 
-	fs = (struct projfs *) calloc(1, sizeof(struct projfs));
+	fs = (struct projfs *)calloc(1, sizeof(struct projfs));
 	if (fs == NULL) {
 		fprintf(stderr, "projfs: failed to allocate projfs object\n");
 		goto out;
@@ -361,10 +373,10 @@ out:
 
 static void *projfs_loop(void *data)
 {
-	struct projfs *fs = (struct projfs *) data;
+	struct projfs *fs = (struct projfs *)data;
 	const char *argv[] = { "projfs", DEBUG_ARGV NULL };
 	int argc = 1 + DEBUG_ARGC;
-	struct fuse_args args = FUSE_ARGS_INIT(argc, (char **) argv);
+	struct fuse_args args = FUSE_ARGS_INIT(argc, (char **)argv);
 	struct fuse_session *se;
 	struct fuse_loop_config loop;
 	int err;
