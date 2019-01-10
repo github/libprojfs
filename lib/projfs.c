@@ -147,6 +147,35 @@ static void projfs_ll_getattr(fuse_req_t req, fuse_ino_t ino,
 	fuse_reply_attr(req, &attr, 1.0);
 }
 
+static void projfs_ll_mknod(fuse_req_t req, fuse_ino_t parent,
+                            char const *name, mode_t mode,
+                            dev_t rdev)
+{
+	struct fuse_entry_param e;
+	int res = mknodat(ino_node(req, parent)->fd, name, mode, rdev);
+	if (res == -1)
+		return (void)fuse_reply_err(req, errno);
+	res = lookup_param(req, parent, name, &e);
+	if (res == 0)
+		fuse_reply_entry(req, &e);
+	else
+		fuse_reply_err(req, res);
+}
+
+static void projfs_ll_symlink(fuse_req_t req, char const *link,
+                             fuse_ino_t parent, char const *name)
+{
+	struct fuse_entry_param e;
+	int res = symlinkat(link, ino_node(req, parent)->fd, name);
+	if (res == -1)
+		return (void)fuse_reply_err(req, errno);
+	res = lookup_param(req, parent, name, &e);
+	if (res == 0)
+		fuse_reply_entry(req, &e);
+	else
+		fuse_reply_err(req, res);
+}
+
 static void projfs_ll_create(fuse_req_t req, fuse_ino_t parent,
                              char const *name, mode_t mode,
                              struct fuse_file_info *fi)
@@ -314,6 +343,8 @@ static struct fuse_lowlevel_ops ll_ops = {
 // 	.fsync		= projfs_ll_fsync,
 // 	.forget		= projfs_ll_forget,
 // 	.forget_multi	= projfs_ll_forget_multi,
+	.mknod		= projfs_ll_mknod,
+	.symlink	= projfs_ll_symlink,
 	.create		= projfs_ll_create,
 	.open		= projfs_ll_open,
 	.read		= projfs_ll_read,
