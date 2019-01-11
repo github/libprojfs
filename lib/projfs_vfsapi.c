@@ -33,6 +33,11 @@
 #include "projfs_i.h"
 #include "projfs_vfsapi.h"
 
+struct _PrjFS_FileHandle
+{
+	int fd;
+};
+
 static char *get_proc_cmdline(pid_t pid)
 {
 	char proc_cmdline_path[14 + 3*sizeof(pid_t) + 1];  // /proc/%d/cmdline
@@ -126,6 +131,51 @@ static int convert_result_to_errno(PrjFS_Result result)
 	return -ret;		// return negated value for convenience
 }
 
+static int handle_proj_event(struct projfs_event *event)
+{
+	PrjFS_Callbacks *callbacks = (PrjFS_Callbacks *) (event->user_data);
+	PrjFS_Result result;
+	char *cmdline = NULL;
+	const char *triggeringProcessName = "";
+	int ret = 0;
+
+	cmdline = get_proc_cmdline(event->pid);
+	if (cmdline != NULL)
+		triggeringProcessName = (const char *) cmdline;
+
+	if (event->mask | PROJFS_ONDIR) {
+		PrjFS_EnumerateDirectoryCallback *callback =
+			callbacks->EnumerateDirectory;
+
+		if (callback == NULL)
+			goto out;
+
+		result = callback(0, event->path,
+				  event->pid, triggeringProcessName);
+	}
+	else {
+		PrjFS_GetFileStreamCallback *callback =
+			callbacks->GetFileStream;
+		unsigned char providerId[PrjFS_PlaceholderIdLength];
+		unsigned char contentId[PrjFS_PlaceholderIdLength];
+		PrjFS_FileHandle fh = { event->fd };
+
+		if (callback == NULL)
+			goto out;
+
+		result = callback(0, event->path, providerId, contentId,
+				  event->pid, triggeringProcessName, &fh);
+	}
+
+	ret = convert_result_to_errno(result);
+
+out:
+	if (cmdline != NULL)
+		free(cmdline);
+
+	return ret;
+}
+
 static int handle_nonproj_event(struct projfs_event *event, int perm)
 {
 	PrjFS_NotifyOperationCallback *callback =
@@ -206,6 +256,7 @@ PrjFS_Result PrjFS_StartVirtualizationInstance(
 	}
 	memcpy(user_data, &callbacks, sizeof(callbacks));
 
+	handlers.handle_proj_event = handle_proj_event;
 	handlers.handle_notify_event = handle_notify_event;
 	handlers.handle_perm_event = handle_perm_event;
 
