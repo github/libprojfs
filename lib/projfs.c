@@ -222,6 +222,25 @@ static void projfs_ll_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 	fuse_reply_data(req, &buf, FUSE_BUF_SPLICE_MOVE);
 }
 
+static void projfs_ll_write_buf(fuse_req_t req, fuse_ino_t ino,
+                                struct fuse_bufvec *bufv, off_t off,
+                                struct fuse_file_info *fi)
+{
+	(void)ino;
+	ssize_t res;
+
+	struct fuse_bufvec buf = FUSE_BUFVEC_INIT(fuse_buf_size(bufv));
+	buf.buf[0].flags = FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK;
+	buf.buf[0].fd = fi->fh;
+	buf.buf[0].pos = off;
+
+	res = fuse_buf_copy(&buf, bufv, 0);
+	if (res < 0)
+		fuse_reply_err(req, -res);
+	else
+		fuse_reply_write(req, (size_t)res);
+}
+
 static void projfs_ll_release(fuse_req_t req, fuse_ino_t ino,
                               struct fuse_file_info *fi)
 {
@@ -348,7 +367,7 @@ static struct fuse_lowlevel_ops ll_ops = {
 	.create		= projfs_ll_create,
 	.open		= projfs_ll_open,
 	.read		= projfs_ll_read,
-// 	.write		= projfs_ll_write,
+	.write_buf	= projfs_ll_write_buf,
 	.release	= projfs_ll_release,
 // 	.unlink		= projfs_ll_unlink,
 	.mkdir		= projfs_ll_mkdir,
