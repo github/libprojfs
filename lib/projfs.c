@@ -46,44 +46,16 @@ static struct projfs *req_fs(fuse_req_t req)
 	return (struct projfs *)fuse_req_userdata(req);
 }
 
-static int projfs_fuse_send_event(fuse_req_t req, projfs_handler_t handler,
-                                  uint64_t mask, const char *path,
-                                  const char *target_path, int perm)
+static int projfs_fuse_send_event(fuse_req_t req,
+                                  projfs_handler_t handler,
+                                  uint64_t mask,
+                                  const char *base_path,
+                                  const char *name,
+                                  const char *target_path,
+                                  int perm)
 {
-	struct projfs_event event;
-	int err = 0;
-
 	if (handler == NULL)
-		goto out;
-
-	event.mask = mask;
-	event.pid = fuse_req_ctx(req)->pid;
-	event.user_data = req_fs(req)->user_data;
-	event.path = path;
-	event.target_path = target_path;
-
-	err = handler(&event);
-	if (err < 0) {
-		fprintf(stderr, "projfs: event handler failed: %s; "
-		                "event mask 0x%04" PRIx64 "-%08" PRIx64 ", "
-		                "pid %d\n",
-		        strerror(-err), mask >> 32, mask & 0xFFFFFFFF,
-		        event.pid);
-	}
-	else if (perm)
-		err = (err == PROJFS_ALLOW) ? 0 : -EPERM;
-
-out:
-	return err;
-}
-
-static int projfs_fuse_notify_event(fuse_req_t req, uint64_t mask,
-                                    const char *base_path,
-                                    const char *name,
-                                    const char *target_path)
-{
-	projfs_handler_t handler =
-		req_fs(req)->handlers.handle_notify_event;
+		return 0;
 
 	const char *path;
 	char *full_path = NULL;
@@ -97,23 +69,52 @@ static int projfs_fuse_notify_event(fuse_req_t req, uint64_t mask,
 		path = name;
 	}
 
-	int res = projfs_fuse_send_event(req, handler, mask,
-	                                 path, target_path, 0);
+	struct projfs_event event;
+	event.mask = mask;
+	event.pid = fuse_req_ctx(req)->pid;
+	event.user_data = req_fs(req)->user_data;
+	event.path = path;
+	event.target_path = target_path;
+
+	int err = handler(&event);
+	if (err < 0) {
+		fprintf(stderr, "projfs: event handler failed: %s; "
+		                "event mask 0x%04" PRIx64 "-%08" PRIx64 ", "
+		                "pid %d\n",
+		        strerror(-err), mask >> 32, mask & 0xFFFFFFFF,
+		        event.pid);
+	}
+	else if (perm)
+		err = (err == PROJFS_ALLOW) ? 0 : -EPERM;
 
 	if (full_path)
 		free(full_path);
 
-	return res;
+	return err;
+}
+
+static int projfs_fuse_notify_event(fuse_req_t req, uint64_t mask,
+                                    const char *base_path,
+                                    const char *name,
+                                    const char *target_path)
+{
+	projfs_handler_t handler =
+		req_fs(req)->handlers.handle_notify_event;
+
+	return projfs_fuse_send_event(
+		req, handler, mask, base_path, name, target_path, 0);
 }
 
 static int projfs_fuse_perm_event(fuse_req_t req, uint64_t mask,
-                                  const char *path, const char *target_path)
+                                  const char *base_path,
+                                  const char *name,
+                                  const char *target_path)
 {
 	projfs_handler_t handler =
 		req_fs(req)->handlers.handle_perm_event;
 
-	return projfs_fuse_send_event(req, handler, mask,
-	                              path, target_path, 1);
+	return projfs_fuse_send_event(
+		req, handler, mask, base_path, name, target_path, 1);
 }
 
 static struct projfs_node *ino_node(fuse_req_t req, fuse_ino_t ino)
@@ -428,7 +429,13 @@ static void projfs_ll_release(fuse_req_t req, fuse_ino_t ino,
 static void projfs_ll_unlink(fuse_req_t req, fuse_ino_t parent,
                              char const *name)
 {
-	int res = unlinkat(ino_node(req, parent)->fd, name, 0);
+	struct projfs_node *node = ino_node(req, parent);
+	int res = projfs_fuse_perm_event(req, PROJFS_DELETE_SELF, node->path,
+	                                 name, NULL);
+	if (res < 0)
+		return (void)fuse_reply_err(req, -res);
+
+	res = unlinkat(node->fd, name, 0);
 	fuse_reply_err(req, res == -1 ? errno : 0);
 }
 
@@ -462,7 +469,16 @@ static void projfs_ll_mkdir(fuse_req_t req, fuse_ino_t parent,
 static void projfs_ll_rmdir(fuse_req_t req, fuse_ino_t parent,
                             char const *name)
 {
-	int res = unlinkat(ino_node(req, parent)->fd, name, AT_REMOVEDIR);
+	struct projfs_node *node = ino_node(req, parent);
+	int res = projfs_fuse_perm_event(
+		req,
+		PROJFS_DELETE_SELF | PROJFS_ONDIR,
+		node->path,
+		name,
+		NULL);
+	if (res < 0)
+		return (void)fuse_reply_err(req, -res);
+	res = unlinkat(ino_node(req, parent)->fd, name, AT_REMOVEDIR);
 	fuse_reply_err(req, res == -1 ? errno : 0);
 }
 
