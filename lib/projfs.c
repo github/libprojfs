@@ -150,9 +150,6 @@ static int lookup_param(fuse_req_t req, fuse_ino_t parent, char const *name,
 	char *parent_path;
 
 	memset(e, 0, sizeof(*e));
-	e->attr_timeout = 1.0;
-	e->entry_timeout = 1.0;
-
 	node = ino_node(req, parent);
 	parent_path = node->path;
 	int fd = openat(node->fd, name, O_PATH | O_NOFOLLOW);
@@ -233,7 +230,7 @@ static void projfs_ll_getattr(fuse_req_t req, fuse_ino_t ino,
 	if (res == -1)
 		return (void)fuse_reply_err(req, errno);
 
-	fuse_reply_attr(req, &attr, 1.0);
+	fuse_reply_attr(req, &attr, 0.0);
 }
 
 static void projfs_ll_setattr(fuse_req_t req, fuse_ino_t ino,
@@ -312,7 +309,7 @@ static void projfs_ll_setattr(fuse_req_t req, fuse_ino_t ino,
 	if (res == -1)
 		return (void)fuse_reply_err(req, errno);
 
-	fuse_reply_attr(req, &ret, 1.0);
+	fuse_reply_attr(req, &ret, 0.0);
 }
 
 static void projfs_ll_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup)
