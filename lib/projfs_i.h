@@ -30,6 +30,7 @@ struct projfs_node {
 	char *path;
 	ino_t ino;
 	dev_t dev;
+	uint64_t nlookup;
 };
 
 struct projfs_dir {

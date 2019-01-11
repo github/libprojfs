@@ -24,6 +24,7 @@
 #include <config.h>
 
 #include <pthread.h>
+#include <assert.h>
 #include <signal.h>
 #include <stdio.h>
 #include <inttypes.h>
@@ -312,6 +313,25 @@ static void projfs_ll_setattr(fuse_req_t req, fuse_ino_t ino,
 	fuse_reply_attr(req, &ret, 1.0);
 }
 
+static void projfs_ll_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup)
+{
+	struct projfs *fs = req_fs(req);
+	struct projfs_node *node = ino_node(req, ino);
+	assert(node->nlookup >= nlookup);
+	node->nlookup -= nlookup;
+	if (node->nlookup == 0) {
+		pthread_mutex_lock(&fs->mutex);
+		if (node->prev)
+			node->prev->next = node->next;
+		if (node->next)
+			node->next->prev = node->prev;
+		free(node->path);
+		free(node);
+		pthread_mutex_unlock(&fs->mutex);
+	}
+	fuse_reply_none(req);
+}
+
 static void projfs_ll_mknod(fuse_req_t req, fuse_ino_t parent,
                             char const *name, mode_t mode,
                             dev_t rdev)
@@ -579,7 +599,7 @@ static struct fuse_lowlevel_ops ll_ops = {
 	.setattr	= projfs_ll_setattr,
 // 	.flush		= projfs_ll_flush,
 // 	.fsync		= projfs_ll_fsync,
-// 	.forget		= projfs_ll_forget,
+	.forget		= projfs_ll_forget,
 // 	.forget_multi	= projfs_ll_forget_multi,
 	.mknod		= projfs_ll_mknod,
 	.symlink	= projfs_ll_symlink,
@@ -644,6 +664,7 @@ struct projfs *projfs_new(const char *lowerdir, const char *mountdir,
 		goto out;
 	}
 
+	fs->root.nlookup = 2;
 	fs->root.fd = open(lowerdir, O_PATH);
 	if (fs->root.fd == -1) {
 		fprintf(stderr, "projfs: failed to open lowerdir\n");
