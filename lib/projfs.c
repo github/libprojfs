@@ -249,6 +249,13 @@ static void projfs_ll_release(fuse_req_t req, fuse_ino_t ino,
 	fuse_reply_err(req, 0);
 }
 
+static void projfs_ll_unlink(fuse_req_t req, fuse_ino_t parent,
+                             char const *name)
+{
+	int res = unlinkat(ino_node(req, parent)->fd, name, 0);
+	fuse_reply_err(req, res == -1 ? errno : 0);
+}
+
 static void projfs_ll_mkdir(fuse_req_t req, fuse_ino_t parent,
                             char const *name, mode_t mode)
 {
@@ -261,6 +268,13 @@ static void projfs_ll_mkdir(fuse_req_t req, fuse_ino_t parent,
 		fuse_reply_entry(req, &e);
 	else
 		fuse_reply_err(req, res);
+}
+
+static void projfs_ll_rmdir(fuse_req_t req, fuse_ino_t parent,
+                            char const *name)
+{
+	int res = unlinkat(ino_node(req, parent)->fd, name, AT_REMOVEDIR);
+	fuse_reply_err(req, res == -1 ? errno : 0);
 }
 
 static void projfs_ll_opendir(fuse_req_t req, fuse_ino_t ino,
@@ -369,9 +383,9 @@ static struct fuse_lowlevel_ops ll_ops = {
 	.read		= projfs_ll_read,
 	.write_buf	= projfs_ll_write_buf,
 	.release	= projfs_ll_release,
-// 	.unlink		= projfs_ll_unlink,
+	.unlink		= projfs_ll_unlink,
 	.mkdir		= projfs_ll_mkdir,
-// 	.rmdir		= projfs_ll_rmdir,
+	.rmdir		= projfs_ll_rmdir,
 	.opendir	= projfs_ll_opendir,
 	.readdir	= projfs_ll_readdir,
 	.releasedir	= projfs_ll_releasedir
