@@ -27,6 +27,7 @@
 struct projfs_node {
 	struct projfs_node *prev, *next;
 	int fd;
+	char *path;
 	ino_t ino;
 	dev_t dev;
 };

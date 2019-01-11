@@ -26,6 +26,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
+#include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>  // TODO: remove unless using strsignal()
 #include <errno.h>
@@ -43,6 +44,74 @@
 static struct projfs *req_fs(fuse_req_t req)
 {
 	return (struct projfs *)fuse_req_userdata(req);
+}
+
+static int projfs_fuse_send_event(fuse_req_t req, projfs_handler_t handler,
+                                  uint64_t mask, const char *path,
+                                  const char *target_path, int perm)
+{
+	struct projfs_event event;
+	int err = 0;
+
+	if (handler == NULL)
+		goto out;
+
+	event.mask = mask;
+	event.pid = fuse_req_ctx(req)->pid;
+	event.user_data = req_fs(req)->user_data;
+	event.path = path;
+	event.target_path = target_path;
+
+	err = handler(&event);
+	if (err < 0) {
+		fprintf(stderr, "projfs: event handler failed: %s; "
+		                "event mask 0x%04" PRIx64 "-%08" PRIx64 ", "
+		                "pid %d\n",
+		        strerror(-err), mask >> 32, mask & 0xFFFFFFFF,
+		        event.pid);
+	}
+	else if (perm)
+		err = (err == PROJFS_ALLOW) ? 0 : -EPERM;
+
+out:
+	return err;
+}
+
+static int projfs_fuse_notify_event(fuse_req_t req, uint64_t mask,
+                                    const char *base_path,
+                                    const char *name,
+                                    const char *target_path)
+{
+	projfs_handler_t handler =
+		req_fs(req)->handlers.handle_notify_event;
+
+	char *full_path;
+	if (base_path) {
+		full_path = malloc(strlen(base_path) + 1 + strlen(name) + 1);
+		strcpy(full_path, base_path);
+		strcat(full_path, "/");
+		strcat(full_path, name);
+	} else {
+		full_path = (char *)name;
+	}
+
+	int res = projfs_fuse_send_event(req, handler, mask,
+	                                 full_path, target_path, 0);
+
+	if (base_path)
+		free(full_path);
+
+	return res;
+}
+
+static int projfs_fuse_perm_event(fuse_req_t req, uint64_t mask,
+                                  const char *path, const char *target_path)
+{
+	projfs_handler_t handler =
+		req_fs(req)->handlers.handle_perm_event;
+
+	return projfs_fuse_send_event(req, handler, mask,
+	                              path, target_path, 1);
 }
 
 static struct projfs_node *ino_node(fuse_req_t req, fuse_ino_t ino)
@@ -74,12 +143,15 @@ static int lookup_param(fuse_req_t req, fuse_ino_t parent, char const *name,
 	int err;
 	struct projfs_node *node;
 	struct projfs *fs = req_fs(req);
+	char *parent_path;
 
 	memset(e, 0, sizeof(*e));
 	e->attr_timeout = 1.0;
 	e->entry_timeout = 1.0;
 
-	int fd = openat(ino_node(req, parent)->fd, name, O_PATH | O_NOFOLLOW);
+	node = ino_node(req, parent);
+	parent_path = node->path;
+	int fd = openat(node->fd, name, O_PATH | O_NOFOLLOW);
 	if (fd == -1) {
 		return errno;
 	}
@@ -106,6 +178,17 @@ static int lookup_param(fuse_req_t req, fuse_ino_t parent, char const *name,
 
 	e->ino = (uintptr_t)node;
 	node->fd = fd;
+	if (parent_path) {
+		// TODO: ENOMEM check
+		node->path = malloc(strlen(parent_path) + 1 + strlen(name) + 1);
+		strcpy(node->path, parent_path);
+		strcat(node->path, "/");
+		strcat(node->path, name);
+	} else {
+		// TODO: ENOMEM check
+		node->path = strdup(name);
+	}
+
 	node->ino = e->attr.st_ino;
 	node->dev = e->attr.st_dev;
 
@@ -182,14 +265,26 @@ static void projfs_ll_create(fuse_req_t req, fuse_ino_t parent,
 {
 	struct fuse_entry_param e;
 	int fd, res;
+	struct projfs_node *node = ino_node(req, parent);
 
-	fd = openat(ino_node(req, parent)->fd, name,
+	fd = openat(node->fd, name,
 	            (fi->flags | O_CREAT) & ~O_NOFOLLOW, mode);
 	if (fd == -1)
 		return (void)fuse_reply_err(req, errno);
 
 	fi->fh = fd;
 	res = lookup_param(req, parent, name, &e);
+
+	int err = projfs_fuse_notify_event(
+		req,
+		PROJFS_CREATE_SELF,
+		node->path,
+		name,
+		NULL);
+
+	if (err < 0 && res == 0)
+		res = -err;
+
 	if (res == 0)
 		fuse_reply_create(req, &e, fi);
 	else
@@ -260,10 +355,23 @@ static void projfs_ll_mkdir(fuse_req_t req, fuse_ino_t parent,
                             char const *name, mode_t mode)
 {
 	struct fuse_entry_param e;
-	int res = mkdirat(ino_node(req, parent)->fd, name, mode);
+	struct projfs_node *node = ino_node(req, parent);
+	int res = mkdirat(node->fd, name, mode);
 	if (res == -1)
 		return (void)fuse_reply_err(req, errno);
 	res = lookup_param(req, parent, name, &e);
+
+	// TODO: we're notifying even on error -- do we want to?
+	int err = projfs_fuse_notify_event(
+		req,
+		PROJFS_CREATE_SELF | PROJFS_ONDIR,
+		node->path,
+		name,
+		NULL);
+
+	if (err < 0 && res == 0)
+		res = -err;
+
 	if (res == 0)
 		fuse_reply_entry(req, &e);
 	else
