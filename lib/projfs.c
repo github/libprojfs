@@ -53,6 +53,7 @@ static int projfs_fuse_send_event(fuse_req_t req,
                                   const char *base_path,
                                   const char *name,
                                   const char *target_path,
+                                  int fd,
                                   int perm)
 {
 	if (handler == NULL)
@@ -76,6 +77,7 @@ static int projfs_fuse_send_event(fuse_req_t req,
 	event.user_data = req_fs(req)->user_data;
 	event.path = path;
 	event.target_path = target_path;
+	event.fd = fd;
 
 	int err = handler(&event);
 	if (err < 0) {
@@ -85,13 +87,25 @@ static int projfs_fuse_send_event(fuse_req_t req,
 		        strerror(-err), mask >> 32, mask & 0xFFFFFFFF,
 		        event.pid);
 	}
-	else if (perm)
+	else if (!fd && perm)
 		err = (err == PROJFS_ALLOW) ? 0 : -EPERM;
 
 	if (full_path)
 		free(full_path);
 
 	return err;
+}
+
+static int projfs_fuse_proj_event(fuse_req_t req, uint64_t mask,
+                                  const char *base_path,
+                                  const char *name,
+                                  int fd)
+{
+	projfs_handler_t handler =
+		req_fs(req)->handlers.handle_proj_event;
+
+	return projfs_fuse_send_event(
+		req, handler, mask, base_path, name, NULL, fd, 0);
 }
 
 static int projfs_fuse_notify_event(fuse_req_t req, uint64_t mask,
@@ -103,7 +117,7 @@ static int projfs_fuse_notify_event(fuse_req_t req, uint64_t mask,
 		req_fs(req)->handlers.handle_notify_event;
 
 	return projfs_fuse_send_event(
-		req, handler, mask, base_path, name, target_path, 0);
+		req, handler, mask, base_path, name, target_path, 0, 0);
 }
 
 static int projfs_fuse_perm_event(fuse_req_t req, uint64_t mask,
@@ -115,7 +129,7 @@ static int projfs_fuse_perm_event(fuse_req_t req, uint64_t mask,
 		req_fs(req)->handlers.handle_perm_event;
 
 	return projfs_fuse_send_event(
-		req, handler, mask, base_path, name, target_path, 1);
+		req, handler, mask, base_path, name, target_path, 0, 1);
 }
 
 static struct projfs_node *ino_node(fuse_req_t req, fuse_ino_t ino)
