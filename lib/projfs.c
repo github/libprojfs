@@ -232,6 +232,85 @@ static void projfs_ll_getattr(fuse_req_t req, fuse_ino_t ino,
 	fuse_reply_attr(req, &attr, 1.0);
 }
 
+static void projfs_ll_setattr(fuse_req_t req, fuse_ino_t ino,
+                              struct stat *attr, int to_set,
+                              struct fuse_file_info *fi)
+{
+	int res;
+	char path[sizeof("/proc/self/fd/") + sizeof(int)*3];
+	struct projfs_node *node = ino_node(req, ino);
+
+	if (to_set & FUSE_SET_ATTR_MODE) {
+		if (fi)
+			res = fchmod(fi->fh, attr->st_mode);
+		else {
+			sprintf(path, "/proc/self/fd/%d", node->fd);
+			res = chmod(path, attr->st_mode);
+		}
+		if (res == -1)
+			return (void)fuse_reply_err(req, errno);
+	}
+
+	if (to_set & (FUSE_SET_ATTR_UID | FUSE_SET_ATTR_GID)) {
+		uid_t uid = (to_set & FUSE_SET_ATTR_UID) ?
+			attr->st_uid : (uid_t)-1;
+		gid_t gid = (to_set & FUSE_SET_ATTR_GID) ?
+			attr->st_gid : (gid_t)-1;
+
+		res = fchownat(node->fd, "", uid, gid,
+		               AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
+		if (res == -1)
+			return (void)fuse_reply_err(req, errno);
+	}
+
+	if (to_set & FUSE_SET_ATTR_SIZE) {
+		if (fi)
+			res = ftruncate(fi->fh, attr->st_size);
+		else {
+			sprintf(path, "/proc/self/fd/%i", node->fd);
+			res = truncate(path, attr->st_size);
+		}
+		if (res == -1)
+			return (void)fuse_reply_err(req, errno);
+	}
+
+	if (to_set & (FUSE_SET_ATTR_ATIME | FUSE_SET_ATTR_MTIME)) {
+		struct timespec times[2];
+
+		times[0].tv_sec = 0;
+		times[1].tv_sec = 0;
+		times[0].tv_nsec = UTIME_OMIT;
+		times[1].tv_nsec = UTIME_OMIT;
+
+		if (to_set & FUSE_SET_ATTR_ATIME_NOW)
+			times[0].tv_nsec = UTIME_NOW;
+		else if (to_set & FUSE_SET_ATTR_ATIME)
+			times[0] = attr->st_atim;
+
+		if (to_set & FUSE_SET_ATTR_MTIME_NOW)
+			times[1].tv_nsec = UTIME_NOW;
+		else if (to_set & FUSE_SET_ATTR_MTIME)
+			times[1] = attr->st_mtim;
+
+		if (fi)
+			res = futimens(fi->fh, times);
+		else {
+			sprintf(path, "/proc/self/fd/%i", node->fd);
+			res = utimensat(0, path, times, 0);
+		}
+
+		if (res == -1)
+			return (void)fuse_reply_err(req, errno);
+	}
+
+	struct stat ret;
+	res = fstatat(node->fd, "", &ret, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
+	if (res == -1)
+		return (void)fuse_reply_err(req, errno);
+
+	fuse_reply_attr(req, &ret, 1.0);
+}
+
 static void projfs_ll_mknod(fuse_req_t req, fuse_ino_t parent,
                             char const *name, mode_t mode,
                             dev_t rdev)
@@ -481,7 +560,7 @@ static struct fuse_lowlevel_ops ll_ops = {
 	.lookup		= projfs_ll_lookup,
 	.getattr	= projfs_ll_getattr,
 // 	.statfs		= projfs_ll_statfs,
-// 	.setattr	= projfs_ll_setattr,
+	.setattr	= projfs_ll_setattr,
 // 	.flush		= projfs_ll_flush,
 // 	.fsync		= projfs_ll_fsync,
 // 	.forget		= projfs_ll_forget,
