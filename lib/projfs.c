@@ -85,20 +85,22 @@ static int projfs_fuse_notify_event(fuse_req_t req, uint64_t mask,
 	projfs_handler_t handler =
 		req_fs(req)->handlers.handle_notify_event;
 
-	char *full_path;
+	const char *path;
+	char *full_path = NULL;
 	if (base_path) {
 		full_path = malloc(strlen(base_path) + 1 + strlen(name) + 1);
 		strcpy(full_path, base_path);
 		strcat(full_path, "/");
 		strcat(full_path, name);
+		path = full_path;
 	} else {
-		full_path = (char *)name;
+		path = name;
 	}
 
 	int res = projfs_fuse_send_event(req, handler, mask,
-	                                 full_path, target_path, 0);
+	                                 path, target_path, 0);
 
-	if (base_path)
+	if (full_path)
 		free(full_path);
 
 	return res;
