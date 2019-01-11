@@ -62,6 +62,7 @@ static int projfs_fuse_send_event(projfs_handler_t handler,
                                   uint64_t mask,
                                   const char *path,
                                   const char *target_path,
+                                  int fd,
                                   int perm)
 {
 	if (handler == NULL)
@@ -73,6 +74,7 @@ static int projfs_fuse_send_event(projfs_handler_t handler,
 	event.user_data = projfs_context_fs()->user_data;
 	event.path = path + 1;
 	event.target_path = target_path ? (target_path + 1) : NULL;
+	event.fd = fd;
 
 	int err = handler(&event);
 	if (err < 0) {
@@ -82,10 +84,22 @@ static int projfs_fuse_send_event(projfs_handler_t handler,
 		        strerror(-err), mask >> 32, mask & 0xFFFFFFFF,
 		        event.pid);
 	}
-	else if (perm)
+	else if (!fd && perm)
 		err = (err == PROJFS_ALLOW) ? 0 : -EPERM;
 
 	return err;
+}
+
+static int projfs_fuse_proj_event(uint64_t mask,
+                                  const char *base_path,
+                                  const char *name,
+                                  int fd)
+{
+	projfs_handler_t handler =
+		projfs_context_fs()->handlers.handle_proj_event;
+
+	return projfs_fuse_send_event(
+		handler, mask, base_path, name, fd, 0);
 }
 
 static int projfs_fuse_notify_event(uint64_t mask,
@@ -96,7 +110,7 @@ static int projfs_fuse_notify_event(uint64_t mask,
 		projfs_context_fs()->handlers.handle_notify_event;
 
 	return projfs_fuse_send_event(
-		handler, mask, path, target_path, 0);
+		handler, mask, path, target_path, 0, 0);
 }
 
 static int projfs_fuse_perm_event(uint64_t mask,
@@ -107,7 +121,7 @@ static int projfs_fuse_perm_event(uint64_t mask,
 		projfs_context_fs()->handlers.handle_perm_event;
 
 	return projfs_fuse_send_event(
-		handler, mask, path, target_path, 1);
+		handler, mask, path, target_path, 0, 1);
 }
 
 // filesystem ops
