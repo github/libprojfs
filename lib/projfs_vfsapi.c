@@ -79,6 +79,62 @@ out:
 	return cmdline;
 }
 
+static PrjFS_Result convert_errno_to_result(int err)
+{
+	PrjFS_Result result = PrjFS_Result_Invalid;
+
+	switch(err) {
+	case 0:
+		result = PrjFS_Result_Success;
+		break;
+
+	case EACCES:
+	case EEXIST:
+	case EPERM:
+	case EROFS:
+		result = PrjFS_Result_EAccessDenied;
+		break;
+	case EBADF:
+		result = PrjFS_Result_EInvalidHandle;
+		break;
+	case EDQUOT:
+	case EIO:
+	case ENODATA:	// also ENOATTR; see getxattr(2)
+	case ENOSPC:
+		result = PrjFS_Result_EIOError;
+		break;
+	case EFAULT:
+	case EINVAL:
+	case EOVERFLOW:
+		result = PrjFS_Result_EInvalidArgs;
+		break;
+	case ELOOP:
+	case EMLINK:
+	case ENAMETOOLONG:
+	case ENOENT:
+	case ENOTDIR:
+		result = PrjFS_Result_EPathNotFound;
+		break;
+	case ENOMEM:
+		result = PrjFS_Result_EOutOfMemory;
+		break;
+	case ENOSYS:
+		result = PrjFS_Result_ENotYetImplemented;
+		break;
+	case ENOTEMPTY:
+		result = PrjFS_Result_EDirectoryNotEmpty;
+		break;
+	case ENOTSUP:
+		result = PrjFS_Result_ENotSupported;
+		break;
+
+	default:
+		result = PrjFS_Result_Invalid;
+	}
+
+	return result;
+}
+
 static int convert_result_to_errno(PrjFS_Result result)
 {
 	int ret = 0;
@@ -119,6 +175,10 @@ static int convert_result_to_errno(PrjFS_Result result)
 	case PrjFS_Result_EIOError:
 		ret = EIO;
 		break;
+	case PrjFS_Result_EDirectoryNotEmpty:
+		ret = ENOTEMPTY;
+		break;
+
 	case PrjFS_Result_ENotYetImplemented:
 		ret = ENOSYS;
 		break;
