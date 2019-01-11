@@ -169,6 +169,7 @@ static int lookup_param(fuse_req_t req, fuse_ino_t parent, char const *name,
 
 	node = find_node(fs, e->attr.st_ino, e->attr.st_dev);
 	if (node) {
+		++node->nlookup;
 		close(fd);
 		e->ino = (uintptr_t)node;
 		return 0;
@@ -195,6 +196,7 @@ static int lookup_param(fuse_req_t req, fuse_ino_t parent, char const *name,
 
 	node->ino = e->attr.st_ino;
 	node->dev = e->attr.st_dev;
+	node->nlookup = 1;
 
 	pthread_mutex_lock(&fs->mutex);
 	node->next = fs->root.next;
