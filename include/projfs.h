@@ -44,11 +44,12 @@ struct projfs;
 
 /** Filesystem event */
 struct projfs_event {
-	uint64_t mask;
+	uint64_t mask;			/* type flags; see projfs_notify.h */
 	pid_t pid;
 	void *user_data;
 	const char *path;
 	const char *target_path;	/* move destination or link target */
+	int fd;				/* file descriptor for projection */
 };
 
 /**
@@ -60,27 +61,32 @@ struct projfs_handlers {
 	/**
 	 * Handle projection request for a file or directory.
 	 *
-	 * TODO: doxygen
-	 * @param path ...
-	 * @return ...
+	 * @param event Filesystem projection event.
+	 * @return Zero on success or a negated errno(3) code on failure.
+	 * @note When event->mask contains PROJFS_ONDIR, the file
+	 *       descriptor in event->fd will be NULL.
 	 */
-	int (*handle_proj_event) (struct projfs_event *event, int fd);
+	int (*handle_proj_event) (struct projfs_event *event);
 
 	/**
 	 * Handle notification of a file or directory event.
 	 *
-	 * TODO: doxygen
-	 * @param path ...
-	 * @return ...
+	 * @param event Filesystem notification event.
+	 * @return Zero on success or a negated errno(3) code on failure.
+	 * @note If event->target_path is non-NULL, the event was a
+	 *       rename(2) or link(2) filesystem operation.
 	 */
 	int (*handle_notify_event) (struct projfs_event *event);
 
 	/**
 	 * Handle permission request for file or directory event.
 	 *
-	 * TODO: doxygen
-	 * @param path ...
-	 * @return ...
+	 * @param event Filesystem permission request event.
+	 * @return PROJFS_ALLOW if the event is permitted,
+	 *         PROJFS_DENY if the event is denied, or a
+	 *         a negated errno(3) code on failure.
+	 * @note If event->target_path is non-NULL, the event is a
+	 *       rename(2) or link(2) filesystem operation.
 	 */
 	int (*handle_perm_event) (struct projfs_event *event);
 };
