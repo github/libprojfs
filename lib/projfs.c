@@ -131,9 +131,8 @@ static struct projfs_node *find_node(struct projfs *fs, ino_t ino, dev_t dev)
 	struct projfs_node *node = &fs->root;
 	pthread_mutex_lock(&fs->mutex);
 	while (node != NULL) {
-		if (node->ino == ino && node->dev == dev) {
+		if (node->ino == ino && node->dev == dev)
 			break;
-		}
 		node = node->next;
 	}
 	pthread_mutex_unlock(&fs->mutex);
@@ -143,28 +142,23 @@ static struct projfs_node *find_node(struct projfs *fs, ino_t ino, dev_t dev)
 static int lookup_param(fuse_req_t req, fuse_ino_t parent, char const *name,
                         struct fuse_entry_param *e)
 {
-
-	int err;
-	struct projfs_node *node;
-	struct projfs *fs = req_fs(req);
-	char *parent_path;
+	struct projfs_node *parent_node = ino_node(req, parent);
+	int fd = openat(parent_node->fd, name, O_PATH | O_NOFOLLOW);
+	if (fd == -1)
+		return errno;
 
 	memset(e, 0, sizeof(*e));
-	node = ino_node(req, parent);
-	parent_path = node->path;
-	int fd = openat(node->fd, name, O_PATH | O_NOFOLLOW);
-	if (fd == -1) {
-		return errno;
-	}
-
-	err = fstatat(fd, "", &e->attr, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
+	int err = fstatat(
+		fd, "", &e->attr, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
 	if (err == -1) {
 		err = errno;
 		close(fd);
 		return err;
 	}
 
-	node = find_node(fs, e->attr.st_ino, e->attr.st_dev);
+	struct projfs *fs = req_fs(req);
+	struct projfs_node *node = find_node(
+		fs, e->attr.st_ino, e->attr.st_dev);
 	if (node) {
 		++node->nlookup;
 		close(fd);
@@ -180,10 +174,11 @@ static int lookup_param(fuse_req_t req, fuse_ino_t parent, char const *name,
 
 	e->ino = (uintptr_t)node;
 	node->fd = fd;
-	if (parent_path) {
+	if (parent_node->path) {
 		// TODO: ENOMEM check
-		node->path = malloc(strlen(parent_path) + 1 + strlen(name) + 1);
-		strcpy(node->path, parent_path);
+		node->path = malloc(
+			strlen(parent_node->path) + 1 + strlen(name) + 1);
+		strcpy(node->path, parent_node->path);
 		strcat(node->path, "/");
 		strcat(node->path, name);
 	} else {
@@ -211,6 +206,7 @@ static void projfs_ll_lookup(fuse_req_t req, fuse_ino_t parent,
 {
 	struct fuse_entry_param e;
 	int res = lookup_param(req, parent, name, &e);
+
 	if (res == 0)
 		fuse_reply_entry(req, &e);
 	else
@@ -220,13 +216,12 @@ static void projfs_ll_lookup(fuse_req_t req, fuse_ino_t parent,
 static void projfs_ll_getattr(fuse_req_t req, fuse_ino_t ino,
                               struct fuse_file_info *fi)
 {
-	int fd = ino_node(req, ino)->fd;
-	int res;
-	struct stat attr;
-
 	(void)fi;
 
-	res = fstatat(fd, "", &attr, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
+	int fd = ino_node(req, ino)->fd;
+
+	struct stat attr;
+	int res = fstatat(fd, "", &attr, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
 	if (res == -1)
 		return (void)fuse_reply_err(req, errno);
 
@@ -335,11 +330,13 @@ static void projfs_ll_mknod(fuse_req_t req, fuse_ino_t parent,
                             char const *name, mode_t mode,
                             dev_t rdev)
 {
-	struct fuse_entry_param e;
 	int res = mknodat(ino_node(req, parent)->fd, name, mode, rdev);
 	if (res == -1)
 		return (void)fuse_reply_err(req, errno);
+
+	struct fuse_entry_param e;
 	res = lookup_param(req, parent, name, &e);
+
 	if (res == 0)
 		fuse_reply_entry(req, &e);
 	else
@@ -349,11 +346,13 @@ static void projfs_ll_mknod(fuse_req_t req, fuse_ino_t parent,
 static void projfs_ll_symlink(fuse_req_t req, char const *link,
                              fuse_ino_t parent, char const *name)
 {
-	struct fuse_entry_param e;
 	int res = symlinkat(link, ino_node(req, parent)->fd, name);
 	if (res == -1)
 		return (void)fuse_reply_err(req, errno);
+
+	struct fuse_entry_param e;
 	res = lookup_param(req, parent, name, &e);
+
 	if (res == 0)
 		fuse_reply_entry(req, &e);
 	else
@@ -364,18 +363,21 @@ static void projfs_ll_create(fuse_req_t req, fuse_ino_t parent,
                              char const *name, mode_t mode,
                              struct fuse_file_info *fi)
 {
-	struct fuse_entry_param e;
-	int fd, res;
 	struct projfs_node *node = ino_node(req, parent);
 
-	fd = openat(node->fd, name,
-	            (fi->flags | O_CREAT) & ~O_NOFOLLOW, mode);
+	int fd = openat(node->fd,
+	                name,
+	                (fi->flags | O_CREAT) & ~O_NOFOLLOW,
+	                mode);
 	if (fd == -1)
 		return (void)fuse_reply_err(req, errno);
 
 	fi->fh = fd;
-	res = lookup_param(req, parent, name, &e);
 
+	struct fuse_entry_param e;
+	int res = lookup_param(req, parent, name, &e);
+
+	// XXX: do we want to notify even if res != 0 ?
 	int err = projfs_fuse_notify_event(
 		req,
 		PROJFS_CREATE_SELF,
@@ -423,14 +425,13 @@ static void projfs_ll_write_buf(fuse_req_t req, fuse_ino_t ino,
                                 struct fuse_file_info *fi)
 {
 	(void)ino;
-	ssize_t res;
 
 	struct fuse_bufvec buf = FUSE_BUFVEC_INIT(fuse_buf_size(bufv));
 	buf.buf[0].flags = FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK;
 	buf.buf[0].fd = fi->fh;
 	buf.buf[0].pos = off;
 
-	res = fuse_buf_copy(&buf, bufv, 0);
+	ssize_t res = fuse_buf_copy(&buf, bufv, 0);
 	if (res < 0)
 		fuse_reply_err(req, -res);
 	else
@@ -441,6 +442,7 @@ static void projfs_ll_release(fuse_req_t req, fuse_ino_t ino,
                               struct fuse_file_info *fi)
 {
 	(void)ino;
+
 	close(fi->fh);
 	fuse_reply_err(req, 0);
 }
@@ -461,11 +463,12 @@ static void projfs_ll_unlink(fuse_req_t req, fuse_ino_t parent,
 static void projfs_ll_mkdir(fuse_req_t req, fuse_ino_t parent,
                             char const *name, mode_t mode)
 {
-	struct fuse_entry_param e;
 	struct projfs_node *node = ino_node(req, parent);
 	int res = mkdirat(node->fd, name, mode);
 	if (res == -1)
 		return (void)fuse_reply_err(req, errno);
+
+	struct fuse_entry_param e;
 	res = lookup_param(req, parent, name, &e);
 
 	// TODO: we're notifying even on error -- do we want to?
@@ -504,20 +507,17 @@ static void projfs_ll_rmdir(fuse_req_t req, fuse_ino_t parent,
 static void projfs_ll_opendir(fuse_req_t req, fuse_ino_t ino,
                               struct fuse_file_info *fi)
 {
-	int err, fd;
-
 	struct projfs_dir *d = calloc(1, sizeof(*d));
 	if (!d)
 		return (void)fuse_reply_err(req, errno);
 
-	fd = openat(ino_node(req, ino)->fd, ".", O_RDONLY | O_DIRECTORY);
-	if (fd == -1) {
+	int fd = openat(ino_node(req, ino)->fd, ".", O_RDONLY | O_DIRECTORY);
+	if (fd == -1)
 		return (void)fuse_reply_err(req, errno);
-	}
 
 	d->dir = fdopendir(fd);
 	if (!d->dir) {
-		err = errno;
+		int err = errno;
 		close(fd);
 		free(d);
 		return (void)fuse_reply_err(req, err);
@@ -533,13 +533,12 @@ static void projfs_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 	(void)ino;
 
 	struct projfs_dir *d = (struct projfs_dir *)fi->fh;
-	char *buf, *p;
-	size_t rem = size, entsize;
+	size_t rem = size;
 
-	buf = calloc(1, size);
+	char *buf = calloc(1, size);
 	if (!buf)
 		return (void)fuse_reply_err(req, errno);
-	p = buf;
+	char *p = buf;
 
 	if (off != d->loc) {
 		seekdir(d->dir, off);
@@ -559,8 +558,8 @@ static void projfs_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 			.st_ino  = d->ent->d_ino,
 			.st_mode = d->ent->d_type << 12,
 		};
-		entsize = fuse_add_direntry(req, p, rem, d->ent->d_name,
-		                            &attr, d->ent->d_off);
+		size_t entsize = fuse_add_direntry(
+			req, p, rem, d->ent->d_name, &attr, d->ent->d_off);
 
 		if (entsize > rem) {
 			errno = 0;
@@ -578,6 +577,7 @@ static void projfs_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 		fuse_reply_err(req, errno);
 	else
 		fuse_reply_buf(req, buf, size - rem);
+
 	free(buf);
 }
 
@@ -585,6 +585,7 @@ static void projfs_ll_releasedir(fuse_req_t req, fuse_ino_t ino,
                                  struct fuse_file_info *fi)
 {
 	(void)ino;
+
 	struct projfs_dir *d = (struct projfs_dir *)fi->fh;
 	closedir(d->dir);
 	free(d);
@@ -634,8 +635,8 @@ void projfs_set_session(struct projfs *fs, struct fuse_session *se)
 }
 
 struct projfs *projfs_new(const char *lowerdir, const char *mountdir,
-			  const struct projfs_handlers *handlers,
-			  size_t handlers_size, void *user_data)
+                          const struct projfs_handlers *handlers,
+                          size_t handlers_size, void *user_data)
 {
 	struct projfs *fs;
 
@@ -653,7 +654,7 @@ struct projfs *projfs_new(const char *lowerdir, const char *mountdir,
 
 	if (sizeof(struct projfs_handlers) < handlers_size) {
 		fprintf(stderr, "projfs: warning: library too old, "
-				"some handlers may be ignored\n");
+		                "some handlers may be ignored\n");
 		handlers_size = sizeof(struct projfs_handlers);
 	}
 
@@ -789,7 +790,7 @@ int projfs_start(struct projfs *fs)
 
 	if (res != 0) {
 		fprintf(stderr, "projfs: error creating thread: %s\n",
-			strerror(res));
+		        strerror(res));
 		return -1;
 	}
 
@@ -824,7 +825,7 @@ void *projfs_stop(struct projfs *fs)
 	if (fs->error > 0) {
 		// TODO: translate projfs_loop() codes into messages
 		fprintf(stderr, "projfs: error from event loop: %d\n",
-			fs->error);
+		        fs->error);
 	}
 
 	pthread_mutex_destroy(&fs->mutex);
@@ -836,4 +837,3 @@ void *projfs_stop(struct projfs *fs)
 	free(fs);
 	return user_data;
 }
-
