@@ -307,6 +307,26 @@ static void projfs_ll_setattr(fuse_req_t req, fuse_ino_t ino,
 	fuse_reply_attr(req, &ret, 0.0);
 }
 
+static void projfs_ll_flush(fuse_req_t req, fuse_ino_t ino,
+                            struct fuse_file_info *fi)
+{
+	(void)ino;
+	int res = close(dup(fi->fh));
+	fuse_reply_err(req, res == -1 ? errno : 0);
+}
+
+static void projfs_ll_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
+                            struct fuse_file_info *fi)
+{
+	(void)ino;
+	int res;
+	if (datasync)
+		res = fdatasync(fi->fh);
+	else
+		res = fsync(fi->fh);
+	fuse_reply_err(req, res == -1 ? errno : 0);
+}
+
 static void projfs_ll_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup)
 {
 	struct projfs *fs = req_fs(req);
@@ -618,10 +638,9 @@ static void projfs_ll_releasedir(fuse_req_t req, fuse_ino_t ino,
 static struct fuse_lowlevel_ops ll_ops = {
 	.lookup		= projfs_ll_lookup,
 	.getattr	= projfs_ll_getattr,
-// 	.statfs		= projfs_ll_statfs,
 	.setattr	= projfs_ll_setattr,
-// 	.flush		= projfs_ll_flush,
-// 	.fsync		= projfs_ll_fsync,
+	.flush		= projfs_ll_flush,
+	.fsync		= projfs_ll_fsync,
 	.forget		= projfs_ll_forget,
 	.forget_multi	= projfs_ll_forget_multi,
 	.mknod		= projfs_ll_mknod,
