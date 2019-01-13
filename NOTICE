@@ -1,0 +1,22 @@
+Linux Projected Filesystem
+Copyright (C) 2018-2019 GitHub, Inc.
+
+This library contains code derived from other open source projects.
+You can find the source code of these projects along with their
+license information below.
+
+Project: libfuse (Linux Filesystem in USErspace reference implementation)
+Copyright (C) Miklos Szeredi <miklos@szeredi.hu> and FUSE contributors.
+https://github.com/libfuse/libfuse
+License: LGPLv2
+
+Project: VFSforGit (Virtual Filesystem for Git)
+Copyright (C) Microsoft Corporation.
+https://github.com/Microsoft/VFSforGit
+License: MIT
+
+Project: Git (stupid content tracker)
+Copyright (C) Junio C Hamano <gitster@pobox.com> and Git contributors.
+https://git-scm.com/
+License: GPLv2
+
