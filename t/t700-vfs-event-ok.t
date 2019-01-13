@@ -41,25 +41,25 @@ test_expect_success 'test event handler on nested file creation' '
 '
 
 projfs_event_printf vfs delete_file d1/d2/f2.txt
-test_expect_success 'test vfs ission granted on nested file deletion' '
+test_expect_success 'test permission granted on nested file deletion' '
 	projfs_event_exec rm target/d1/d2/f2.txt &&
 	test_path_is_missing target/d1/d2/f2.txt
 '
 
 projfs_event_printf vfs delete_file f1.txt
-test_expect_success 'test vfs ission granted on top-level file deletion' '
+test_expect_success 'test permission granted on top-level file deletion' '
 	projfs_event_exec rm target/f1.txt &&
 	test_path_is_missing target/f1.txt
 '
 
 projfs_event_printf vfs delete_dir d1/d2
-test_expect_success 'test vfs ission granted on nested directory deletion' '
+test_expect_success 'test permission granted on nested directory deletion' '
 	projfs_event_exec rmdir target/d1/d2 &&
 	test_path_is_missing target/d1/d2
 '
 
 projfs_event_printf vfs delete_dir d1
-test_expect_success 'test vfs ission granted on parent directory deletion' '
+test_expect_success 'test permission granted on parent directory deletion' '
 	projfs_event_exec rmdir target/d1 &&
 	test_path_is_missing target/d1
 '
