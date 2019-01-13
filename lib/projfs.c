@@ -326,6 +326,29 @@ static void projfs_ll_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup)
 	fuse_reply_none(req);
 }
 
+static void projfs_ll_forget_multi(fuse_req_t req, size_t count,
+                                   struct fuse_forget_data *forgets)
+{
+	struct projfs *fs = req_fs(req);
+	pthread_mutex_lock(&fs->mutex);
+	for (size_t i = 0; i < count; ++i) {
+		struct projfs_node *node = ino_node(req, forgets[i].ino);
+		uint64_t nlookup = forgets[i].nlookup;
+		assert(node->nlookup >= nlookup);
+		node->nlookup -= nlookup;
+		if (node->nlookup == 0) {
+			if (node->prev)
+				node->prev->next = node->next;
+			if (node->next)
+				node->next->prev = node->prev;
+			free(node->path);
+			free(node);
+		}
+	}
+	pthread_mutex_unlock(&fs->mutex);
+	fuse_reply_none(req);
+}
+
 static void projfs_ll_mknod(fuse_req_t req, fuse_ino_t parent,
                             char const *name, mode_t mode,
                             dev_t rdev)
@@ -600,7 +623,7 @@ static struct fuse_lowlevel_ops ll_ops = {
 // 	.flush		= projfs_ll_flush,
 // 	.fsync		= projfs_ll_fsync,
 	.forget		= projfs_ll_forget,
-// 	.forget_multi	= projfs_ll_forget_multi,
+	.forget_multi	= projfs_ll_forget_multi,
 	.mknod		= projfs_ll_mknod,
 	.symlink	= projfs_ll_symlink,
 	.create		= projfs_ll_create,
