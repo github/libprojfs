@@ -53,7 +53,8 @@ TESTS += t500-vfs-mirror-read.t \
 	 
 endif ENABLE_VFSAPI
 
-EXTRA_DIST = test-lib.sh test-lib-functions.sh $(TESTS)
+EXTRA_DIST = README.md chainlint.sed \
+	     test-lib.sh test-lib-event.sh test-lib-functions.sh $(TESTS)
 
 LOG_DRIVER = env AM_TAP_AWK='$(AWK)' HARNESS_ACTIVE=true \
 	$(SHELL) ../tap-driver.sh
