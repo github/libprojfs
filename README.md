@@ -18,7 +18,9 @@ See the [design document](/docs/design.md).
 
 ## Licensing
 
-See [LICENSE.md](LICENSE.md).
+libprojfs is licensed under the [LGPL v2.1](COPYING). See the [NOTICE](NOTICE)
+file for a list of other licenses used in the project, and in the comments in
+each file for the licenses applicable to them.
 
 ## Development Roadmap
 
