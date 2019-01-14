@@ -3,12 +3,8 @@ ACLOCAL_AMFLAGS = -I m4
 SUBDIRS = include lib
 DIST_SUBDIRS = $(SUBDIRS) t
 
-EXTRA_DIST = COPYING COPYING.LIB COPYING.TESTLIB README.md \
+EXTRA_DIST = COPYING LICENSE.md README.md \
 	     config.sh.in projfs.pc.in tap-driver.sh
-
-if ENABLE_VFSAPI
-EXTRA_DIST += COPYING.VFSAPI
-endif ENABLE_VFSAPI
 
 pkgconfigdir = @pkgconfigdir@
 pkgconfig_DATA = projfs.pc
