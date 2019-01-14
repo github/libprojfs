@@ -666,7 +666,7 @@ static struct fuse_lowlevel_ops ll_ops = {
 #define DEBUG_ARGC 0
 #endif
 
-void projfs_set_session(struct projfs *fs, struct fuse_session *se)
+static void projfs_set_session(struct projfs *fs, struct fuse_session *se)
 {
 	if (fs == NULL)
 		return;

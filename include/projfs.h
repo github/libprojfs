@@ -86,12 +86,6 @@ struct projfs_handlers {
 };
 
 /**
- * Set a FUSE session in a projfs filesystem.
- * TODO: remove when not needed
- */
-void projfs_set_session(struct projfs *fs, struct fuse_session *se);
-
-/**
  * Create a new projfs filesystem.
  * TODO: doxygen
  */
