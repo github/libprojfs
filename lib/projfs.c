@@ -23,14 +23,14 @@
 
 #include <config.h>
 
-#include <pthread.h>
 #include <assert.h>
+#include <errno.h>
+#include <inttypes.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
-#include <inttypes.h>
 #include <stdlib.h>
-#include <string.h>  // TODO: remove unless using strsignal()
-#include <errno.h>
+#include <string.h>
 #include <unistd.h>
 
 #include <fuse3/fuse_opt.h>
