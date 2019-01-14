@@ -1,0 +1,201 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require_relative 'project'
+require_relative 'tests'
+
+Dir.chdir(File.dirname(__FILE__))
+
+def usage
+  STDERR.puts <<~USAGE
+    usage: #$0 [command]
+
+    command:
+      setup
+        Build all containers and run all build scripts necessary for
+        development work (excludes distpkg).
+
+      image fuse3|develop|distpkg|vfs|integrate
+        Build the Docker build environment for the specified component.
+
+      develop configure|make|test|dist|clean
+        Builds libprojfs for local development and testing.
+
+        configure: runs autogen with appropriate switches
+        make:      runs make
+        test:      runs make test
+        dist:      runs make dist
+        clean:     runs make clean
+
+      vfs restore|make
+        Build VFSForGit.
+
+        restore: do a NuGet restore
+        make:    build everything
+
+      integrate clone|mount
+        Run the integration.
+
+        clone: run the MirrorProvider clone
+        mount: mount the MirrorProvider
+
+      run IMAGE [OPTION ...] -- CMD [ARG ...]
+        Run a command in the specified image (`fuse3', `develop', `vfs', etc.)
+        Everything up until `--' is passed as options to `docker run', i.e.
+        before the image name is given. If no options are specified, defaults
+        for the image will be used (e.g. enables FUSE for the 'integrate'
+        image).
+
+      exec IMAGE [OPTION ...] -- CMD [ARG ...]
+        Run a command in a container already started with `#$0 run'.
+
+      test [--force]
+        Run the test suite.  Will fail if there's already a running integration
+        container, unless --force is specified, in which case the running
+        container is stopped before tests are run.
+  USAGE
+  exit 1
+end
+
+def system(*args)
+  puts ">> #{args.join " "}"
+  result = Kernel.system(*args)
+  if !result
+    raise "failed to run '#{args.join " "}"
+  end
+end
+
+usage if ARGV.length == 0
+
+fuse3 = Project.new('fuse3',
+  dockerfile: 'Dockerfile-fuse3',
+  image: 'github/fuse3-linux'
+)
+
+develop = Project.new('develop',
+  dockerfile: 'Dockerfile-develop',
+  image: 'github/projfs-dev-linux',
+  mounts: ["#{Dir.pwd}/..:/data/projfs"],
+  commands: {
+    configure: ['./autogen.sh', '--enable-vfs-api'],
+    make: ['make'],
+    test: ['make', 'test'],
+    dist: ['make', 'dist'],
+    clean: ['make', 'clean'],
+  },
+  build_options: ['--build-arg', "UID=#{Process.uid}"],
+  options: ['--device', '/dev/fuse', '--cap-add', 'SYS_ADMIN'])
+
+distpkg = Project.new('distpkg',
+  dockerfile: 'Dockerfile-distpkg',
+  image: 'github/projfs-dist-linux',
+  mounts: ["#{Dir.pwd}/..:/data/projfs"]
+)
+
+vfs = Project.new('vfs',
+  dockerfile: 'Dockerfile-vfs',
+  image: 'github/vfs-linux',
+  mounts: [
+    "#{Dir.pwd}/VFSForGit:/data/vfs/src",
+    "#{Dir.pwd}/build/packages:/data/vfs/packages",
+    "#{Dir.pwd}/build/BuildOutput:/data/vfs/BuildOutput",
+  ],
+  commands: {
+    restore: [
+      ["dotnet", "restore", "MirrorProvider/MirrorProvider.sln", "/p:Configuration=Debug.Linux", "--packages", "../packages"],
+      ["dotnet", "restore", "ProjFS.Linux/PrjFSLib.Linux.Managed/PrjFSLib.Linux.Managed.csproj", "/p:Configuration=Debug", "/p:Platform=x64", "--packages", "../packages"],
+    ],
+    make: [
+      ["dotnet", "build", "ProjFS.Linux/PrjFSLib.Linux.Managed/PrjFSLib.Linux.Managed.csproj", "/p:Configuration=Debug", "/p:Platform=x64", "--no-restore"],
+      ["dotnet", "build", "MirrorProvider/MirrorProvider.sln", "/p:Configuration=Debug.Linux", "--no-restore"],
+    ]
+  })
+
+integrate = Project.new('integrate',
+  dockerfile: 'Dockerfile-integrate',
+  image: 'github/projfs-vfs-linux',
+  mounts: [
+    "#{Dir.pwd}/..:/data/projfs",
+    "#{Dir.pwd}/VFSForGit:/data/vfs/src",
+    "#{Dir.pwd}/build/packages:/data/vfs/packages",
+    "#{Dir.pwd}/build/BuildOutput:/data/vfs/BuildOutput",
+    "#{Dir.pwd}/build/PathToMirror:/data/PathToMirror",
+    "#{Dir.pwd}/build/integrate:/data/integrate"
+  ],
+  commands: {
+    clone: [["env", "PATH_TO_MIRROR=/data/PathToMirror", "TEST_ROOT=/data/integrate/TestRoot", "/data/vfs/src/MirrorProvider/Scripts/Linux/MirrorProvider_Clone.sh"]],
+    mount: [["env", "TEST_ROOT=/data/integrate/TestRoot", "/data/vfs/src/MirrorProvider/Scripts/Linux/MirrorProvider_Mount.sh"]],
+  },
+  options: ['--device', '/dev/fuse', '--cap-add', 'SYS_ADMIN', '-i'],
+  run_as_root: true)
+
+images = {
+  "fuse3" => fuse3,
+  "develop" => develop,
+  "distpkg" => distpkg,
+  "vfs" => vfs,
+  "integrate" => integrate,
+}
+
+case ARGV.shift
+when "setup"
+  usage if ARGV.length > 0
+  fuse3.build(quiet:false)
+
+  develop.build(quiet: false)
+  develop.command "configure"
+  develop.command "make"
+  develop.command "test"
+
+  vfs.build(quiet: false)
+  vfs.command "restore"
+  vfs.command "make"
+
+  integrate.build(quiet: false)
+
+when "image"
+  usage if ARGV.length != 1
+  images[ARGV[0]].build(quiet: false)
+
+when "develop"
+  usage if ARGV.length != 1
+  develop.command(ARGV[0])
+
+when "vfs"
+  usage if ARGV.length != 1
+  vfs.command(ARGV[0])
+
+when "integrate"
+  usage if ARGV.length != 1
+  integrate.command(ARGV[0])
+
+when "run"
+  index = ARGV.index("--")
+  usage if ARGV.length < 3 || index == nil || index == ARGV.length - 1
+
+  image = images[ARGV[0]] || usage
+  image.run(*ARGV[1..-1])
+
+when "exec"
+  index = ARGV.index("--")
+  usage if ARGV.length < 3 || index == nil || index == ARGV.length - 1
+
+  image = images[ARGV[0]] || usage
+  image.exec(*ARGV[1..-1])
+
+when "test"
+  force = false
+  while arg = ARGV.shift
+    case arg
+    when "--force" then force = true
+    else                usage
+    end
+  end
+
+  tests(images, force: force)
+
+else
+  usage
+end
+
+# vim: set sw=2 et:
