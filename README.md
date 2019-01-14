@@ -2,7 +2,7 @@
 
 A Linux projected filesystem library, similar in concept to the Windows
 [Projected File System][winprojfs] and developed in conjunction with the
-[VFSforGit][vfs4git] project.
+[VFSForGit][vfs4git] project.
 
 ## Design
 
@@ -27,10 +27,10 @@ and test its performance, before migrating functionality into a
 Linux kernel module (assuming that proves to be necessary to meet
 our performance criteria).
 
-The VFSforGit API, which is currently supported through the use of
+The VFSForGit API, which is currently supported through the use of
 the `--enable-vfs-api` configuration option to libprojfs, may at some
 point refactored out of this library entirely and handled exclusively
-within Linux-specific code in the VFSforGit project.  However, for
+within Linux-specific code in the VFSForGit project.  However, for
 the moment it has proven efficient to keep it within this library
 while libprojfs undergoes rapid early development.
 

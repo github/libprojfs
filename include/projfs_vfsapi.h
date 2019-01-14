@@ -1,4 +1,4 @@
-/* VFSforGit ProjFS API
+/* VFSForGit ProjFS API
    Copyright (C) 2018-2019 GitHub, Inc.
 
    See the COPYING file distributed with this library for additional

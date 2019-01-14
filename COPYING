@@ -12,9 +12,9 @@ Copyright (C) Miklos Szeredi <miklos@szeredi.hu> and FUSE contributors.
 https://github.com/libfuse/libfuse
 License: LGPLv2
 
-Project: VFSforGit (Virtual Filesystem for Git)
+Project: VFSForGit (Virtual Filesystem for Git)
 Copyright (C) Microsoft Corporation.
-https://github.com/Microsoft/VFSforGit
+https://github.com/Microsoft/VFSForGit
 License: MIT
 
 Project: Git (stupid content tracker)

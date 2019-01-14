@@ -3,7 +3,7 @@
 The primary libprojfs source code, including header files, is licensed
 under the GNU Lesser General Public License, version 2.1, included below.
 
-The VFSforGit API is licensed under the MIT License.  This specifically means
+The VFSForGit API is licensed under the MIT License.  This specifically means
 the [projfs\_vfsapi.h](include/projfs_vfsapi.h) header file is cross-licensed
 under both the LGPLv2.1 and MIT licenses.
 

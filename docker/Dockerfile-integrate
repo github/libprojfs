@@ -14,6 +14,6 @@ RUN set -ex && \
     ln -s libfuse3.so.$FUSE_VERSION libfuse3.so.3 && \
     ln -s libfuse3.so.3 libfuse3.so
 
-# Allow VFSforGit to load locally-compiled libprojfs binaries for development
+# Allow VFSForGit to load locally-compiled libprojfs binaries for development
 ENV LD_LIBRARY_PATH /data/projfs/lib/.libs
 
