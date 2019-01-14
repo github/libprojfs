@@ -44,9 +44,9 @@ struct projfs;
 
 /** Filesystem event */
 struct projfs_event {
+	struct projfs *fs;
 	uint64_t mask;			/* type flags; see projfs_notify.h */
 	pid_t pid;
-	void *user_data;
 	const char *path;
 	const char *target_path;	/* move destination or link target */
 	int fd;				/* file descriptor for projection */
@@ -94,6 +94,8 @@ struct projfs_handlers {
 /**
  * Set a FUSE session in a projfs filesystem.
  * TODO: remove when not needed
+ *       -OR-
+ *       move to projfs_i.h
  */
 void projfs_set_session(struct projfs *fs, struct fuse_session *se);
 

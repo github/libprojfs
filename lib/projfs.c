@@ -72,9 +72,9 @@ static int projfs_fuse_send_event(fuse_req_t req,
 	}
 
 	struct projfs_event event;
+	event.fs = req_fs(req);
 	event.mask = mask;
 	event.pid = fuse_req_ctx(req)->pid;
-	event.user_data = req_fs(req)->user_data;
 	event.path = path;
 	event.target_path = target_path;
 	event.fd = fd;
@@ -769,7 +769,6 @@ static void *projfs_loop(void *data)
 	int err;
 	int res = 0;
 
-	// TODO: pass a real userdata structure here, not fs
 	se = fuse_session_new(&args, &ll_ops, sizeof(ll_ops), fs);
 	if (se == NULL) {
 		res = 1;
