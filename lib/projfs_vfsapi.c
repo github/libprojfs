@@ -193,11 +193,14 @@ static int convert_result_to_errno(PrjFS_Result result)
 
 static int handle_proj_event(struct projfs_event *event)
 {
-	PrjFS_Callbacks *callbacks = (PrjFS_Callbacks *) (event->user_data);
+	PrjFS_Callbacks *callbacks = (PrjFS_Callbacks *) event->fs->user_data;
 	PrjFS_Result result;
 	char *cmdline = NULL;
 	const char *triggeringProcessName = "";
 	int ret = 0;
+
+	if (callbacks == NULL)
+		goto out;
 
 	cmdline = get_proc_cmdline(event->pid);
 	if (cmdline != NULL)
@@ -238,8 +241,8 @@ out:
 
 static int handle_nonproj_event(struct projfs_event *event, int perm)
 {
-	PrjFS_NotifyOperationCallback *callback =
-		((PrjFS_Callbacks *) (event->user_data))->NotifyOperation;
+	PrjFS_Callbacks *callbacks = (PrjFS_Callbacks *) event->fs->user_data;
+	PrjFS_NotifyOperationCallback *callback;
 	PrjFS_NotificationType notificationType = PrjFS_NotificationType_None;
 	unsigned char providerId[PrjFS_PlaceholderIdLength];
 	unsigned char contentId[PrjFS_PlaceholderIdLength];
@@ -249,6 +252,10 @@ static int handle_nonproj_event(struct projfs_event *event, int perm)
 	const char *triggeringProcessName = "";
 	int ret = 0;
 
+	if (callbacks == NULL)
+		goto out;
+
+	callback = callbacks->NotifyOperation;
 	if (callback == NULL)
 		goto out;
 

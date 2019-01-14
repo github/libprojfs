@@ -44,9 +44,9 @@ struct projfs;
 
 /** Filesystem event */
 struct projfs_event {
+	struct projfs *fs;
 	uint64_t mask;			/* type flags; see projfs_notify.h */
 	pid_t pid;
-	void *user_data;
 	const char *path;
 	const char *target_path;	/* move destination or link target */
 	int fd;				/* file descriptor for projection */

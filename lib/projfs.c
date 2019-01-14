@@ -69,9 +69,9 @@ static int projfs_fuse_send_event(projfs_handler_t handler,
 		return 0;
 
 	struct projfs_event event;
+	event.fs = projfs_context_fs();
 	event.mask = mask;
 	event.pid = fuse_get_context()->pid;
-	event.user_data = projfs_context_fs()->user_data;
 	event.path = path + 1;
 	event.target_path = target_path ? (target_path + 1) : NULL;
 	event.fd = fd;
