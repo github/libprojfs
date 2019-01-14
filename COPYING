@@ -5,6 +5,8 @@ This library contains code derived from other open source projects.
 You can find the source code of these projects along with their
 license information below.
 
+See LICNESE.md for more information.
+
 Project: libfuse (Linux Filesystem in USErspace reference implementation)
 Copyright (C) Miklos Szeredi <miklos@szeredi.hu> and FUSE contributors.
 https://github.com/libfuse/libfuse

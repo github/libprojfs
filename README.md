@@ -18,21 +18,7 @@ See the [design document](/docs/design.md).
 
 ## Licensing
 
-The primary libprojfs source code, including header files, is licensed
-under the [GNU Lesser General Public License, version 2.1][lgpl-v2];
-see the [COPYING.LIB](COPYING.LIB) file for details.
-
-The VFSforGit API is licensed under the [MIT License][mit]; see the
-[COPYING.VFSAPI](COPYING.VFSAPI) file for details.  This specifically
-means the [projfs_vfsapi.h](include/projfs_vfsapi.h) header file is
-cross-licensed under both the LGPLv2.1 and MIT licenses.
-
-Some other portions of this project, such as the test scripts and
-test script libraries, and files from the [GNU Build System][gnu-build],
-are licensed under the [GNU General Public License, version 2][gpl-v2];
-see the [COPYING.TESTLIB](COPYING.TESTLIB) file for details.  These
-files are not compiled into the libprojfs library but are used for
-build and test functionality only.
+See [LICENSE.md](LICENSE.md).
 
 ## Development Roadmap
 
