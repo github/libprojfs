@@ -1,7 +1,7 @@
 /* Linux Projected Filesystem
    Copyright (C) 2018-2019 GitHub, Inc.
 
-   See the NOTICE file distributed with this library for additional
+   See the COPYING file distributed with this library for additional
    information regarding copyright ownership.
 
    This library is free software; you can redistribute it and/or
