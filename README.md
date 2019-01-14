@@ -6,7 +6,7 @@ A Linux projected filesystem library, similar in concept to the Windows
 
 ## Design
 
-*TBD*
+See the [design document](/docs/design.md).
 
 ## Getting Started
 
