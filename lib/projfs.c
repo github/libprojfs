@@ -715,10 +715,13 @@ struct projfs *projfs_new(const char *lowerdir, const char *mountdir,
 
 	fs->user_data = user_data;
 
-	pthread_mutex_init(&fs->mutex, NULL);
+	if (pthread_mutex_init(&fs->mutex, NULL) > 0)
+		goto out_mount;
 
 	return fs;
 
+out_mount:
+	free(fs->mountdir);
 out_lower:
 	free(fs->lowerdir);
 out_handle:
