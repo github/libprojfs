@@ -31,6 +31,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/syscall.h>
 #include <unistd.h>
 
 #include "projfs.h"
@@ -308,6 +309,29 @@ static int projfs_op_rmdir(char const *path)
 	return res == -1 ? -errno : 0;
 }
 
+static int projfs_op_rename(char const *src, char const *dst,
+                            unsigned int flags)
+{
+	char *lower_src = lower_path(src);
+	if (!lower_src)
+		return -errno;
+	char *lower_dst = lower_path(dst);
+	if (!lower_dst) {
+		free(lower_src);
+		return -errno;
+	}
+	int res = syscall(
+		SYS_renameat2,
+		0,
+		lower_src,
+		0,
+		lower_dst,
+		flags);
+	free(lower_dst);
+	free(lower_src);
+	return res == -1 ? -errno : 0;
+}
+
 static int projfs_op_opendir(char const *path, struct fuse_file_info *fi)
 {
 	struct projfs_dir *d = calloc(1, sizeof(*d));
@@ -470,6 +494,7 @@ static struct fuse_operations projfs_ops = {
 	.unlink		= projfs_op_unlink,
 	.mkdir		= projfs_op_mkdir,
 	.rmdir		= projfs_op_rmdir,
+	.rename		= projfs_op_rename,
 	.opendir	= projfs_op_opendir,
 	.readdir	= projfs_op_readdir,
 	.releasedir	= projfs_op_releasedir,
