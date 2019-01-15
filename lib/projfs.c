@@ -399,32 +399,13 @@ static void projfs_op_unlink(fuse_req_t req, fuse_ino_t parent,
 	fuse_reply_err(req, res == -1 ? errno : 0);
 }
 
-static void projfs_op_mkdir(fuse_req_t req, fuse_ino_t parent,
-                            char const *name, mode_t mode)
+static int projfs_op_mkdir(char const *path, mode_t mode)
 {
-	struct projfs_node *node = ino_node(req, parent);
-	int res = mkdirat(node->fd, name, mode);
-	if (res == -1)
-		return (void)fuse_reply_err(req, errno);
-
-	struct fuse_entry_param e;
-	res = lookup_param(req, parent, name, &e);
-
-	// TODO: we're notifying even on error -- do we want to?
-	int err = projfs_fuse_notify_event(
-		req,
-		PROJFS_CREATE_SELF | PROJFS_ONDIR,
-		node->path,
-		name,
-		NULL);
-
-	if (err < 0 && res == 0)
-		res = -err;
-
-	if (res == 0)
-		fuse_reply_entry(req, &e);
-	else
-		fuse_reply_err(req, res);
+	char *lower = lower_path(path);
+	if (!lower)
+		return -errno;
+	int res = mkdir(lower, mode);
+	return res == -1 ? -errno : 0;
 }
 
 static void projfs_op_rmdir(fuse_req_t req, fuse_ino_t parent,
@@ -538,7 +519,7 @@ static struct fuse_operations projfs_ops = {
 	// .write_buf	= projfs_op_write_buf,
 	// .release	= projfs_op_release,
 	// .unlink		= projfs_op_unlink,
-	// .mkdir		= projfs_op_mkdir,
+	.mkdir		= projfs_op_mkdir,
 	// .rmdir		= projfs_op_rmdir,
 	.opendir	= projfs_op_opendir,
 	.readdir	= projfs_op_readdir,
