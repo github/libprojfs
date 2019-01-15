@@ -42,38 +42,24 @@
 #include "projfs_vfsapi.h"
 #endif
 
-static struct projfs *req_fs(fuse_req_t req)
+static struct projfs *projfs_context_fs(void)
 {
-	return (struct projfs *)fuse_req_userdata(req);
+	return (struct projfs *)fuse_get_context()->private_data;
 }
 
-static int projfs_fuse_send_event(fuse_req_t req,
-                                  projfs_handler_t handler,
+static int projfs_fuse_send_event(projfs_handler_t handler,
                                   uint64_t mask,
-                                  const char *base_path,
-                                  const char *name,
+                                  const char *path,
                                   const char *target_path,
                                   int perm)
 {
 	if (handler == NULL)
 		return 0;
 
-	const char *path;
-	char *full_path = NULL;
-	if (base_path) {
-		full_path = malloc(strlen(base_path) + 1 + strlen(name) + 1);
-		strcpy(full_path, base_path);
-		strcat(full_path, "/");
-		strcat(full_path, name);
-		path = full_path;
-	} else {
-		path = name;
-	}
-
 	struct projfs_event event;
 	event.mask = mask;
-	event.pid = fuse_req_ctx(req)->pid;
-	event.user_data = req_fs(req)->user_data;
+	event.pid = fuse_get_context()->pid;
+	event.user_data = projfs_context_fs()->user_data;
 	event.path = path;
 	event.target_path = target_path;
 
@@ -88,42 +74,29 @@ static int projfs_fuse_send_event(fuse_req_t req,
 	else if (perm)
 		err = (err == PROJFS_ALLOW) ? 0 : -EPERM;
 
-	if (full_path)
-		free(full_path);
-
 	return err;
 }
 
-static int projfs_fuse_notify_event(fuse_req_t req, uint64_t mask,
-                                    const char *base_path,
-                                    const char *name,
+static int projfs_fuse_notify_event(uint64_t mask,
+                                    const char *path,
                                     const char *target_path)
 {
 	projfs_handler_t handler =
-		req_fs(req)->handlers.handle_notify_event;
+		projfs_context_fs()->handlers.handle_notify_event;
 
 	return projfs_fuse_send_event(
-		req, handler, mask, base_path, name, target_path, 0);
+		handler, mask, path, target_path, 0);
 }
 
-static int projfs_fuse_perm_event(fuse_req_t req, uint64_t mask,
-                                  const char *base_path,
-                                  const char *name,
+static int projfs_fuse_perm_event(uint64_t mask,
+                                  const char *path,
                                   const char *target_path)
 {
 	projfs_handler_t handler =
-		req_fs(req)->handlers.handle_perm_event;
+		projfs_context_fs()->handlers.handle_perm_event;
 
 	return projfs_fuse_send_event(
-		req, handler, mask, base_path, name, target_path, 1);
-}
-
-static struct projfs_node *ino_node(fuse_req_t req, fuse_ino_t ino)
-{
-	if (ino == FUSE_ROOT_ID)
-		return &req_fs(req)->root;
-
-	return (struct projfs_node *)ino;
+		handler, mask, path, target_path, 1);
 }
 
 static struct projfs_node *find_node(struct projfs *fs, ino_t ino, dev_t dev)
@@ -209,13 +182,13 @@ static void *projfs_op_init(struct fuse_conn_info *conn, struct fuse_config *cfg
 	cfg->attr_timeout = 0;
 	cfg->negative_timeout = 0;
 
-	return fuse_get_context()->private_data;
+	return projfs_context_fs();
 }
 
 static char *lower_path(char const *path)
 {
 	// lower never ends in "/", path always starts with "/"
-	struct projfs *fs = (struct projfs *)fuse_get_context()->private_data;
+	struct projfs *fs = projfs_context_fs();
 	int lower_len = strlen(fs->lowerdir);
 	int path_len = strlen(path);
 	char *res = malloc(lower_len + path_len + 1);
@@ -266,6 +239,7 @@ static void projfs_op_mknod(fuse_req_t req, fuse_ino_t parent,
                             char const *name, mode_t mode,
                             dev_t rdev)
 {
+	/*
 	int res = mknodat(ino_node(req, parent)->fd, name, mode, rdev);
 	if (res == -1)
 		return (void)fuse_reply_err(req, errno);
@@ -277,11 +251,13 @@ static void projfs_op_mknod(fuse_req_t req, fuse_ino_t parent,
 		fuse_reply_entry(req, &e);
 	else
 		fuse_reply_err(req, res);
+	*/
 }
 
 static void projfs_op_symlink(fuse_req_t req, char const *link,
                               fuse_ino_t parent, char const *name)
 {
+	/*
 	int res = symlinkat(link, ino_node(req, parent)->fd, name);
 	if (res == -1)
 		return (void)fuse_reply_err(req, errno);
@@ -293,6 +269,7 @@ static void projfs_op_symlink(fuse_req_t req, char const *link,
 		fuse_reply_entry(req, &e);
 	else
 		fuse_reply_err(req, res);
+	*/
 }
 
 static int projfs_op_create(char const *path, mode_t mode,
@@ -378,15 +355,27 @@ static int projfs_op_mkdir(char const *path, mode_t mode)
 		return -errno;
 	int res = mkdir(lower, mode);
 	free(lower);
+	if (res == -1)
+		return -errno;
+	res = projfs_fuse_notify_event(
+		PROJFS_CREATE_SELF | PROJFS_ONDIR,
+		path,
+		NULL);
 	return res == -1 ? -errno : 0;
 }
 
 static int projfs_op_rmdir(char const *path)
 {
+	int res = projfs_fuse_perm_event(
+		PROJFS_DELETE_SELF | PROJFS_ONDIR,
+		path,
+		NULL);
+	if (res < 0)
+		return -res;
 	char *lower = lower_path(path);
 	if (!lower)
 		return -errno;
-	int res = rmdir(lower);
+	res = rmdir(lower);
 	free(lower);
 	return res == -1 ? -errno : 0;
 }
