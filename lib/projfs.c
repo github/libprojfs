@@ -283,7 +283,11 @@ static int projfs_op_create(char const *path, mode_t mode,
 	if (fd == -1)
 		return -errno;
 	fi->fh = fd;
-	return 0;
+	int res = projfs_fuse_notify_event(
+		PROJFS_CREATE_SELF,
+		path,
+		NULL);
+	return -res;
 }
 
 static int projfs_op_open(char const *path, struct fuse_file_info *fi)
@@ -340,10 +344,16 @@ static int projfs_op_release(char const *path, struct fuse_file_info *fi)
 
 static int projfs_op_unlink(char const *path)
 {
+	int res = projfs_fuse_perm_event(
+		PROJFS_DELETE_SELF,
+		path,
+		NULL);
+	if (res < 0)
+		return -res;
 	char *lower = lower_path(path);
 	if (!lower)
 		return -errno;
-	int res = unlink(lower);
+	res = unlink(lower);
 	free(lower);
 	return res == -1 ? -errno : 0;
 }
@@ -361,7 +371,7 @@ static int projfs_op_mkdir(char const *path, mode_t mode)
 		PROJFS_CREATE_SELF | PROJFS_ONDIR,
 		path,
 		NULL);
-	return res == -1 ? -errno : 0;
+	return -res;
 }
 
 static int projfs_op_rmdir(char const *path)
