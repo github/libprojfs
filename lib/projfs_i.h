@@ -24,15 +24,6 @@
 
 #include <dirent.h>
 
-struct projfs_node {
-	struct projfs_node *prev, *next;
-	int fd;
-	char *path;
-	ino_t ino;
-	dev_t dev;
-	uint64_t nlookup;
-};
-
 struct projfs_dir {
 	DIR *dir;
 	long loc;
@@ -49,8 +40,6 @@ struct projfs {
 	struct fuse_session *session;
 	pthread_t thread_id;
 	int error;
-
-	struct projfs_node root;
 };
 
 /** Private event handler type */
