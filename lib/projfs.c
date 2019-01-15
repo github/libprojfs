@@ -303,6 +303,7 @@ static int projfs_op_create(char const *path, mode_t mode,
 	if (!lower)
 		return -errno;
 	int fd = open(lower, fi->flags, mode);
+	free(lower);
 	if (fd == -1)
 		return -errno;
 	fi->fh = fd;
@@ -315,6 +316,7 @@ static int projfs_op_open(char const *path, struct fuse_file_info *fi)
 	if (!lower)
 		return -errno;
 	int fd = open(lower, fi->flags);
+	free(lower);
 	if (fd == -1)
 		return -errno;
 	fi->fh = fd;
@@ -353,26 +355,21 @@ static int projfs_op_write_buf(char const *path, struct fuse_bufvec *src,
 	return fuse_buf_copy(&buf, src, FUSE_BUF_SPLICE_NONBLOCK);
 }
 
-static void projfs_op_release(fuse_req_t req, fuse_ino_t ino,
-                              struct fuse_file_info *fi)
+static int projfs_op_release(char const *path, struct fuse_file_info *fi)
 {
-	(void)ino;
-
+	(void)path;
 	close(fi->fh);
-	fuse_reply_err(req, 0);
+	return 0;
 }
 
-static void projfs_op_unlink(fuse_req_t req, fuse_ino_t parent,
-                             char const *name)
+static int projfs_op_unlink(char const *path)
 {
-	struct projfs_node *node = ino_node(req, parent);
-	int res = projfs_fuse_perm_event(req, PROJFS_DELETE_SELF, node->path,
-	                                 name, NULL);
-	if (res < 0)
-		return (void)fuse_reply_err(req, -res);
-
-	res = unlinkat(node->fd, name, 0);
-	fuse_reply_err(req, res == -1 ? errno : 0);
+	char *lower = lower_path(path);
+	if (!lower)
+		return -errno;
+	int res = unlink(lower);
+	free(lower);
+	return res == -1 ? -errno : 0;
 }
 
 static int projfs_op_mkdir(char const *path, mode_t mode)
@@ -381,6 +378,7 @@ static int projfs_op_mkdir(char const *path, mode_t mode)
 	if (!lower)
 		return -errno;
 	int res = mkdir(lower, mode);
+	free(lower);
 	return res == -1 ? -errno : 0;
 }
 
@@ -390,6 +388,7 @@ static int projfs_op_rmdir(char const *path)
 	if (!lower)
 		return -errno;
 	int res = rmdir(lower);
+	free(lower);
 	return res == -1 ? -errno : 0;
 }
 
@@ -406,8 +405,8 @@ static int projfs_op_opendir(char const *path, struct fuse_file_info *fi)
 	}
 
 	d->dir = opendir(lower);
+	free(lower);
 	if (!d->dir) {
-		free(lower);
 		free(d);
 		return -errno;
 	}
@@ -486,8 +485,8 @@ static struct fuse_operations projfs_ops = {
 	.open		= projfs_op_open,
 	.read_buf	= projfs_op_read_buf,
 	.write_buf	= projfs_op_write_buf,
-	// .release	= projfs_op_release,
-	// .unlink		= projfs_op_unlink,
+	.release	= projfs_op_release,
+	.unlink		= projfs_op_unlink,
 	.mkdir		= projfs_op_mkdir,
 	.rmdir		= projfs_op_rmdir,
 	.opendir	= projfs_op_opendir,
