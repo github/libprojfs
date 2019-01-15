@@ -60,8 +60,8 @@ static int projfs_fuse_send_event(projfs_handler_t handler,
 	event.mask = mask;
 	event.pid = fuse_get_context()->pid;
 	event.user_data = projfs_context_fs()->user_data;
-	event.path = path;
-	event.target_path = target_path;
+	event.path = path + 1;
+	event.target_path = target_path ? (target_path + 1) : NULL;
 
 	int err = handler(&event);
 	if (err < 0) {
@@ -390,6 +390,71 @@ static int projfs_op_releasedir(char const *path, struct fuse_file_info *fi)
 	return 0;
 }
 
+static int projfs_op_chmod(char const *path, mode_t mode,
+                           struct fuse_file_info *fi)
+{
+	int res;
+	if (fi)
+		res = fchmod(fi->fh, mode);
+	else {
+		char *lower = lower_path(path);
+		if (!lower)
+			return -errno;
+		res = chmod(lower, mode);
+		free(lower);
+	}
+	return res == -1 ? -errno : 0;
+}
+
+static int projfs_op_chown(char const *path, uid_t uid, gid_t gid,
+                           struct fuse_file_info *fi)
+{
+	int res;
+	if (fi)
+		res = fchown(fi->fh, uid, gid);
+	else {
+		char *lower = lower_path(path);
+		if (!lower)
+			return -errno;
+		res = chown(lower, uid, gid);
+		free(lower);
+	}
+	return res == -1 ? -errno : 0;
+}
+
+static int projfs_op_truncate(char const *path, off_t off,
+                              struct fuse_file_info *fi)
+{
+	int res;
+	if (fi)
+		res = ftruncate(fi->fh, off);
+	else {
+		char *lower = lower_path(path);
+		if (!lower)
+			return -errno;
+		res = truncate(lower, off);
+		free(lower);
+	}
+	return res == -1 ? -errno : 0;
+}
+
+static int projfs_op_utimens(char const *path, const struct timespec tv[2],
+                             struct fuse_file_info *fi)
+{
+	int res;
+	if (fi)
+		res = futimens(fi->fh, tv);
+	else {
+		char *lower = lower_path(path);
+		if (!lower)
+			return -errno;
+		res = utimensat(0, lower, tv, AT_SYMLINK_NOFOLLOW);
+		free(lower);
+	}
+	return res == -1 ? -errno : 0;
+}
+
+
 static struct fuse_operations projfs_ops = {
 	.init		= projfs_op_init,
 	.getattr	= projfs_op_getattr,
@@ -407,7 +472,11 @@ static struct fuse_operations projfs_ops = {
 	.rmdir		= projfs_op_rmdir,
 	.opendir	= projfs_op_opendir,
 	.readdir	= projfs_op_readdir,
-	.releasedir	= projfs_op_releasedir
+	.releasedir	= projfs_op_releasedir,
+	.chmod		= projfs_op_chmod,
+	.chown		= projfs_op_chown,
+	.truncate	= projfs_op_truncate,
+	.utimens	= projfs_op_utimens,
 };
 
 #ifdef PROJFS_DEBUG
