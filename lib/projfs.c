@@ -281,7 +281,7 @@ static void projfs_op_mknod(fuse_req_t req, fuse_ino_t parent,
 }
 
 static void projfs_op_symlink(fuse_req_t req, char const *link,
-                             fuse_ino_t parent, char const *name)
+                              fuse_ino_t parent, char const *name)
 {
 	int res = symlinkat(link, ino_node(req, parent)->fd, name);
 	if (res == -1)
@@ -296,53 +296,29 @@ static void projfs_op_symlink(fuse_req_t req, char const *link,
 		fuse_reply_err(req, res);
 }
 
-static void projfs_op_create(fuse_req_t req, fuse_ino_t parent,
-                             char const *name, mode_t mode,
-                             struct fuse_file_info *fi)
+static int projfs_op_create(char const *path, mode_t mode,
+                            struct fuse_file_info *fi)
 {
-	struct projfs_node *node = ino_node(req, parent);
-
-	int fd = openat(node->fd,
-	                name,
-	                (fi->flags | O_CREAT) & ~O_NOFOLLOW,
-	                mode);
+	char *lower = lower_path(path);
+	if (!lower)
+		return -errno;
+	int fd = open(lower, fi->flags, mode);
 	if (fd == -1)
-		return (void)fuse_reply_err(req, errno);
-
+		return -errno;
 	fi->fh = fd;
-
-	struct fuse_entry_param e;
-	int res = lookup_param(req, parent, name, &e);
-
-	// XXX: do we want to notify even if res != 0 ?
-	int err = projfs_fuse_notify_event(
-		req,
-		PROJFS_CREATE_SELF,
-		node->path,
-		name,
-		NULL);
-
-	if (err < 0 && res == 0)
-		res = -err;
-
-	if (res == 0)
-		fuse_reply_create(req, &e, fi);
-	else
-		fuse_reply_err(req, res);
+	return 0;
 }
 
-static void projfs_op_open(fuse_req_t req, fuse_ino_t ino,
-                           struct fuse_file_info *fi)
+static int projfs_op_open(char const *path, struct fuse_file_info *fi)
 {
-	int fd = ino_node(req, ino)->fd;
-	char path[sizeof("/proc/self/fd/") + sizeof(int)*3];
-	sprintf(path, "/proc/self/fd/%d", fd);
-	fd = open(path, fi->flags & ~O_NOFOLLOW);
+	char *lower = lower_path(path);
+	if (!lower)
+		return -errno;
+	int fd = open(lower, fi->flags);
 	if (fd == -1)
-		return (void)fuse_reply_err(req, errno);
-
+		return -errno;
 	fi->fh = fd;
-	fuse_reply_open(req, fi);
+	return 0;
 }
 
 static void projfs_op_read(fuse_req_t req, fuse_ino_t ino, size_t size,
@@ -462,19 +438,19 @@ static int projfs_op_readdir(char const *path, void *buf,
 		}
 
 		struct stat attr;
-		
+
 		enum fuse_fill_dir_flags filled = 0;
 		if (flags & FUSE_READDIR_PLUS) {
 			int res = fstatat(
-				dirfd(d->dir), d->ent->d_name, &attr,
-				AT_SYMLINK_NOFOLLOW);
+					dirfd(d->dir), d->ent->d_name, &attr,
+					AT_SYMLINK_NOFOLLOW);
 			if (res != -1)
 				filled = FUSE_FILL_DIR_PLUS;
 		}
 		if (filled == 0) {
 			memset(&attr, 0, sizeof(attr));
 			attr.st_ino = d->ent->d_ino,
-			attr.st_mode = d->ent->d_type << 12;
+				attr.st_mode = d->ent->d_type << 12;
 		}
 
 		if (filler(buf, d->ent->d_name, &attr, d->ent->d_off, filled))
@@ -504,8 +480,8 @@ static struct fuse_operations projfs_ops = {
 	// .fsync		= projfs_op_fsync,
 	// .mknod		= projfs_op_mknod,
 	// .symlink	= projfs_op_symlink,
-	// .create		= projfs_op_create,
-	// .open		= projfs_op_open,
+	.create		= projfs_op_create,
+	.open		= projfs_op_open,
 	// .read		= projfs_op_read,
 	// .write_buf	= projfs_op_write_buf,
 	// .release	= projfs_op_release,
@@ -536,8 +512,8 @@ static void projfs_set_session(struct projfs *fs, struct fuse_session *se)
 }
 
 struct projfs *projfs_new(const char *lowerdir, const char *mountdir,
-                          const struct projfs_handlers *handlers,
-                          size_t handlers_size, void *user_data)
+		const struct projfs_handlers *handlers,
+		size_t handlers_size, void *user_data)
 {
 	struct projfs *fs;
 
@@ -555,7 +531,7 @@ struct projfs *projfs_new(const char *lowerdir, const char *mountdir,
 
 	if (sizeof(struct projfs_handlers) < handlers_size) {
 		fprintf(stderr, "projfs: warning: library too old, "
-		                "some handlers may be ignored\n");
+				"some handlers may be ignored\n");
 		handlers_size = sizeof(struct projfs_handlers);
 	}
 
@@ -617,7 +593,7 @@ static void *projfs_loop(void *data)
 	struct fuse_args args = FUSE_ARGS_INIT(argc, (char **)argv);
 	struct fuse_loop_config loop;
 	int res = 0;
-	
+
 	// TODO: verify the way we're setting signal handlers on the underlying
 	// session works correctly when using the high-level API
 
