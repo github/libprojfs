@@ -205,7 +205,7 @@ static int projfs_op_create(char const *path, mode_t mode,
 		PROJFS_CREATE_SELF,
 		path,
 		NULL);
-	return -res;
+	return res;
 }
 
 static int projfs_op_open(char const *path, struct fuse_file_info *fi)
@@ -267,7 +267,7 @@ static int projfs_op_unlink(char const *path)
 		path,
 		NULL);
 	if (res < 0)
-		return -res;
+		return res;
 	char *lower = lower_path(path);
 	if (!lower)
 		return -errno;
@@ -289,7 +289,7 @@ static int projfs_op_mkdir(char const *path, mode_t mode)
 		PROJFS_CREATE_SELF | PROJFS_ONDIR,
 		path,
 		NULL);
-	return -res;
+	return res;
 }
 
 static int projfs_op_rmdir(char const *path)
@@ -299,7 +299,7 @@ static int projfs_op_rmdir(char const *path)
 		path,
 		NULL);
 	if (res < 0)
-		return -res;
+		return res;
 	char *lower = lower_path(path);
 	if (!lower)
 		return -errno;
