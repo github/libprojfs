@@ -341,22 +341,16 @@ static int projfs_op_read_buf(char const *path, struct fuse_bufvec **bufp, size_
 	return 0;
 }
 
-static void projfs_op_write_buf(fuse_req_t req, fuse_ino_t ino,
-                                struct fuse_bufvec *bufv, off_t off,
-                                struct fuse_file_info *fi)
+static int projfs_op_write_buf(char const *path, struct fuse_bufvec *src,
+                                off_t off, struct fuse_file_info *fi)
 {
-	(void)ino;
-
-	struct fuse_bufvec buf = FUSE_BUFVEC_INIT(fuse_buf_size(bufv));
+	(void)path;
+	struct fuse_bufvec buf = FUSE_BUFVEC_INIT(fuse_buf_size(src));
 	buf.buf[0].flags = FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK;
 	buf.buf[0].fd = fi->fh;
 	buf.buf[0].pos = off;
 
-	ssize_t res = fuse_buf_copy(&buf, bufv, 0);
-	if (res < 0)
-		fuse_reply_err(req, -res);
-	else
-		fuse_reply_write(req, (size_t)res);
+	return fuse_buf_copy(&buf, src, FUSE_BUF_SPLICE_NONBLOCK);
 }
 
 static void projfs_op_release(fuse_req_t req, fuse_ino_t ino,
@@ -491,7 +485,7 @@ static struct fuse_operations projfs_ops = {
 	.create		= projfs_op_create,
 	.open		= projfs_op_open,
 	.read_buf	= projfs_op_read_buf,
-	// .write_buf	= projfs_op_write_buf,
+	.write_buf	= projfs_op_write_buf,
 	// .release	= projfs_op_release,
 	// .unlink		= projfs_op_unlink,
 	.mkdir		= projfs_op_mkdir,
