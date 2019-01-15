@@ -14,7 +14,7 @@ class Project
 
   def build(quiet: true)
     raise "cannot build #@name" if ![@dockerfile, @image].all?
-    system("docker", "build", *(quiet ? ["-q"] : []), *@build_options, "-f", @dockerfile, "-t", @image, File.dirname(__FILE__))
+    system("docker", "build", *(quiet ? ["-q"] : []), *@build_options, "-f", @dockerfile, "-t", @image, File.dirname(File.dirname(__FILE__)))
   end
 
   def command(name, popen: false)

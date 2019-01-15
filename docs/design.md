@@ -30,7 +30,7 @@ up-to-date, it is always advisable to check the current state of the code in
 the
 [`features/linuxprototype`](https://github.com/Microsoft/VFSForGit/tree/features/linuxprototype)
 branch of the VFSForGit repository, and in the
-[projfs-linux](https://github.com/github/projfs-linux) repository.
+[libprojfs](https://github.com/github/libprojfs) repository.
 
 ## Overview
 
