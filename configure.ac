@@ -36,8 +36,8 @@ libprojfs_export_regex='projfs'
 
 AC_ARG_ENABLE([vfs_api],
   [AS_HELP_STRING([--enable-vfs-api],
-    [Enable .NET VFSforGit API])],
-  [AC_DEFINE(PROJFS_VFSAPI, 1, [Enable .NET VFSforGit API])
+    [Enable .NET VFSForGit API])],
+  [AC_DEFINE(PROJFS_VFSAPI, 1, [Enable .NET VFSForGit API])
     enable_vfsapi=true
     libprojfs_export_regex='(projfs|PrjFS)'
   ]dnl

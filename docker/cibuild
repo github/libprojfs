@@ -1,0 +1,20 @@
+#!/bin/bash
+
+set -ex
+
+cd "$(dirname "$0")"
+
+./projfs image fuse3
+
+./projfs image develop
+./projfs develop configure
+./projfs develop make
+./projfs develop test
+
+./projfs image vfs
+./projfs vfs restore
+./projfs vfs make
+
+./projfs image integrate
+./projfs integrate clone
+./projfs test --force

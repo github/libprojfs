@@ -1,7 +1,7 @@
 /* Linux Projected Filesystem
    Copyright (C) 2018-2019 GitHub, Inc.
 
-   See the NOTICE file distributed with this library for additional
+   See the COPYING file distributed with this library for additional
    information regarding copyright ownership.
 
    This library is free software; you can redistribute it and/or
@@ -15,7 +15,7 @@
    Lesser General Public License for more details.
 
    You should have received a copy of the GNU Lesser General Public
-   License along with this library, in the file COPYING.LIB; if not,
+   License along with this library, in the file LICENSE.md; if not,
    see <http://www.gnu.org/licenses/>.
 */
 
@@ -23,14 +23,14 @@
 
 #include <config.h>
 
-#include <pthread.h>
 #include <assert.h>
+#include <errno.h>
+#include <inttypes.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
-#include <inttypes.h>
 #include <stdlib.h>
-#include <string.h>  // TODO: remove unless using strsignal()
-#include <errno.h>
+#include <string.h>
 #include <unistd.h>
 
 #include <fuse3/fuse_opt.h>
@@ -680,7 +680,7 @@ static struct fuse_lowlevel_ops ll_ops = {
 #define DEBUG_ARGC 0
 #endif
 
-void projfs_set_session(struct projfs *fs, struct fuse_session *se)
+static void projfs_set_session(struct projfs *fs, struct fuse_session *se)
 {
 	if (fs == NULL)
 		return;

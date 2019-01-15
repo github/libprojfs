@@ -1,6 +1,6 @@
 # Copyright (C) 2005 Junio C Hamano
 #
-# See the NOTICE file distributed with this library for additional
+# See the COPYING file distributed with this library for additional
 # information regarding copyright ownership.  Additional functions are:
 #
 # Copyright (C) 2018-2019 GitHub, Inc.

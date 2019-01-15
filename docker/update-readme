@@ -1,0 +1,18 @@
+#!/usr/bin/env ruby
+
+require 'commonmarker'
+
+doc = CommonMarker.render_doc(File.read('README.md'))
+
+did_replace = false
+
+doc.walk do |node|
+  if !did_replace && node.type == :code_block && node.string_content.start_with?("$ ./projfs")
+    node.string_content = "$ ./projfs\n" + `./projfs 2>&1`
+    did_replace = true
+  end
+end
+
+raise "replaced nothing" unless did_replace
+
+File.open("README.md", "w") {|f| f.write(doc.to_commonmark)}

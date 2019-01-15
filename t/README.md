@@ -3,7 +3,7 @@
 Both this [README](README.md) and the shell test suite libraries used in this
 project are derived in large part from those written for the
 [git](https://git-scm.com/) version control system.  Please see the
-[NOTICE](../NOTICE) file distributed with this library for additional
+[COPYING](../COPYING) file distributed with this library for additional
 information regarding copyright ownership, and the
 [git/t source](https://github.com/git/git/tree/master/t) for
 further reading.

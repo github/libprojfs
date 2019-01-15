@@ -1,7 +1,7 @@
 /* Linux Projected Filesystem
    Copyright (C) 2018-2019 GitHub, Inc.
 
-   See the NOTICE file distributed with this library for additional
+   See the COPYING file distributed with this library for additional
    information regarding copyright ownership.
 
    This library is free software; you can redistribute it and/or
@@ -15,7 +15,7 @@
    Lesser General Public License for more details.
 
    You should have received a copy of the GNU Lesser General Public
-   License along with this library, in the file COPYING.LIB; if not,
+   License along with this library, in the file LICENSE.md; if not,
    see <http://www.gnu.org/licenses/>.
 */
 
@@ -90,14 +90,6 @@ struct projfs_handlers {
 	 */
 	int (*handle_perm_event) (struct projfs_event *event);
 };
-
-/**
- * Set a FUSE session in a projfs filesystem.
- * TODO: remove when not needed
- *       -OR-
- *       move to projfs_i.h
- */
-void projfs_set_session(struct projfs *fs, struct fuse_session *se);
 
 /**
  * Create a new projfs filesystem.

@@ -1,8 +1,0 @@
-#!/bin/sh
-
-cat <<EOF
-noop
-
-(this exists because we need to have a projfs-linux-private project in Janky in
-order for projfs-docker to depend on it.)
-EOF
