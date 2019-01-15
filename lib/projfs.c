@@ -240,9 +240,7 @@ static int projfs_op_getattr(char const *path, struct stat *attr,
 		res = lstat(lower, attr);
 		free(lower);
 	}
-	if (res == -1)
-		return -errno;
-	return 0;
+	return res == -1 ? -errno : 0;
 }
 
 static void projfs_op_flush(fuse_req_t req, fuse_ino_t ino,
@@ -408,20 +406,13 @@ static int projfs_op_mkdir(char const *path, mode_t mode)
 	return res == -1 ? -errno : 0;
 }
 
-static void projfs_op_rmdir(fuse_req_t req, fuse_ino_t parent,
-                            char const *name)
+static int projfs_op_rmdir(char const *path)
 {
-	struct projfs_node *node = ino_node(req, parent);
-	int res = projfs_fuse_perm_event(
-		req,
-		PROJFS_DELETE_SELF | PROJFS_ONDIR,
-		node->path,
-		name,
-		NULL);
-	if (res < 0)
-		return (void)fuse_reply_err(req, -res);
-	res = unlinkat(ino_node(req, parent)->fd, name, AT_REMOVEDIR);
-	fuse_reply_err(req, res == -1 ? errno : 0);
+	char *lower = lower_path(path);
+	if (!lower)
+		return -errno;
+	int res = rmdir(lower);
+	return res == -1 ? -errno : 0;
 }
 
 static int projfs_op_opendir(char const *path, struct fuse_file_info *fi)
@@ -520,7 +511,7 @@ static struct fuse_operations projfs_ops = {
 	// .release	= projfs_op_release,
 	// .unlink		= projfs_op_unlink,
 	.mkdir		= projfs_op_mkdir,
-	// .rmdir		= projfs_op_rmdir,
+	.rmdir		= projfs_op_rmdir,
 	.opendir	= projfs_op_opendir,
 	.readdir	= projfs_op_readdir,
 	.releasedir	= projfs_op_releasedir
