@@ -99,81 +99,6 @@ static int projfs_fuse_perm_event(uint64_t mask,
 		handler, mask, path, target_path, 1);
 }
 
-static struct projfs_node *find_node(struct projfs *fs, ino_t ino, dev_t dev)
-{
-	struct projfs_node *node = &fs->root;
-	pthread_mutex_lock(&fs->mutex);
-	while (node != NULL) {
-		if (node->ino == ino && node->dev == dev)
-			break;
-		node = node->next;
-	}
-	pthread_mutex_unlock(&fs->mutex);
-	return node;
-}
-
-static int lookup_param(fuse_req_t req, fuse_ino_t parent, char const *name,
-                        struct fuse_entry_param *e)
-{
-	struct projfs_node *parent_node = ino_node(req, parent);
-	int fd = openat(parent_node->fd, name, O_PATH | O_NOFOLLOW);
-	if (fd == -1)
-		return errno;
-
-	memset(e, 0, sizeof(*e));
-	int err = fstatat(
-		fd, "", &e->attr, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
-	if (err == -1) {
-		err = errno;
-		close(fd);
-		return err;
-	}
-
-	struct projfs *fs = req_fs(req);
-	struct projfs_node *node = find_node(
-		fs, e->attr.st_ino, e->attr.st_dev);
-	if (node) {
-		++node->nlookup;
-		close(fd);
-		e->ino = (uintptr_t)node;
-		return 0;
-	}
-
-	node = calloc(1, sizeof(*node));
-	if (!node) {
-		close(fd);
-		return ENOMEM;
-	}
-
-	e->ino = (uintptr_t)node;
-	node->fd = fd;
-	if (parent_node->path) {
-		// TODO: ENOMEM check
-		node->path = malloc(
-			strlen(parent_node->path) + 1 + strlen(name) + 1);
-		strcpy(node->path, parent_node->path);
-		strcat(node->path, "/");
-		strcat(node->path, name);
-	} else {
-		// TODO: ENOMEM check
-		node->path = strdup(name);
-	}
-
-	node->ino = e->attr.st_ino;
-	node->dev = e->attr.st_dev;
-	node->nlookup = 1;
-
-	pthread_mutex_lock(&fs->mutex);
-	node->next = fs->root.next;
-	fs->root.next = node;
-	if (node->next)
-		node->next->prev = node;
-	node->prev = &fs->root;
-	pthread_mutex_unlock(&fs->mutex);
-	
-	return 0;
-}
-
 static void *projfs_op_init(struct fuse_conn_info *conn, struct fuse_config *cfg)
 {
 	(void)conn;
@@ -235,41 +160,34 @@ static int projfs_op_fsync(char const *path, int datasync,
 	return res == -1 ? -errno : 0;
 }
 
-static void projfs_op_mknod(fuse_req_t req, fuse_ino_t parent,
-                            char const *name, mode_t mode,
-                            dev_t rdev)
+static int projfs_op_mknod(char const *path, mode_t mode, dev_t rdev)
 {
-	/*
-	int res = mknodat(ino_node(req, parent)->fd, name, mode, rdev);
-	if (res == -1)
-		return (void)fuse_reply_err(req, errno);
-
-	struct fuse_entry_param e;
-	res = lookup_param(req, parent, name, &e);
-
-	if (res == 0)
-		fuse_reply_entry(req, &e);
+	int res;
+	char *lower = lower_path(path);
+	if (!lower)
+		return -errno;
+	if (S_ISFIFO(mode))
+		res = mkfifo(lower, mode);
 	else
-		fuse_reply_err(req, res);
-	*/
+		res = mknod(lower, mode, rdev);
+	free(lower);
+	return res == -1 ? -errno : 0;
 }
 
-static void projfs_op_symlink(fuse_req_t req, char const *link,
-                              fuse_ino_t parent, char const *name)
+static int projfs_op_symlink(char const *link, char const *name)
 {
-	/*
-	int res = symlinkat(link, ino_node(req, parent)->fd, name);
-	if (res == -1)
-		return (void)fuse_reply_err(req, errno);
-
-	struct fuse_entry_param e;
-	res = lookup_param(req, parent, name, &e);
-
-	if (res == 0)
-		fuse_reply_entry(req, &e);
-	else
-		fuse_reply_err(req, res);
-	*/
+	char *lower_link = lower_path(link);
+	if (!lower_link)
+		return -errno;
+	char *lower_name = lower_path(name);
+	if (!lower_name) {
+		free(lower_link);
+		return -errno;
+	}
+	int res = symlink(lower_link, lower_name);
+	free(lower_name);
+	free(lower_link);
+	return res == -1 ? -errno : 0;
 }
 
 static int projfs_op_create(char const *path, mode_t mode,
@@ -477,8 +395,8 @@ static struct fuse_operations projfs_ops = {
 	.getattr	= projfs_op_getattr,
 	.flush		= projfs_op_flush,
 	.fsync		= projfs_op_fsync,
-	// .mknod		= projfs_op_mknod,
-	// .symlink	= projfs_op_symlink,
+	.mknod		= projfs_op_mknod,
+	.symlink	= projfs_op_symlink,
 	.create		= projfs_op_create,
 	.open		= projfs_op_open,
 	.read_buf	= projfs_op_read_buf,
@@ -540,17 +458,10 @@ struct projfs *projfs_new(const char *lowerdir, const char *mountdir,
 		goto out;
 	}
 
-	fs->root.nlookup = 2;
-	fs->root.fd = open(lowerdir, O_PATH);
-	if (fs->root.fd == -1) {
-		fprintf(stderr, "projfs: failed to open lowerdir\n");
-		goto out_handle;
-	}
-
 	fs->lowerdir = strdup(lowerdir);
 	if (fs->lowerdir == NULL) {
 		fprintf(stderr, "projfs: failed to allocate lower path\n");
-		goto out_fd;
+		goto out_handle;
 	}
 	int len = strlen(fs->lowerdir);
 	if (len && fs->lowerdir[len - 1] == '/')
@@ -576,8 +487,6 @@ struct projfs *projfs_new(const char *lowerdir, const char *mountdir,
 
 out_lower:
 	free(fs->lowerdir);
-out_fd:
-	close(fs->root.fd);
 out_handle:
 	free(fs);
 out:
