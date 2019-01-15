@@ -201,19 +201,48 @@ static int lookup_param(fuse_req_t req, fuse_ino_t parent, char const *name,
 	return 0;
 }
 
-static void projfs_op_getattr(fuse_req_t req, fuse_ino_t ino,
-                              struct fuse_file_info *fi)
+static void *projfs_op_init(struct fuse_conn_info *conn, struct fuse_config *cfg)
+{
+	(void)conn;
+
+	cfg->entry_timeout = 0;
+	cfg->attr_timeout = 0;
+	cfg->negative_timeout = 0;
+
+	return fuse_get_context()->private_data;
+}
+
+static char *lower_path(char const *path)
+{
+	struct projfs *fs = (struct projfs *)fuse_get_context()->private_data;
+	int lower_len = strlen(fs->lowerdir);
+	int path_len = strlen(path);
+	char *res = malloc(lower_len + 1 + path_len + 1);
+	if (!res)
+		return NULL;
+	strcpy(res, fs->lowerdir);
+	strcat(res, "/");
+	strcat(res, path);
+	return res;
+}
+
+static int projfs_op_getattr(char const *path, struct stat *attr,
+                             struct fuse_file_info *fi)
 {
 	(void)fi;
-
-	int fd = ino_node(req, ino)->fd;
-
-	struct stat attr;
-	int res = fstatat(fd, "", &attr, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
+	int res;
+	if (fi)
+		res = fstat(fi->fh, attr);
+	else {
+		char *lower = lower_path(path);
+		if (lower == NULL)
+			return -errno;
+		res = lstat(lower, attr);
+		free(lower);
+	}
 	if (res == -1)
-		return (void)fuse_reply_err(req, errno);
-
-	fuse_reply_attr(req, &attr, 0.0);
+		return -errno;
+	return 0;
 }
 
 static void projfs_op_flush(fuse_req_t req, fuse_ino_t ino,
@@ -503,8 +532,9 @@ static void projfs_op_releasedir(fuse_req_t req, fuse_ino_t ino,
 }
 
 static struct fuse_operations projfs_ops = {
-	/*
+	.init		= projfs_op_init,
 	.getattr	= projfs_op_getattr,
+	/*
 	.flush		= projfs_op_flush,
 	.fsync		= projfs_op_fsync,
 	.mknod		= projfs_op_mknod,
@@ -583,12 +613,18 @@ struct projfs *projfs_new(const char *lowerdir, const char *mountdir,
 		fprintf(stderr, "projfs: failed to allocate lower path\n");
 		goto out_fd;
 	}
+	int len = strlen(fs->lowerdir);
+	if (len && fs->lowerdir[len - 1] == '/')
+		fs->lowerdir[len - 1] = 0;
 
 	fs->mountdir = strdup(mountdir);
 	if (fs->mountdir == NULL) {
 		fprintf(stderr, "projfs: failed to allocate mount path\n");
 		goto out_lower;
 	}
+	len = strlen(fs->mountdir);
+	if (len && fs->mountdir[len - 1] == '/')
+		fs->mountdir[len - 1] = 0;
 
 	if (handlers != NULL)
 		memcpy(&fs->handlers, handlers, handlers_size);
