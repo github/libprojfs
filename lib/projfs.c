@@ -33,10 +33,10 @@
 #include <string.h>
 #include <unistd.h>
 
-#include <fuse3/fuse_opt.h>
-
 #include "projfs.h"
 #include "projfs_i.h"
+
+#include <fuse3/fuse.h>
 
 #ifdef PROJFS_VFSAPI
 #include "projfs_vfsapi.h"
@@ -201,19 +201,7 @@ static int lookup_param(fuse_req_t req, fuse_ino_t parent, char const *name,
 	return 0;
 }
 
-static void projfs_ll_lookup(fuse_req_t req, fuse_ino_t parent,
-                             const char *name)
-{
-	struct fuse_entry_param e;
-	int res = lookup_param(req, parent, name, &e);
-
-	if (res == 0)
-		fuse_reply_entry(req, &e);
-	else
-		fuse_reply_err(req, res);
-}
-
-static void projfs_ll_getattr(fuse_req_t req, fuse_ino_t ino,
+static void projfs_op_getattr(fuse_req_t req, fuse_ino_t ino,
                               struct fuse_file_info *fi)
 {
 	(void)fi;
@@ -228,86 +216,7 @@ static void projfs_ll_getattr(fuse_req_t req, fuse_ino_t ino,
 	fuse_reply_attr(req, &attr, 0.0);
 }
 
-static void projfs_ll_setattr(fuse_req_t req, fuse_ino_t ino,
-                              struct stat *attr, int to_set,
-                              struct fuse_file_info *fi)
-{
-	int res;
-	char path[sizeof("/proc/self/fd/") + sizeof(int)*3];
-	struct projfs_node *node = ino_node(req, ino);
-
-	if (to_set & FUSE_SET_ATTR_MODE) {
-		if (fi)
-			res = fchmod(fi->fh, attr->st_mode);
-		else {
-			sprintf(path, "/proc/self/fd/%d", node->fd);
-			res = chmod(path, attr->st_mode);
-		}
-		if (res == -1)
-			return (void)fuse_reply_err(req, errno);
-	}
-
-	if (to_set & (FUSE_SET_ATTR_UID | FUSE_SET_ATTR_GID)) {
-		uid_t uid = (to_set & FUSE_SET_ATTR_UID) ?
-			attr->st_uid : (uid_t)-1;
-		gid_t gid = (to_set & FUSE_SET_ATTR_GID) ?
-			attr->st_gid : (gid_t)-1;
-
-		res = fchownat(node->fd, "", uid, gid,
-		               AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
-		if (res == -1)
-			return (void)fuse_reply_err(req, errno);
-	}
-
-	if (to_set & FUSE_SET_ATTR_SIZE) {
-		if (fi)
-			res = ftruncate(fi->fh, attr->st_size);
-		else {
-			sprintf(path, "/proc/self/fd/%i", node->fd);
-			res = truncate(path, attr->st_size);
-		}
-		if (res == -1)
-			return (void)fuse_reply_err(req, errno);
-	}
-
-	if (to_set & (FUSE_SET_ATTR_ATIME | FUSE_SET_ATTR_MTIME)) {
-		struct timespec times[2];
-
-		times[0].tv_sec = 0;
-		times[1].tv_sec = 0;
-		times[0].tv_nsec = UTIME_OMIT;
-		times[1].tv_nsec = UTIME_OMIT;
-
-		if (to_set & FUSE_SET_ATTR_ATIME_NOW)
-			times[0].tv_nsec = UTIME_NOW;
-		else if (to_set & FUSE_SET_ATTR_ATIME)
-			times[0] = attr->st_atim;
-
-		if (to_set & FUSE_SET_ATTR_MTIME_NOW)
-			times[1].tv_nsec = UTIME_NOW;
-		else if (to_set & FUSE_SET_ATTR_MTIME)
-			times[1] = attr->st_mtim;
-
-		if (fi)
-			res = futimens(fi->fh, times);
-		else {
-			sprintf(path, "/proc/self/fd/%i", node->fd);
-			res = utimensat(0, path, times, 0);
-		}
-
-		if (res == -1)
-			return (void)fuse_reply_err(req, errno);
-	}
-
-	struct stat ret;
-	res = fstatat(node->fd, "", &ret, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
-	if (res == -1)
-		return (void)fuse_reply_err(req, errno);
-
-	fuse_reply_attr(req, &ret, 0.0);
-}
-
-static void projfs_ll_flush(fuse_req_t req, fuse_ino_t ino,
+static void projfs_op_flush(fuse_req_t req, fuse_ino_t ino,
                             struct fuse_file_info *fi)
 {
 	(void)ino;
@@ -315,7 +224,7 @@ static void projfs_ll_flush(fuse_req_t req, fuse_ino_t ino,
 	fuse_reply_err(req, res == -1 ? errno : 0);
 }
 
-static void projfs_ll_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
+static void projfs_op_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
                             struct fuse_file_info *fi)
 {
 	(void)ino;
@@ -327,49 +236,7 @@ static void projfs_ll_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
 	fuse_reply_err(req, res == -1 ? errno : 0);
 }
 
-static void projfs_ll_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup)
-{
-	struct projfs *fs = req_fs(req);
-	struct projfs_node *node = ino_node(req, ino);
-	assert(node->nlookup >= nlookup);
-	node->nlookup -= nlookup;
-	if (node->nlookup == 0) {
-		pthread_mutex_lock(&fs->mutex);
-		if (node->prev)
-			node->prev->next = node->next;
-		if (node->next)
-			node->next->prev = node->prev;
-		free(node->path);
-		free(node);
-		pthread_mutex_unlock(&fs->mutex);
-	}
-	fuse_reply_none(req);
-}
-
-static void projfs_ll_forget_multi(fuse_req_t req, size_t count,
-                                   struct fuse_forget_data *forgets)
-{
-	struct projfs *fs = req_fs(req);
-	pthread_mutex_lock(&fs->mutex);
-	for (size_t i = 0; i < count; ++i) {
-		struct projfs_node *node = ino_node(req, forgets[i].ino);
-		uint64_t nlookup = forgets[i].nlookup;
-		assert(node->nlookup >= nlookup);
-		node->nlookup -= nlookup;
-		if (node->nlookup == 0) {
-			if (node->prev)
-				node->prev->next = node->next;
-			if (node->next)
-				node->next->prev = node->prev;
-			free(node->path);
-			free(node);
-		}
-	}
-	pthread_mutex_unlock(&fs->mutex);
-	fuse_reply_none(req);
-}
-
-static void projfs_ll_mknod(fuse_req_t req, fuse_ino_t parent,
+static void projfs_op_mknod(fuse_req_t req, fuse_ino_t parent,
                             char const *name, mode_t mode,
                             dev_t rdev)
 {
@@ -386,7 +253,7 @@ static void projfs_ll_mknod(fuse_req_t req, fuse_ino_t parent,
 		fuse_reply_err(req, res);
 }
 
-static void projfs_ll_symlink(fuse_req_t req, char const *link,
+static void projfs_op_symlink(fuse_req_t req, char const *link,
                              fuse_ino_t parent, char const *name)
 {
 	int res = symlinkat(link, ino_node(req, parent)->fd, name);
@@ -402,7 +269,7 @@ static void projfs_ll_symlink(fuse_req_t req, char const *link,
 		fuse_reply_err(req, res);
 }
 
-static void projfs_ll_create(fuse_req_t req, fuse_ino_t parent,
+static void projfs_op_create(fuse_req_t req, fuse_ino_t parent,
                              char const *name, mode_t mode,
                              struct fuse_file_info *fi)
 {
@@ -437,7 +304,7 @@ static void projfs_ll_create(fuse_req_t req, fuse_ino_t parent,
 		fuse_reply_err(req, res);
 }
 
-static void projfs_ll_open(fuse_req_t req, fuse_ino_t ino,
+static void projfs_op_open(fuse_req_t req, fuse_ino_t ino,
                            struct fuse_file_info *fi)
 {
 	int fd = ino_node(req, ino)->fd;
@@ -451,7 +318,7 @@ static void projfs_ll_open(fuse_req_t req, fuse_ino_t ino,
 	fuse_reply_open(req, fi);
 }
 
-static void projfs_ll_read(fuse_req_t req, fuse_ino_t ino, size_t size,
+static void projfs_op_read(fuse_req_t req, fuse_ino_t ino, size_t size,
                            off_t off, struct fuse_file_info *fi)
 {
 	(void)ino;
@@ -463,7 +330,7 @@ static void projfs_ll_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 	fuse_reply_data(req, &buf, FUSE_BUF_SPLICE_MOVE);
 }
 
-static void projfs_ll_write_buf(fuse_req_t req, fuse_ino_t ino,
+static void projfs_op_write_buf(fuse_req_t req, fuse_ino_t ino,
                                 struct fuse_bufvec *bufv, off_t off,
                                 struct fuse_file_info *fi)
 {
@@ -481,7 +348,7 @@ static void projfs_ll_write_buf(fuse_req_t req, fuse_ino_t ino,
 		fuse_reply_write(req, (size_t)res);
 }
 
-static void projfs_ll_release(fuse_req_t req, fuse_ino_t ino,
+static void projfs_op_release(fuse_req_t req, fuse_ino_t ino,
                               struct fuse_file_info *fi)
 {
 	(void)ino;
@@ -490,7 +357,7 @@ static void projfs_ll_release(fuse_req_t req, fuse_ino_t ino,
 	fuse_reply_err(req, 0);
 }
 
-static void projfs_ll_unlink(fuse_req_t req, fuse_ino_t parent,
+static void projfs_op_unlink(fuse_req_t req, fuse_ino_t parent,
                              char const *name)
 {
 	struct projfs_node *node = ino_node(req, parent);
@@ -503,7 +370,7 @@ static void projfs_ll_unlink(fuse_req_t req, fuse_ino_t parent,
 	fuse_reply_err(req, res == -1 ? errno : 0);
 }
 
-static void projfs_ll_mkdir(fuse_req_t req, fuse_ino_t parent,
+static void projfs_op_mkdir(fuse_req_t req, fuse_ino_t parent,
                             char const *name, mode_t mode)
 {
 	struct projfs_node *node = ino_node(req, parent);
@@ -531,7 +398,7 @@ static void projfs_ll_mkdir(fuse_req_t req, fuse_ino_t parent,
 		fuse_reply_err(req, res);
 }
 
-static void projfs_ll_rmdir(fuse_req_t req, fuse_ino_t parent,
+static void projfs_op_rmdir(fuse_req_t req, fuse_ino_t parent,
                             char const *name)
 {
 	struct projfs_node *node = ino_node(req, parent);
@@ -547,7 +414,7 @@ static void projfs_ll_rmdir(fuse_req_t req, fuse_ino_t parent,
 	fuse_reply_err(req, res == -1 ? errno : 0);
 }
 
-static void projfs_ll_opendir(fuse_req_t req, fuse_ino_t ino,
+static void projfs_op_opendir(fuse_req_t req, fuse_ino_t ino,
                               struct fuse_file_info *fi)
 {
 	struct projfs_dir *d = calloc(1, sizeof(*d));
@@ -570,7 +437,7 @@ static void projfs_ll_opendir(fuse_req_t req, fuse_ino_t ino,
 	fuse_reply_open(req, fi);
 }
 
-static void projfs_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
+static void projfs_op_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
                               off_t off, struct fuse_file_info *fi)
 {
 	(void)ino;
@@ -624,7 +491,7 @@ static void projfs_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 	free(buf);
 }
 
-static void projfs_ll_releasedir(fuse_req_t req, fuse_ino_t ino,
+static void projfs_op_releasedir(fuse_req_t req, fuse_ino_t ino,
                                  struct fuse_file_info *fi)
 {
 	(void)ino;
@@ -635,27 +502,25 @@ static void projfs_ll_releasedir(fuse_req_t req, fuse_ino_t ino,
 	fuse_reply_err(req, 0);
 }
 
-static struct fuse_lowlevel_ops ll_ops = {
-	.lookup		= projfs_ll_lookup,
-	.getattr	= projfs_ll_getattr,
-	.setattr	= projfs_ll_setattr,
-	.flush		= projfs_ll_flush,
-	.fsync		= projfs_ll_fsync,
-	.forget		= projfs_ll_forget,
-	.forget_multi	= projfs_ll_forget_multi,
-	.mknod		= projfs_ll_mknod,
-	.symlink	= projfs_ll_symlink,
-	.create		= projfs_ll_create,
-	.open		= projfs_ll_open,
-	.read		= projfs_ll_read,
-	.write_buf	= projfs_ll_write_buf,
-	.release	= projfs_ll_release,
-	.unlink		= projfs_ll_unlink,
-	.mkdir		= projfs_ll_mkdir,
-	.rmdir		= projfs_ll_rmdir,
-	.opendir	= projfs_ll_opendir,
-	.readdir	= projfs_ll_readdir,
-	.releasedir	= projfs_ll_releasedir
+static struct fuse_operations projfs_ops = {
+	/*
+	.getattr	= projfs_op_getattr,
+	.flush		= projfs_op_flush,
+	.fsync		= projfs_op_fsync,
+	.mknod		= projfs_op_mknod,
+	.symlink	= projfs_op_symlink,
+	.create		= projfs_op_create,
+	.open		= projfs_op_open,
+	.read		= projfs_op_read,
+	.write_buf	= projfs_op_write_buf,
+	.release	= projfs_op_release,
+	.unlink		= projfs_op_unlink,
+	.mkdir		= projfs_op_mkdir,
+	.rmdir		= projfs_op_rmdir,
+	.opendir	= projfs_op_opendir,
+	.readdir	= projfs_op_readdir,
+	.releasedir	= projfs_op_releasedir
+	*/
 };
 
 #ifdef PROJFS_DEBUG
@@ -750,18 +615,20 @@ static void *projfs_loop(void *data)
 	const char *argv[] = { "projfs", DEBUG_ARGV NULL };
 	int argc = 1 + DEBUG_ARGC;
 	struct fuse_args args = FUSE_ARGS_INIT(argc, (char **)argv);
-	struct fuse_session *se;
 	struct fuse_loop_config loop;
-	int err;
 	int res = 0;
+	
+	// TODO: verify the way we're setting signal handlers on the underlying
+	// session works correctly when using the high-level API
 
-	// TODO: pass a real userdata structure here, not fs
-	se = fuse_session_new(&args, &ll_ops, sizeof(ll_ops), fs);
-	if (se == NULL) {
+	struct fuse *fuse =
+		fuse_new(&args, &projfs_ops, sizeof(projfs_ops), fs);
+	if (fuse == NULL) {
 		res = 1;
 		goto out;
 	}
 
+	struct fuse_session *se = fuse_get_session(fuse);
 	projfs_set_session(fs, se);
 
 	// TODO: defer all signal handling to user, once we remove FUSE
@@ -771,7 +638,7 @@ static void *projfs_loop(void *data)
 	}
 
 	// TODO: mount with x-gvfs-hide option and maybe others for KDE, etc.
-	if (fuse_session_mount(se, fs->mountdir) != 0) {
+	if (fuse_mount(fuse, fs->mountdir) != 0) {
 		res = 3;
 		goto out_signal;
 	}
@@ -787,8 +654,8 @@ static void *projfs_loop(void *data)
 	loop.max_idle_threads = 10;
 
 	// TODO: output strsignal() only for dev purposes
-	if ((err = fuse_session_loop_mt(se, &loop)) != 0)
-	{
+	int err;
+	if ((err = fuse_loop_mt(fuse, &loop)) != 0) {
 		if (err > 0)
 			fprintf(stderr, "projfs: %s signal\n", strsignal(err));
 		res = 5;
