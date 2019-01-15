@@ -26,7 +26,7 @@ recheck:
 	$(MAKE) -C t/ recheck
 
 clean-local:
-	$(MAKE) -C t/ clean
+	-$(MAKE) -C t/ clean
 
 .PHONY: gitclean
 gitclean:
