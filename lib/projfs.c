@@ -243,24 +243,23 @@ static int projfs_op_getattr(char const *path, struct stat *attr,
 	return res == -1 ? -errno : 0;
 }
 
-static void projfs_op_flush(fuse_req_t req, fuse_ino_t ino,
-                            struct fuse_file_info *fi)
+static int projfs_op_flush(char const *path, struct fuse_file_info *fi)
 {
-	(void)ino;
+	(void)path;
 	int res = close(dup(fi->fh));
-	fuse_reply_err(req, res == -1 ? errno : 0);
+	return res == -1 ? -errno : 0;
 }
 
-static void projfs_op_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
-                            struct fuse_file_info *fi)
+static int projfs_op_fsync(char const *path, int datasync,
+                           struct fuse_file_info *fi)
 {
-	(void)ino;
+	(void)path;
 	int res;
 	if (datasync)
 		res = fdatasync(fi->fh);
 	else
 		res = fsync(fi->fh);
-	fuse_reply_err(req, res == -1 ? errno : 0);
+	return res == -1 ? -errno : 0;
 }
 
 static void projfs_op_mknod(fuse_req_t req, fuse_ino_t parent,
@@ -477,8 +476,8 @@ static int projfs_op_releasedir(char const *path, struct fuse_file_info *fi)
 static struct fuse_operations projfs_ops = {
 	.init		= projfs_op_init,
 	.getattr	= projfs_op_getattr,
-	// .flush		= projfs_op_flush,
-	// .fsync		= projfs_op_fsync,
+	.flush		= projfs_op_flush,
+	.fsync		= projfs_op_fsync,
 	// .mknod		= projfs_op_mknod,
 	// .symlink	= projfs_op_symlink,
 	.create		= projfs_op_create,
