@@ -214,14 +214,14 @@ static void *projfs_op_init(struct fuse_conn_info *conn, struct fuse_config *cfg
 
 static char *lower_path(char const *path)
 {
+	// lower never ends in "/", path always starts with "/"
 	struct projfs *fs = (struct projfs *)fuse_get_context()->private_data;
 	int lower_len = strlen(fs->lowerdir);
 	int path_len = strlen(path);
-	char *res = malloc(lower_len + 1 + path_len + 1);
+	char *res = malloc(lower_len + path_len + 1);
 	if (!res)
 		return NULL;
 	strcpy(res, fs->lowerdir);
-	strcat(res, "/");
 	strcat(res, path);
 	return res;
 }
@@ -443,41 +443,37 @@ static void projfs_op_rmdir(fuse_req_t req, fuse_ino_t parent,
 	fuse_reply_err(req, res == -1 ? errno : 0);
 }
 
-static void projfs_op_opendir(fuse_req_t req, fuse_ino_t ino,
-                              struct fuse_file_info *fi)
+static int projfs_op_opendir(char const *path, struct fuse_file_info *fi)
 {
 	struct projfs_dir *d = calloc(1, sizeof(*d));
 	if (!d)
-		return (void)fuse_reply_err(req, errno);
+		return -ENOMEM;
 
-	int fd = openat(ino_node(req, ino)->fd, ".", O_RDONLY | O_DIRECTORY);
-	if (fd == -1)
-		return (void)fuse_reply_err(req, errno);
-
-	d->dir = fdopendir(fd);
-	if (!d->dir) {
-		int err = errno;
-		close(fd);
+	char *lower = lower_path(path);
+	if (!lower) {
 		free(d);
-		return (void)fuse_reply_err(req, err);
+		return -errno;
+	}
+
+	d->dir = opendir(lower);
+	if (!d->dir) {
+		free(lower);
+		free(d);
+		return -errno;
 	}
 
 	fi->fh = (uintptr_t)d;
-	fuse_reply_open(req, fi);
+	return 0;
 }
 
-static void projfs_op_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
-                              off_t off, struct fuse_file_info *fi)
+static int projfs_op_readdir(char const *path, void *buf,
+                             fuse_fill_dir_t filler, off_t off,
+                             struct fuse_file_info *fi,
+                             enum fuse_readdir_flags flags)
 {
-	(void)ino;
+	(void)path;
 
 	struct projfs_dir *d = (struct projfs_dir *)fi->fh;
-	size_t rem = size;
-
-	char *buf = calloc(1, size);
-	if (!buf)
-		return (void)fuse_reply_err(req, errno);
-	char *p = buf;
 
 	if (off != d->loc) {
 		seekdir(d->dir, off);
@@ -493,64 +489,60 @@ static void projfs_op_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 				break;
 		}
 
-		struct stat attr = {
-			.st_ino  = d->ent->d_ino,
-			.st_mode = d->ent->d_type << 12,
-		};
-		size_t entsize = fuse_add_direntry(
-			req, p, rem, d->ent->d_name, &attr, d->ent->d_off);
-
-		if (entsize > rem) {
-			errno = 0;
-			break;
+		struct stat attr;
+		
+		enum fuse_fill_dir_flags filled = 0;
+		if (flags & FUSE_READDIR_PLUS) {
+			int res = fstatat(
+				dirfd(d->dir), d->ent->d_name, &attr,
+				AT_SYMLINK_NOFOLLOW);
+			if (res != -1)
+				filled = FUSE_FILL_DIR_PLUS;
+		}
+		if (filled == 0) {
+			memset(&attr, 0, sizeof(attr));
+			attr.st_ino = d->ent->d_ino,
+			attr.st_mode = d->ent->d_type << 12;
 		}
 
-		p += entsize;
-		rem -= entsize;
+		if (filler(buf, d->ent->d_name, &attr, d->ent->d_off, filled))
+			break;
 
 		d->loc = d->ent->d_off;
 		d->ent = NULL;
 	}
 
-	if (errno && rem == size)
-		fuse_reply_err(req, errno);
-	else
-		fuse_reply_buf(req, buf, size - rem);
-
-	free(buf);
+	return -errno;
 }
 
-static void projfs_op_releasedir(fuse_req_t req, fuse_ino_t ino,
-                                 struct fuse_file_info *fi)
+static int projfs_op_releasedir(char const *path, struct fuse_file_info *fi)
 {
-	(void)ino;
+	(void)path;
 
 	struct projfs_dir *d = (struct projfs_dir *)fi->fh;
 	closedir(d->dir);
 	free(d);
-	fuse_reply_err(req, 0);
+	return 0;
 }
 
 static struct fuse_operations projfs_ops = {
 	.init		= projfs_op_init,
 	.getattr	= projfs_op_getattr,
-	/*
-	.flush		= projfs_op_flush,
-	.fsync		= projfs_op_fsync,
-	.mknod		= projfs_op_mknod,
-	.symlink	= projfs_op_symlink,
-	.create		= projfs_op_create,
-	.open		= projfs_op_open,
-	.read		= projfs_op_read,
-	.write_buf	= projfs_op_write_buf,
-	.release	= projfs_op_release,
-	.unlink		= projfs_op_unlink,
-	.mkdir		= projfs_op_mkdir,
-	.rmdir		= projfs_op_rmdir,
+	// .flush		= projfs_op_flush,
+	// .fsync		= projfs_op_fsync,
+	// .mknod		= projfs_op_mknod,
+	// .symlink	= projfs_op_symlink,
+	// .create		= projfs_op_create,
+	// .open		= projfs_op_open,
+	// .read		= projfs_op_read,
+	// .write_buf	= projfs_op_write_buf,
+	// .release	= projfs_op_release,
+	// .unlink		= projfs_op_unlink,
+	// .mkdir		= projfs_op_mkdir,
+	// .rmdir		= projfs_op_rmdir,
 	.opendir	= projfs_op_opendir,
 	.readdir	= projfs_op_readdir,
 	.releasedir	= projfs_op_releasedir
-	*/
 };
 
 #ifdef PROJFS_DEBUG
