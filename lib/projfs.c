@@ -321,16 +321,24 @@ static int projfs_op_open(char const *path, struct fuse_file_info *fi)
 	return 0;
 }
 
-static void projfs_op_read(fuse_req_t req, fuse_ino_t ino, size_t size,
-                           off_t off, struct fuse_file_info *fi)
+static int projfs_op_read_buf(char const *path, struct fuse_bufvec **bufp, size_t size,
+                          off_t off, struct fuse_file_info *fi)
 {
-	(void)ino;
+	(void) path;
 
-	struct fuse_bufvec buf = FUSE_BUFVEC_INIT(size);
-	buf.buf[0].flags = FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK;
-	buf.buf[0].fd = fi->fh;
-	buf.buf[0].pos = off;
-	fuse_reply_data(req, &buf, FUSE_BUF_SPLICE_MOVE);
+	struct fuse_bufvec *src = malloc(sizeof(*src));
+	if (!src)
+		return -errno;
+
+	*src = FUSE_BUFVEC_INIT(size);
+
+	src->buf[0].flags = FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK;
+	src->buf[0].fd = fi->fh;
+	src->buf[0].pos = off;
+
+	*bufp = src;
+
+	return 0;
 }
 
 static void projfs_op_write_buf(fuse_req_t req, fuse_ino_t ino,
@@ -482,7 +490,7 @@ static struct fuse_operations projfs_ops = {
 	// .symlink	= projfs_op_symlink,
 	.create		= projfs_op_create,
 	.open		= projfs_op_open,
-	// .read		= projfs_op_read,
+	.read_buf	= projfs_op_read_buf,
 	// .write_buf	= projfs_op_write_buf,
 	// .release	= projfs_op_release,
 	// .unlink		= projfs_op_unlink,
