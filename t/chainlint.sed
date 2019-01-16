@@ -1,6 +1,6 @@
 # Copyright (C) Junio C Hamano and Git contributors.
 #
-# See the COPYING file distributed with this library for additional
+# See the NOTICE file distributed with this library for additional
 # information regarding copyright ownership.
 
 #------------------------------------------------------------------------------

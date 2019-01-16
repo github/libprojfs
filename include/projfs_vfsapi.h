@@ -1,7 +1,7 @@
 /* VFSForGit ProjFS API
    Copyright (C) 2018-2019 GitHub, Inc.
 
-   See the COPYING file distributed with this library for additional
+   See the NOTICE file distributed with this library for additional
    information regarding copyright ownership.
 
    This library is free software; you can redistribute it and/or
@@ -15,7 +15,7 @@
    Lesser General Public License for more details.
 
    You should have received a copy of the GNU Lesser General Public
-   License along with this library, in the file LICENSE.md; if not,
+   License along with this library, in the file COPYING; if not,
    see <http://www.gnu.org/licenses/>.
  */
 
@@ -44,7 +44,7 @@
    DEALINGS IN THE SOFTWARE
 
    You should have received a copy of the MIT License along with this
-   library, in the file LICENSE.md; if not, see
+   library, in the file COPYING; if not, see
    <https://opensource.org/licenses/MIT>
  */
 
