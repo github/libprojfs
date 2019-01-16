@@ -480,28 +480,47 @@ static int projfs_op_utimens(char const *path, const struct timespec tv[2],
 
 
 static struct fuse_operations projfs_ops = {
-	.init		= projfs_op_init,
 	.getattr	= projfs_op_getattr,
-	.flush		= projfs_op_flush,
-	.fsync		= projfs_op_fsync,
+	// readlink
 	.mknod		= projfs_op_mknod,
-	.symlink	= projfs_op_symlink,
-	.create		= projfs_op_create,
-	.open		= projfs_op_open,
-	.read_buf	= projfs_op_read_buf,
-	.write_buf	= projfs_op_write_buf,
-	.release	= projfs_op_release,
-	.unlink		= projfs_op_unlink,
 	.mkdir		= projfs_op_mkdir,
+	.unlink		= projfs_op_unlink,
 	.rmdir		= projfs_op_rmdir,
+	.symlink	= projfs_op_symlink,
 	.rename		= projfs_op_rename,
-	.opendir	= projfs_op_opendir,
-	.readdir	= projfs_op_readdir,
-	.releasedir	= projfs_op_releasedir,
+	// link
 	.chmod		= projfs_op_chmod,
 	.chown		= projfs_op_chown,
 	.truncate	= projfs_op_truncate,
+	.open		= projfs_op_open,
+	// read
+	// write
+	// statfs
+	.flush		= projfs_op_flush,
+	.release	= projfs_op_release,
+	.fsync		= projfs_op_fsync,
+	// setxattr
+	// getxattr
+	// listxattr
+	// removexattr
+	.opendir	= projfs_op_opendir,
+	.readdir	= projfs_op_readdir,
+	.releasedir	= projfs_op_releasedir,
+	// fsyncdir
+	.init		= projfs_op_init,
+	// destroy
+	// access
+	.create		= projfs_op_create,
+	// lock
 	.utimens	= projfs_op_utimens,
+	// bmap
+	// ioctl
+	// poll
+	.write_buf	= projfs_op_write_buf,
+	.read_buf	= projfs_op_read_buf,
+	// flock
+	// fallocate
+	// copy_file_range
 };
 
 #ifdef PROJFS_DEBUG
