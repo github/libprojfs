@@ -31,6 +31,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/file.h>
 #include <sys/syscall.h>
 #include <sys/xattr.h>
 #include <unistd.h>
@@ -573,6 +574,13 @@ static int projfs_op_access(char const *path, int mode)
 	return res == -1 ? -errno : 0;
 }
 
+static int projfs_op_flock(char const *path, struct fuse_file_info *fi, int op)
+{
+	(void)path;
+	int res = flock(fi->fh, op);
+	return res == -1 ? -errno : 0;
+}
+
 static struct fuse_operations projfs_ops = {
 	.getattr	= projfs_op_getattr,
 	.readlink	= projfs_op_readlink,
@@ -601,14 +609,13 @@ static struct fuse_operations projfs_ops = {
 	.init		= projfs_op_init,
 	.access		= projfs_op_access,
 	.create		= projfs_op_create,
-	// lock
 	.utimens	= projfs_op_utimens,
 	// bmap
 	// ioctl
 	// poll
 	.write_buf	= projfs_op_write_buf,
 	.read_buf	= projfs_op_read_buf,
-	// flock
+	.flock		= projfs_op_flock,
 	// fallocate
 	// copy_file_range
 };
