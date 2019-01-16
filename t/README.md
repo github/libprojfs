@@ -792,11 +792,11 @@ library for your script to use.
   test_line_count = 5 foo
   ```
 
-* `test_path_is_file <path> [<diagnosis>]`
-  `test_path_is_dir <path> [<diagnosis>]`
-  `test_path_exists <path> [<diagnosis>]`
-  `test_path_is_missing <path> [<diagnosis>]`
-  `test_dir_is_empty <path>`
+* `test_path_is_file <path> [<diagnosis>]`\
+  `test_path_is_dir <path> [<diagnosis>]`\
+  `test_path_exists <path> [<diagnosis>]`\
+  `test_path_is_missing <path> [<diagnosis>]`\
+  `test_dir_is_empty <path>`\
   `test_must_be_empty <path>`
 
   Check if the named path is a file, if the named path is a
