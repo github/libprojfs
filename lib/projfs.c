@@ -563,6 +563,16 @@ static int projfs_op_removexattr(char const *path, char const *name)
 	return res == -1 ? -errno : 0;
 }
 
+static int projfs_op_access(char const *path, int mode)
+{
+	char *lower = lower_path(path);
+	if (!lower)
+		return -errno;
+	int res = faccessat(AT_FDCWD, lower, mode, AT_SYMLINK_NOFOLLOW);
+	free(lower);
+	return res == -1 ? -errno : 0;
+}
+
 static struct fuse_operations projfs_ops = {
 	.getattr	= projfs_op_getattr,
 	.readlink	= projfs_op_readlink,
@@ -588,10 +598,8 @@ static struct fuse_operations projfs_ops = {
 	.opendir	= projfs_op_opendir,
 	.readdir	= projfs_op_readdir,
 	.releasedir	= projfs_op_releasedir,
-	// fsyncdir
 	.init		= projfs_op_init,
-	// destroy
-	// access
+	.access		= projfs_op_access,
 	.create		= projfs_op_create,
 	// lock
 	.utimens	= projfs_op_utimens,
