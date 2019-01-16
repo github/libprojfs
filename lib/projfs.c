@@ -24,6 +24,7 @@
 #include <config.h>
 
 #include <assert.h>
+#include <dirent.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <pthread.h>
@@ -44,6 +45,12 @@
 #ifdef PROJFS_VFSAPI
 #include "projfs_vfsapi.h"
 #endif
+
+struct projfs_dir {
+	DIR *dir;
+	long loc;
+	struct dirent *ent;
+};
 
 static struct projfs *projfs_context_fs(void)
 {
@@ -102,18 +109,14 @@ static int projfs_fuse_perm_event(uint64_t mask,
 		handler, mask, path, target_path, 1);
 }
 
-static char *lower_path(char const *path)
+static const char *lower_path(char const *path)
 {
-	// lower never ends in "/", path always starts with "/"
-	struct projfs *fs = projfs_context_fs();
-	int lower_len = strlen(fs->lowerdir);
-	int path_len = strlen(path);
-	char *res = malloc(lower_len + path_len + 1);
-	if (!res)
-		return NULL;
-	strcpy(res, fs->lowerdir);
-	strcat(res, path);
-	return res;
+	if (*(++path) == '\0') {
+		struct projfs *fs = projfs_context_fs();
+
+		return fs->lowerdir;
+	} else
+		return path;
 }
 
 // filesystem ops
@@ -126,22 +129,16 @@ static int projfs_op_getattr(char const *path, struct stat *attr,
 	if (fi)
 		res = fstat(fi->fh, attr);
 	else {
-		char *lower = lower_path(path);
-		if (lower == NULL)
-			return -errno;
+		const char *lower = lower_path(path);
 		res = lstat(lower, attr);
-		free(lower);
 	}
 	return res == -1 ? -errno : 0;
 }
 
 static int projfs_op_readlink(char const *path, char *buf, size_t size)
 {
-	char *lower = lower_path(path);
-	if (!lower)
-		return -errno;
+	const char *lower = lower_path(path);
 	int res = readlink(lower, buf, size - 1);
-	free(lower);
 	if (res == -1)
 		return -errno;
 	buf[res] = 0;
@@ -150,17 +147,9 @@ static int projfs_op_readlink(char const *path, char *buf, size_t size)
 
 static int projfs_op_link(char const *src, char const *dst)
 {
-	char *lower_src = lower_path(src);
-	if (!lower_src)
-		return -errno;
-	char *lower_dst = lower_path(dst);
-	if (!lower_dst) {
-		free(lower_src);
-		return -errno;
-	}
+	const char *lower_src = lower_path(src);
+	const char *lower_dst = lower_path(dst);
 	int res = link(lower_src, lower_dst);
-	free(lower_dst);
-	free(lower_src);
 	return res == -1 ? -errno : 0;
 }
 
@@ -198,43 +187,30 @@ static int projfs_op_fsync(char const *path, int datasync,
 static int projfs_op_mknod(char const *path, mode_t mode, dev_t rdev)
 {
 	int res;
-	char *lower = lower_path(path);
-	if (!lower)
-		return -errno;
+	const char *lower = lower_path(path);
+
 	if (S_ISFIFO(mode))
 		res = mkfifo(lower, mode);
 	else
 		res = mknod(lower, mode, rdev);
-	free(lower);
 	return res == -1 ? -errno : 0;
 }
 
 static int projfs_op_symlink(char const *link, char const *name)
 {
-	char *lower_link = lower_path(link);
-	if (!lower_link)
-		return -errno;
-	char *lower_name = lower_path(name);
-	if (!lower_name) {
-		free(lower_link);
-		return -errno;
-	}
+	const char *lower_link = lower_path(link);
+	const char *lower_name = lower_path(name);
+
 	int res = symlink(lower_link, lower_name);
-	free(lower_name);
-	free(lower_link);
 	return res == -1 ? -errno : 0;
 }
 
 static int projfs_op_create(char const *path, mode_t mode,
                             struct fuse_file_info *fi)
 {
-	char *lower = lower_path(path);
-	if (!lower)
-		return -errno;
+	const char *lower = lower_path(path);
 	int fd = open(lower, fi->flags, mode);
-	free(lower);
-	if (fd == -1)
-		return -errno;
+
 	fi->fh = fd;
 	int res = projfs_fuse_notify_event(
 		PROJFS_CREATE_SELF,
@@ -245,11 +221,9 @@ static int projfs_op_create(char const *path, mode_t mode,
 
 static int projfs_op_open(char const *path, struct fuse_file_info *fi)
 {
-	char *lower = lower_path(path);
-	if (!lower)
-		return -errno;
+	const char *lower = lower_path(path);
 	int fd = open(lower, fi->flags);
-	free(lower);
+
 	if (fd == -1)
 		return -errno;
 	fi->fh = fd;
@@ -258,11 +232,8 @@ static int projfs_op_open(char const *path, struct fuse_file_info *fi)
 
 static int projfs_op_statfs(char const *path, struct statvfs *buf)
 {
-	char *lower = lower_path(path);
-	if (!lower)
-		return -errno;
+	const char *lower = lower_path(path);
 	int res = statvfs(lower, buf);
-	free(lower);
 	return res == -1 ? -errno : 0;
 }
 
@@ -313,21 +284,17 @@ static int projfs_op_unlink(char const *path)
 		NULL);
 	if (res < 0)
 		return res;
-	char *lower = lower_path(path);
-	if (!lower)
-		return -errno;
+	const char *lower = lower_path(path);
+
 	res = unlink(lower);
-	free(lower);
 	return res == -1 ? -errno : 0;
 }
 
 static int projfs_op_mkdir(char const *path, mode_t mode)
 {
-	char *lower = lower_path(path);
-	if (!lower)
-		return -errno;
+	const char *lower = lower_path(path);
+
 	int res = mkdir(lower, mode);
-	free(lower);
 	if (res == -1)
 		return -errno;
 	res = projfs_fuse_notify_event(
@@ -345,25 +312,18 @@ static int projfs_op_rmdir(char const *path)
 		NULL);
 	if (res < 0)
 		return res;
-	char *lower = lower_path(path);
-	if (!lower)
-		return -errno;
+	const char *lower = lower_path(path);
+
 	res = rmdir(lower);
-	free(lower);
 	return res == -1 ? -errno : 0;
 }
 
 static int projfs_op_rename(char const *src, char const *dst,
                             unsigned int flags)
 {
-	char *lower_src = lower_path(src);
-	if (!lower_src)
-		return -errno;
-	char *lower_dst = lower_path(dst);
-	if (!lower_dst) {
-		free(lower_src);
-		return -errno;
-	}
+	const char *lower_src = lower_path(src);
+	const char *lower_dst = lower_path(dst);
+
 	int res = syscall(
 		SYS_renameat2,
 		0,
@@ -371,8 +331,6 @@ static int projfs_op_rename(char const *src, char const *dst,
 		0,
 		lower_dst,
 		flags);
-	free(lower_dst);
-	free(lower_src);
 	return res == -1 ? -errno : 0;
 }
 
@@ -382,14 +340,9 @@ static int projfs_op_opendir(char const *path, struct fuse_file_info *fi)
 	if (!d)
 		return -ENOMEM;
 
-	char *lower = lower_path(path);
-	if (!lower) {
-		free(d);
-		return -errno;
-	}
+	const char *lower = lower_path(path);
 
 	d->dir = opendir(lower);
-	free(lower);
 	if (!d->dir) {
 		free(d);
 		return -errno;
@@ -465,11 +418,9 @@ static int projfs_op_chmod(char const *path, mode_t mode,
 	if (fi)
 		res = fchmod(fi->fh, mode);
 	else {
-		char *lower = lower_path(path);
-		if (!lower)
-			return -errno;
+		const char *lower = lower_path(path);
+
 		res = chmod(lower, mode);
-		free(lower);
 	}
 	return res == -1 ? -errno : 0;
 }
@@ -481,11 +432,9 @@ static int projfs_op_chown(char const *path, uid_t uid, gid_t gid,
 	if (fi)
 		res = fchown(fi->fh, uid, gid);
 	else {
-		char *lower = lower_path(path);
-		if (!lower)
-			return -errno;
+		const char *lower = lower_path(path);
+
 		res = chown(lower, uid, gid);
-		free(lower);
 	}
 	return res == -1 ? -errno : 0;
 }
@@ -497,11 +446,9 @@ static int projfs_op_truncate(char const *path, off_t off,
 	if (fi)
 		res = ftruncate(fi->fh, off);
 	else {
-		char *lower = lower_path(path);
-		if (!lower)
-			return -errno;
+		const char *lower = lower_path(path);
+
 		res = truncate(lower, off);
-		free(lower);
 	}
 	return res == -1 ? -errno : 0;
 }
@@ -513,11 +460,9 @@ static int projfs_op_utimens(char const *path, const struct timespec tv[2],
 	if (fi)
 		res = futimens(fi->fh, tv);
 	else {
-		char *lower = lower_path(path);
-		if (!lower)
-			return -errno;
-		res = utimensat(0, lower, tv, AT_SYMLINK_NOFOLLOW);
-		free(lower);
+		const char *lower = lower_path(path);
+
+		res = utimensat(AT_FDCWD, lower, tv, AT_SYMLINK_NOFOLLOW);
 	}
 	return res == -1 ? -errno : 0;
 }
@@ -525,52 +470,37 @@ static int projfs_op_utimens(char const *path, const struct timespec tv[2],
 static int projfs_op_setxattr(char const *path, char const *name,
                               char const *value, size_t size, int flags)
 {
-	char *lower = lower_path(path);
-	if (!lower)
-		return -errno;
+	const char *lower = lower_path(path);
 	int res = lsetxattr(lower, name, value, size, flags);
-	free(lower);
 	return res == -1 ? -errno : 0;
 }
 
 static int projfs_op_getxattr(char const *path, char const *name,
                               char *value, size_t size)
 {
-	char *lower = lower_path(path);
-	if (!lower)
-		return -errno;
+	const char *lower = lower_path(path);
 	ssize_t res = lgetxattr(lower, name, value, size);
-	free(lower);
 	return res == -1 ? -errno : 0;
 }
 
 static int projfs_op_listxattr(char const *path, char *list, size_t size)
 {
-	char *lower = lower_path(path);
-	if (!lower)
-		return -errno;
+	const char *lower = lower_path(path);
 	int res = llistxattr(lower, list, size);
-	free(lower);
 	return res == -1 ? -errno : 0;
 }
 
 static int projfs_op_removexattr(char const *path, char const *name)
 {
-	char *lower = lower_path(path);
-	if (!lower)
-		return -errno;
+	const char *lower = lower_path(path);
 	int res = removexattr(lower, name);
-	free(lower);
 	return res == -1 ? -errno : 0;
 }
 
 static int projfs_op_access(char const *path, int mode)
 {
-	char *lower = lower_path(path);
-	if (!lower)
-		return -errno;
+	const char *lower = lower_path(path);
 	int res = faccessat(AT_FDCWD, lower, mode, AT_SYMLINK_NOFOLLOW);
-	free(lower);
 	return res == -1 ? -errno : 0;
 }
 
@@ -743,8 +673,8 @@ static void *projfs_loop(void *data)
 		goto out_signal;
 	}
 
-	// since we're running in a thread, don't daemonize, just chdir()
-	if (fuse_daemonize(1)) {
+	// change to lower directory so relative paths resolve in file ops
+	if (chdir(fs->lowerdir) < 0) {
 		res = 4;
 		goto out_unmount;
 	}
