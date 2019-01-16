@@ -32,6 +32,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/syscall.h>
+#include <sys/xattr.h>
 #include <unistd.h>
 
 #include "projfs.h"
@@ -520,6 +521,47 @@ static int projfs_op_utimens(char const *path, const struct timespec tv[2],
 	return res == -1 ? -errno : 0;
 }
 
+static int projfs_op_setxattr(char const *path, char const *name,
+                              char const *value, size_t size, int flags)
+{
+	char *lower = lower_path(path);
+	if (!lower)
+		return -errno;
+	int res = lsetxattr(lower, name, value, size, flags);
+	free(lower);
+	return res == -1 ? -errno : 0;
+}
+
+static int projfs_op_getxattr(char const *path, char const *name,
+                              char *value, size_t size)
+{
+	char *lower = lower_path(path);
+	if (!lower)
+		return -errno;
+	ssize_t res = lgetxattr(lower, name, value, size);
+	free(lower);
+	return res == -1 ? -errno : 0;
+}
+
+static int projfs_op_listxattr(char const *path, char *list, size_t size)
+{
+	char *lower = lower_path(path);
+	if (!lower)
+		return -errno;
+	int res = llistxattr(lower, list, size);
+	free(lower);
+	return res == -1 ? -errno : 0;
+}
+
+static int projfs_op_removexattr(char const *path, char const *name)
+{
+	char *lower = lower_path(path);
+	if (!lower)
+		return -errno;
+	int res = removexattr(lower, name);
+	free(lower);
+	return res == -1 ? -errno : 0;
+}
 
 static struct fuse_operations projfs_ops = {
 	.getattr	= projfs_op_getattr,
@@ -539,10 +581,10 @@ static struct fuse_operations projfs_ops = {
 	.flush		= projfs_op_flush,
 	.release	= projfs_op_release,
 	.fsync		= projfs_op_fsync,
-	// setxattr
-	// getxattr
-	// listxattr
-	// removexattr
+	.setxattr	= projfs_op_setxattr,
+	.getxattr	= projfs_op_getxattr,
+	.listxattr	= projfs_op_listxattr,
+	.removexattr	= projfs_op_removexattr,
 	.opendir	= projfs_op_opendir,
 	.readdir	= projfs_op_readdir,
 	.releasedir	= projfs_op_releasedir,
