@@ -22,14 +22,6 @@
 #ifndef PROJFS_I_H
 #define PROJFS_I_H
 
-#include <dirent.h>
-
-struct projfs_dir {
-	DIR *dir;
-	long loc;
-	struct dirent *ent;
-};
-
 /** Private projfs filesystem handle */
 struct projfs {
 	char *lowerdir;
