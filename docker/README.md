@@ -1,6 +1,4 @@
-# projfs-docker
-
-Build projfs with Docker.
+Build libprojfs with Docker.
 
   - [Getting started](#getting-started)
   - [How it works](#how-it-works)
