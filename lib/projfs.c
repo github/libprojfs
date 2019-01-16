@@ -100,17 +100,6 @@ static int projfs_fuse_perm_event(uint64_t mask,
 		handler, mask, path, target_path, 1);
 }
 
-static void *projfs_op_init(struct fuse_conn_info *conn, struct fuse_config *cfg)
-{
-	(void)conn;
-
-	cfg->entry_timeout = 0;
-	cfg->attr_timeout = 0;
-	cfg->negative_timeout = 0;
-
-	return projfs_context_fs();
-}
-
 static char *lower_path(char const *path)
 {
 	// lower never ends in "/", path always starts with "/"
@@ -124,6 +113,8 @@ static char *lower_path(char const *path)
 	strcat(res, path);
 	return res;
 }
+
+// filesystem ops
 
 static int projfs_op_getattr(char const *path, struct stat *attr,
                              struct fuse_file_info *fi)
@@ -140,6 +131,47 @@ static int projfs_op_getattr(char const *path, struct stat *attr,
 		free(lower);
 	}
 	return res == -1 ? -errno : 0;
+}
+
+static int projfs_op_readlink(char const *path, char *buf, size_t size)
+{
+	char *lower = lower_path(path);
+	if (!lower)
+		return -errno;
+	int res = readlink(lower, buf, size - 1);
+	free(lower);
+	if (res == -1)
+		return -errno;
+	buf[res] = 0;
+	return 0;
+}
+
+static int projfs_op_link(char const *src, char const *dst)
+{
+	char *lower_src = lower_path(src);
+	if (!lower_src)
+		return -errno;
+	char *lower_dst = lower_path(dst);
+	if (!lower_dst) {
+		free(lower_src);
+		return -errno;
+	}
+	int res = link(lower_src, lower_dst);
+	free(lower_dst);
+	free(lower_src);
+	return res == -1 ? -errno : 0;
+}
+
+static void *projfs_op_init(struct fuse_conn_info *conn,
+                            struct fuse_config *cfg)
+{
+	(void)conn;
+
+	cfg->entry_timeout = 0;
+	cfg->attr_timeout = 0;
+	cfg->negative_timeout = 0;
+
+	return projfs_context_fs();
 }
 
 static int projfs_op_flush(char const *path, struct fuse_file_info *fi)
@@ -220,6 +252,16 @@ static int projfs_op_open(char const *path, struct fuse_file_info *fi)
 		return -errno;
 	fi->fh = fd;
 	return 0;
+}
+
+static int projfs_op_statfs(char const *path, struct statvfs *buf)
+{
+	char *lower = lower_path(path);
+	if (!lower)
+		return -errno;
+	int res = statvfs(lower, buf);
+	free(lower);
+	return res == -1 ? -errno : 0;
 }
 
 static int projfs_op_read_buf(char const *path, struct fuse_bufvec **bufp, size_t size,
@@ -481,21 +523,19 @@ static int projfs_op_utimens(char const *path, const struct timespec tv[2],
 
 static struct fuse_operations projfs_ops = {
 	.getattr	= projfs_op_getattr,
-	// readlink
+	.readlink	= projfs_op_readlink,
 	.mknod		= projfs_op_mknod,
 	.mkdir		= projfs_op_mkdir,
 	.unlink		= projfs_op_unlink,
 	.rmdir		= projfs_op_rmdir,
 	.symlink	= projfs_op_symlink,
 	.rename		= projfs_op_rename,
-	// link
+	.link		= projfs_op_link,
 	.chmod		= projfs_op_chmod,
 	.chown		= projfs_op_chown,
 	.truncate	= projfs_op_truncate,
 	.open		= projfs_op_open,
-	// read
-	// write
-	// statfs
+	.statfs		= projfs_op_statfs,
 	.flush		= projfs_op_flush,
 	.release	= projfs_op_release,
 	.fsync		= projfs_op_fsync,
