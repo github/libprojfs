@@ -581,6 +581,15 @@ static int projfs_op_flock(char const *path, struct fuse_file_info *fi, int op)
 	return res == -1 ? -errno : 0;
 }
 
+static int projfs_op_fallocate(char const *path, int mode, off_t off,
+                               off_t len, struct fuse_file_info *fi)
+{
+	(void)path;
+	if (mode)
+		return -EOPNOTSUPP;
+	return -posix_fallocate(fi->fh, off, len);
+}
+
 static struct fuse_operations projfs_ops = {
 	.getattr	= projfs_op_getattr,
 	.readlink	= projfs_op_readlink,
@@ -610,13 +619,10 @@ static struct fuse_operations projfs_ops = {
 	.access		= projfs_op_access,
 	.create		= projfs_op_create,
 	.utimens	= projfs_op_utimens,
-	// bmap
-	// ioctl
-	// poll
 	.write_buf	= projfs_op_write_buf,
 	.read_buf	= projfs_op_read_buf,
 	.flock		= projfs_op_flock,
-	// fallocate
+	.fallocate	= projfs_op_fallocate,
 	// copy_file_range
 };
 
