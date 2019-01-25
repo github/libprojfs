@@ -196,12 +196,9 @@ static int projfs_op_mknod(char const *path, mode_t mode, dev_t rdev)
 	return res == -1 ? -errno : 0;
 }
 
-static int projfs_op_symlink(char const *link, char const *name)
+static int projfs_op_symlink(char const *link, char const *path)
 {
-	const char *lower_link = lower_path(link);
-	const char *lower_name = lower_path(name);
-
-	int res = symlink(lower_link, lower_name);
+	int res = symlink(link, lower_path(path));
 	return res == -1 ? -errno : 0;
 }
 
