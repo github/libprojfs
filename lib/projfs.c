@@ -208,6 +208,8 @@ static int projfs_op_create(char const *path, mode_t mode,
 	const char *lower = lower_path(path);
 	int fd = open(lower, fi->flags, mode);
 
+	if (fd == -1)
+		return -errno;
 	fi->fh = fd;
 	int res = projfs_fuse_notify_event(
 		PROJFS_CREATE_SELF,
