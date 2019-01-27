@@ -84,7 +84,7 @@ AC_HEADER_STDBOOL
 AC_TYPE_UINT16_T
 
 AC_CHECK_HEADER([pthread.h], [],
-  [AC_MSG_ERROR(POSIX threads header file not found)]dnl
+  [AC_MSG_ERROR([POSIX threads header file not found])]dnl
 )dnl
 
 AC_CHECK_HEADERS([sys/fanotify.h])
@@ -92,8 +92,12 @@ AC_CHECK_HEADERS([sys/inotify.h])
 
 LIBS=''
 # TODO: remove when FUSE no longer used (also Libs.private in projfs.pc)
-AC_SEARCH_LIBS([fuse_new_30], [fuse3])
-AC_SEARCH_LIBS([pthread_create], [pthread])
+AC_SEARCH_LIBS([fuse_new_30], [fuse3], [],
+  [AC_MSG_ERROR([FUSE version 3 library not found])]dnl
+)dnl
+AC_SEARCH_LIBS([pthread_create], [pthread], [],
+  [AC_MSG_ERROR([POSIX threads library not found])]dnl
+)dnl
 
 libprojfs_libs="$LIBS"
 AC_SUBST([libprojfs_libs])
