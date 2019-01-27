@@ -26,6 +26,8 @@
 
 #define RETVAL_DEFAULT 1000		// magic unused value
 
+long int test_parse_long(const char *arg, int base);
+
 int test_parse_retsym(int vfsapi, const char *retsym, int *retval);
 
 void test_parse_opts(int argc, const char **argv, int vfsapi,

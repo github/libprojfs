@@ -33,7 +33,7 @@ check_PROGRAMS = get_strerror \
 get_strerror_SOURCES = get_strerror.c $(test_common)
 test_projfs_handlers_SOURCES = test_projfs_handlers.c $(test_common)
 test_projfs_simple_SOURCES = test_projfs_simple.c $(test_common)
-wait_mount_SOURCES = wait_mount.c
+wait_mount_SOURCES = wait_mount.c $(test_common)
 
 if ENABLE_VFSAPI
 test_vfsapi_common = $(test_common) $(top_srcdir)/include/projfs_vfsapi.h

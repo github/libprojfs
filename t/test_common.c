@@ -96,6 +96,21 @@ static struct retval vfsapi_retvals[] = {
 #define get_retvals(v) errno_retvals
 #endif /* !PROJFS_VFSAPI */
 
+long int test_parse_long(const char *arg, int base)
+{
+	long int val;
+	char *end;
+
+	errno = 0;
+	val = strtol(arg, &end, base);
+	if (errno > 0 || end == arg || *end != '\0') {
+		errno = EINVAL;
+		val = 0;
+	}
+
+	return val;
+}
+
 int test_parse_retsym(int vfsapi, const char *retsym, int *retval)
 {
 	const struct retval *retvals = get_retvals(vfsapi);
