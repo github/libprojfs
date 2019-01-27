@@ -93,7 +93,7 @@ out:
 	return ret;
 }
 
-int main(int argc, const char *argv[])
+int main(int argc, char *const argv[])
 {
 	long int prior_dev;
 	long int timeout;

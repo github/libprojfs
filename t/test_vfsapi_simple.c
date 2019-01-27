@@ -27,13 +27,14 @@
 
 #include "test_common.h"
 
-int main(int argc, const char **argv)
+int main(int argc, char *const argv[])
 {
 	const char *lower_path, *mount_path;
 	PrjFS_MountHandle *handle;
 	PrjFS_Callbacks callbacks;
 
-	test_parse_opts(argc, argv, 1, &lower_path, &mount_path, NULL);
+	test_parse_mount_opts(argc, argv, TEST_OPT_VFSAPI,
+			      &lower_path, &mount_path, NULL);
 
 	memset(&callbacks, 0, sizeof(PrjFS_Callbacks));
 

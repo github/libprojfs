@@ -53,13 +53,14 @@ static PrjFS_Result TestNotifyOperation(
 	return (retval == RETVAL_DEFAULT) ? PrjFS_Result_Success : retval;
 }
 
-int main(int argc, const char **argv)
+int main(int argc, char *const argv[])
 {
 	const char *lower_path, *mount_path;
 	PrjFS_MountHandle *handle;
 	PrjFS_Callbacks callbacks;
 
-	test_parse_opts(argc, argv, 1, &lower_path, &mount_path, &retval);
+	test_parse_mount_opts(argc, argv, TEST_OPT_VFSAPI,
+			      &lower_path, &mount_path, &retval);
 
 	memset(&callbacks, 0, sizeof(PrjFS_Callbacks));
 	callbacks.NotifyOperation = TestNotifyOperation;

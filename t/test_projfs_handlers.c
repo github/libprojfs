@@ -55,13 +55,14 @@ static int test_perm_event(struct projfs_event *event)
 	return test_handle_event(event, "permission request", 1);
 }
 
-int main(int argc, const char **argv)
+int main(int argc, char *const argv[])
 {
 	const char *lower_path, *mount_path;
 	struct projfs *fs;
 	struct projfs_handlers handlers;
 
-	test_parse_opts(argc, argv, 0, &lower_path, &mount_path, &retval);
+	test_parse_mount_opts(argc, argv, TEST_OPT_NONE,
+			      &lower_path, &mount_path, &retval);
 
 	handlers.handle_notify_event = &test_notify_event;
 	handlers.handle_perm_event = &test_perm_event;

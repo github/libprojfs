@@ -24,12 +24,13 @@
 
 #include "test_common.h"
 
-int main(int argc, const char **argv)
+int main(int argc, char *const argv[])
 {
 	const char *lower_path, *mount_path;
 	struct projfs *fs;
 
-	test_parse_opts(argc, argv, 0, &lower_path, &mount_path, NULL);
+	test_parse_mount_opts(argc, argv, TEST_OPT_NONE,
+			      &lower_path, &mount_path, NULL);
 
 	fs = test_start_mount(lower_path, mount_path, NULL, 0, NULL);
 	test_wait_signal();

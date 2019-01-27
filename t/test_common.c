@@ -186,7 +186,7 @@ int test_parse_retsym(int vfsapi, const char *retsym, int *retval)
 	return ret;
 }
 
-void test_parse_opts(int argc, const char **argv, int vfsapi,
+void test_parse_opts(int argc, char *const argv[], int vfsapi,
 		    const char **lower_path, const char **mount_path,
 		    int *retval)
 {
@@ -212,6 +212,15 @@ void test_parse_opts(int argc, const char **argv, int vfsapi,
 			test_exit_error(argv[0], "invalid %s option: %s",
 					RETVAL_OPT_NAME, retname);
 	}
+}
+
+void test_parse_mount_opts(int argc, char *const argv[],
+			   unsigned int opt_flags,
+			   const char **lower_path, const char **mount_path,
+			   int *retval)
+{
+	test_parse_opts(argc, argv, (opt_flags & TEST_OPT_VFSAPI) ? 1 : 0,
+			lower_path, mount_path, retval);
 }
 
 struct projfs *test_start_mount(const char *lowerdir, const char *mountdir,

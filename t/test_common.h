@@ -26,15 +26,23 @@
 
 #define RETVAL_DEFAULT 1000		// magic unused value
 
+#define TEST_OPT_NONE		0x0000
+#define TEST_OPT_VFSAPI		0x8000		// not a command-line option
+
 void test_exit_error(const char *argv0, const char *fmt, ...);
 
 long int test_parse_long(const char *arg, int base);
 
 int test_parse_retsym(int vfsapi, const char *retsym, int *retval);
 
-void test_parse_opts(int argc, const char **argv, int vfsapi,
+void test_parse_opts(int argc, char *const argv[], int vfsapi,
 		     const char **lower_path, const char **mount_path,
 		     int *retval);
+
+void test_parse_mount_opts(int argc, char *const argv[],
+			   unsigned int opt_flags,
+			   const char **lower_path, const char **mount_path,
+			   int *retval);
 
 struct projfs *test_start_mount(const char *lowerdir, const char *mountdir,
 				const struct projfs_handlers *handlers,
