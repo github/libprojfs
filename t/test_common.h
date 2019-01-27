@@ -26,7 +26,7 @@
 
 #define RETVAL_DEFAULT 1000		// magic unused value
 
-int test_find_retval(int vfsapi, const char *retname, const char *optname);
+int test_parse_retsym(int vfsapi, const char *retsym, int *retval);
 
 void test_parse_opts(int argc, const char **argv, int vfsapi,
 		     const char **lower_path, const char **mount_path,

@@ -36,9 +36,7 @@ int main(int argc, const char **argv)
 		exit(EXIT_FAILURE);
 	}
 
-	err = test_find_retval(0, argv[1], "errno");
-
-	if (err > 0) {
+	if (test_parse_retsym(0, argv[1], &err) < 0 || err > 0) {
 		fprintf(stderr, "%s: invalid errno: %s\n", basename(argv[0]),
 							   argv[1]);
 		exit(EXIT_FAILURE);

@@ -96,24 +96,28 @@ static struct retval vfsapi_retvals[] = {
 #define get_retvals(v) errno_retvals
 #endif /* !PROJFS_VFSAPI */
 
-int test_find_retval(int vfsapi, const char *retname, const char *optname)
+int test_parse_retsym(int vfsapi, const char *retsym, int *retval)
 {
 	const struct retval *retvals = get_retvals(vfsapi);
+	int ret = -1;
 	int i = 0;
 
 	while (retvals[i].name != NULL) {
 		const char *name = retvals[i].name;
 
-		if (!strcasecmp(name, retname) ||
+		if (!strcasecmp(name, retsym) ||
 		    (vfsapi &&
 		     !strncmp(name, VFSAPI_PREFIX, VFSAPI_PREFIX_LEN) &&
-		     !strcasecmp(name + VFSAPI_PREFIX_LEN, retname)))
-			return retvals[i].val;
+		     !strcasecmp(name + VFSAPI_PREFIX_LEN, retsym))) {
+			ret = 0;
+			*retval = retvals[i].val;
+			break;
+		}
+
 		++i;
 	}
 
-	errx(EXIT_FAILURE, "invalid %s option: %s",
-	     optname, retname);
+	return ret;
 }
 
 void test_parse_opts(int argc, const char **argv, int vfsapi,
@@ -144,9 +148,9 @@ void test_parse_opts(int argc, const char **argv, int vfsapi,
 	if (retval != NULL) {
 		if (retname == NULL)
 			*retval = RETVAL_DEFAULT;
-		else
-			*retval = test_find_retval(vfsapi, retname,
-						   RETVAL_OPT_NAME);
+		else if (test_parse_retsym(vfsapi, retname, retval) < 0)
+			errx(EXIT_FAILURE, "invalid %s option: %s",
+			     RETVAL_OPT_NAME, retname);
 	}
 }
 
