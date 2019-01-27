@@ -36,11 +36,8 @@ int main(int argc, const char **argv)
 		exit(EXIT_FAILURE);
 	}
 
-	if (test_parse_retsym(0, argv[1], &err) < 0 || err > 0) {
-		fprintf(stderr, "%s: invalid errno: %s\n", basename(argv[0]),
-							   argv[1]);
-		exit(EXIT_FAILURE);
-	}
+	if (test_parse_retsym(0, argv[1], &err) < 0 || err > 0)
+		test_exit_error(argv[0], "invalid errno symbol: %s", argv[1]);
 
 	printf("%s\n", strerror(-err));
 

@@ -105,18 +105,14 @@ int main(int argc, const char *argv[])
 	}
 
         prior_dev = test_parse_long(argv[1], 16);
-        if (errno > 0 || prior_dev <= 0) {
-		fprintf(stderr, "invalid device ID: %s\n", argv[1]);
-		exit(EXIT_FAILURE);
-	}
+        if (errno > 0 || prior_dev <= 0)
+		test_exit_error(argv[0], "invalid device ID: %s", argv[1]);
 
 	if (argc == 4) {
 		timeout = test_parse_long(argv[3], 10);
-		if (errno > 0 || timeout < 0) {
-			fprintf(stderr, "invalid timeout value: %s\n",
-				argv[3]);
-			exit(EXIT_FAILURE);
-		}
+		if (errno > 0 || timeout < 0)
+			test_exit_error(argv[0], "invalid timeout value: %s",
+					argv[3]);
 		max_wait = timeout;
 	}
 

@@ -26,6 +26,7 @@
 #include <err.h>
 #include <errno.h>
 #include <signal.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -34,6 +35,8 @@
 #include "test_common.h"
 
 #include "../include/projfs_notify.h"
+
+#define MOUNT_ARGS_USAGE "<lower-path> <mount-path>"
 
 #define RETVAL_OPT_NAME "--retval"
 #define RETVAL_OPT_HELP "allow|deny|null|<error>"
@@ -96,6 +99,54 @@ static struct retval vfsapi_retvals[] = {
 #define get_retvals(v) errno_retvals
 #endif /* !PROJFS_VFSAPI */
 
+static const char *get_program_name(const char *program)
+{
+	const char *basename;
+
+	basename = strrchr(program, '/');
+	if (basename != NULL)
+		program = basename + 1;
+
+	// remove libtool script prefix, if any
+	if (strncmp(program, "lt-", 3) == 0)
+		program += 3;
+
+	return program;
+}
+
+static void exit_usage(int err, const char *argv0, int retval_opt,
+		       const char *args_usage)
+{
+	FILE *file = err ? stderr : stdout;
+
+	fprintf(file, "Usage: %s", get_program_name(argv0));
+
+	if (retval_opt)
+		fprintf(stderr, " [%s %s]",
+			RETVAL_OPT_NAME, RETVAL_OPT_HELP);
+
+	fprintf(file, "%s%s\n",
+		(*args_usage == '\0' ? "" : " "),
+		args_usage);
+
+	exit(err ? EXIT_FAILURE : EXIT_SUCCESS);
+}
+
+void test_exit_error(const char *argv0, const char *fmt, ...)
+{
+	va_list ap;
+
+	fprintf(stderr, "%s: ", get_program_name(argv0));
+
+	va_start(ap, fmt);
+	vfprintf(stderr, fmt, ap);
+	va_end(ap);
+
+	fprintf(stderr, "\n");
+
+	exit(EXIT_FAILURE);
+}
+
 long int test_parse_long(const char *arg, int base)
 {
 	long int val;
@@ -147,15 +198,9 @@ void test_parse_opts(int argc, const char **argv, int vfsapi,
 		arg_offset = 2;
 	}
 
-	if (argc - arg_offset != 3) {
-		fprintf(stderr, "Usage: %s ", basename(argv[0]));
-		if (retval != NULL) {
-			fprintf(stderr, "\\\n\t[%s %s] ",
-				RETVAL_OPT_NAME, RETVAL_OPT_HELP);
-		}
-		fprintf(stderr, "<lower-path> <mount-path>\n");
-		exit(EXIT_FAILURE);
-	}
+	if (argc - arg_offset != 3)
+		exit_usage(1, argv[0], (retval == NULL) ? 0 : 1,
+			   MOUNT_ARGS_USAGE);
 
 	*lower_path = argv[1 + arg_offset];
 	*mount_path = argv[2 + arg_offset];
@@ -164,8 +209,8 @@ void test_parse_opts(int argc, const char **argv, int vfsapi,
 		if (retname == NULL)
 			*retval = RETVAL_DEFAULT;
 		else if (test_parse_retsym(vfsapi, retname, retval) < 0)
-			errx(EXIT_FAILURE, "invalid %s option: %s",
-			     RETVAL_OPT_NAME, retname);
+			test_exit_error(argv[0], "invalid %s option: %s",
+					RETVAL_OPT_NAME, retname);
 	}
 }
 
