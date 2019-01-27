@@ -61,15 +61,15 @@ int main(int argc, const char **argv)
 	struct projfs *fs;
 	struct projfs_handlers handlers;
 
-	tst_parse_opts(argc, argv, 0, &lower_path, &mount_path, &retval);
+	test_parse_opts(argc, argv, 0, &lower_path, &mount_path, &retval);
 
 	handlers.handle_notify_event = &test_notify_event;
 	handlers.handle_perm_event = &test_perm_event;
 
-	fs = tst_start_mount(lower_path, mount_path,
+	fs = test_start_mount(lower_path, mount_path,
 			     &handlers, sizeof(handlers), NULL);
-	tst_wait_signal();
-	tst_stop_mount(fs);
+	test_wait_signal();
+	test_stop_mount(fs);
 
 	exit(EXIT_SUCCESS);
 }

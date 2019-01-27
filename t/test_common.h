@@ -26,27 +26,27 @@
 
 #define RETVAL_DEFAULT 1000		// magic unused value
 
-int tst_find_retval(int vfsapi, const char *retname, const char *optname);
+int test_find_retval(int vfsapi, const char *retname, const char *optname);
 
-void tst_parse_opts(int argc, const char **argv, int vfsapi,
-		    const char **lower_path, const char **mount_path,
-		    int *retval);
+void test_parse_opts(int argc, const char **argv, int vfsapi,
+		     const char **lower_path, const char **mount_path,
+		     int *retval);
 
-struct projfs *tst_start_mount(const char *lowerdir, const char *mountdir,
-			       const struct projfs_handlers *handlers,
-			       size_t handlers_size, void *user_data);
+struct projfs *test_start_mount(const char *lowerdir, const char *mountdir,
+				const struct projfs_handlers *handlers,
+				size_t handlers_size, void *user_data);
 
-void *tst_stop_mount(struct projfs *fs);
+void *test_stop_mount(struct projfs *fs);
 
 #ifdef PROJFS_VFSAPI
-void tst_start_vfsapi_mount(const char *storageRootFullPath,
-                            const char *virtualizationRootFullPath,
-                            PrjFS_Callbacks callbacks,
-                            unsigned int poolThreadCount,
-                            PrjFS_MountHandle** mountHandle);
+void test_start_vfsapi_mount(const char *storageRootFullPath,
+			     const char *virtualizationRootFullPath,
+			     PrjFS_Callbacks callbacks,
+			     unsigned int poolThreadCount,
+			     PrjFS_MountHandle** mountHandle);
 
-void tst_stop_vfsapi_mount(PrjFS_MountHandle* handle);
+void test_stop_vfsapi_mount(PrjFS_MountHandle* handle);
 #endif /* PROJFS_VFSAPI */
 
-void tst_wait_signal(void);
+void test_wait_signal(void);
 

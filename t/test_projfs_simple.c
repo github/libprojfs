@@ -29,11 +29,11 @@ int main(int argc, const char **argv)
 	const char *lower_path, *mount_path;
 	struct projfs *fs;
 
-	tst_parse_opts(argc, argv, 0, &lower_path, &mount_path, NULL);
+	test_parse_opts(argc, argv, 0, &lower_path, &mount_path, NULL);
 
-	fs = tst_start_mount(lower_path, mount_path, NULL, 0, NULL);
-	tst_wait_signal();
-	tst_stop_mount(fs);
+	fs = test_start_mount(lower_path, mount_path, NULL, 0, NULL);
+	test_wait_signal();
+	test_stop_mount(fs);
 
 	exit(EXIT_SUCCESS);
 }

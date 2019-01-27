@@ -96,7 +96,7 @@ static struct retval vfsapi_retvals[] = {
 #define get_retvals(v) errno_retvals
 #endif /* !PROJFS_VFSAPI */
 
-int tst_find_retval(int vfsapi, const char *retname, const char *optname)
+int test_find_retval(int vfsapi, const char *retname, const char *optname)
 {
 	const struct retval *retvals = get_retvals(vfsapi);
 	int i = 0;
@@ -116,7 +116,7 @@ int tst_find_retval(int vfsapi, const char *retname, const char *optname)
 	     optname, retname);
 }
 
-void tst_parse_opts(int argc, const char **argv, int vfsapi,
+void test_parse_opts(int argc, const char **argv, int vfsapi,
 		    const char **lower_path, const char **mount_path,
 		    int *retval)
 {
@@ -145,14 +145,14 @@ void tst_parse_opts(int argc, const char **argv, int vfsapi,
 		if (retname == NULL)
 			*retval = RETVAL_DEFAULT;
 		else
-			*retval = tst_find_retval(vfsapi, retname,
-						  RETVAL_OPT_NAME);
+			*retval = test_find_retval(vfsapi, retname,
+						   RETVAL_OPT_NAME);
 	}
 }
 
-struct projfs *tst_start_mount(const char *lowerdir, const char *mountdir,
-			       const struct projfs_handlers *handlers,
-			       size_t handlers_size, void *user_data)
+struct projfs *test_start_mount(const char *lowerdir, const char *mountdir,
+				const struct projfs_handlers *handlers,
+				size_t handlers_size, void *user_data)
 {
 	struct projfs *fs;
 
@@ -168,17 +168,17 @@ struct projfs *tst_start_mount(const char *lowerdir, const char *mountdir,
 	return fs;
 }
 
-void *tst_stop_mount(struct projfs *fs)
+void *test_stop_mount(struct projfs *fs)
 {
 	return projfs_stop(fs);
 }
 
 #ifdef PROJFS_VFSAPI
-void tst_start_vfsapi_mount(const char *storageRootFullPath,
-			    const char *virtualizationRootFullPath,
-			    PrjFS_Callbacks callbacks,
-			    unsigned int poolThreadCount,
-			    PrjFS_MountHandle** mountHandle)
+void test_start_vfsapi_mount(const char *storageRootFullPath,
+			     const char *virtualizationRootFullPath,
+			     PrjFS_Callbacks callbacks,
+			     unsigned int poolThreadCount,
+			     PrjFS_MountHandle** mountHandle)
 {
 	PrjFS_Result ret;
 
@@ -191,7 +191,7 @@ void tst_start_vfsapi_mount(const char *storageRootFullPath,
 		err(EXIT_FAILURE, "unable to start filesystem: %d", ret);
 }
 
-void tst_stop_vfsapi_mount(PrjFS_MountHandle* mountHandle)
+void test_stop_vfsapi_mount(PrjFS_MountHandle* mountHandle)
 {
 	PrjFS_StopVirtualizationInstance(mountHandle);
 }
@@ -202,7 +202,7 @@ static void signal_handler(int sig)
 	(void) sig;
 }
 
-void tst_wait_signal(void)
+void test_wait_signal(void)
 {
 	int tty = isatty(STDIN_FILENO);
 
