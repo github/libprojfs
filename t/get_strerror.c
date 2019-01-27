@@ -29,17 +29,17 @@
 
 int main(int argc, const char **argv)
 {
-	int err;
+	int errval;
 
 	if (argc != 2) {
 		fprintf(stderr, "Usage: %s <errno>\n", basename(argv[0]));
 		exit(EXIT_FAILURE);
 	}
 
-	if (test_parse_retsym(0, argv[1], &err) < 0 || err > 0)
+	if (test_parse_retsym(0, argv[1], &errval) < 0 || errval > 0)
 		test_exit_error(argv[0], "invalid errno symbol: %s", argv[1]);
 
-	printf("%s\n", strerror(-err));
+	printf("%s\n", strerror(-errval));
 
 	exit(EXIT_SUCCESS);
 }
