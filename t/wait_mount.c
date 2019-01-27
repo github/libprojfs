@@ -20,7 +20,7 @@
 */
 
 #define _GNU_SOURCE		// for basename() in <string.h>
-				// and nanosleep()
+				// and nanosleep() in <time.h>
 
 #include <err.h>
 #include <errno.h>
@@ -32,8 +32,10 @@
 
 #include "test_common.h"
 
-#define MOUNT_MAX_WAIT_SEC 30
-#define MOUNT_WAIT_TIMESPEC { 0, 1000*1000 }
+#define MOUNT_SLEEP_TIMESPEC { 0, 1000*1000 }
+
+#define MOUNT_WAIT_SEC_DEFAULT 30
+#define MOUNT_WAIT_SEC_MAX 3600
 
 static int get_curr_time(time_t *sec)
 {
@@ -54,7 +56,7 @@ static int wait_for_mount(dev_t prior_dev, const char *mountdir,
 			  time_t max_wait)
 {
 	struct stat mnt;
-	const struct timespec wait_req = MOUNT_WAIT_TIMESPEC;
+	const struct timespec wait_req = MOUNT_SLEEP_TIMESPEC;
 	time_t start, now, wait = 0;
 	time_t warn_sec = 0;
 	int ret = 0;
@@ -95,7 +97,7 @@ int main(int argc, const char *argv[])
 {
 	long int prior_dev;
 	long int timeout;
-	time_t max_wait = MOUNT_MAX_WAIT_SEC;
+	time_t max_wait = MOUNT_WAIT_SEC_DEFAULT;
 
 	if (argc < 3 || argc > 4) {
 		fprintf(stderr, "Usage: %s <dev-id> <mount-path> "
@@ -110,7 +112,7 @@ int main(int argc, const char *argv[])
 
 	if (argc == 4) {
 		timeout = test_parse_long(argv[3], 10);
-		if (errno > 0 || timeout < 0)
+		if (errno > 0 || timeout < 0 || timeout > MOUNT_WAIT_SEC_MAX)
 			test_exit_error(argv[0], "invalid timeout value: %s",
 					argv[3]);
 		max_wait = timeout;
