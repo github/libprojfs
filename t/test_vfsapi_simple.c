@@ -38,7 +38,8 @@ int main(int argc, char *const argv[])
 
 	memset(&callbacks, 0, sizeof(PrjFS_Callbacks));
 
-	test_start_vfsapi_mount(lower_path, mount_path, callbacks, 0, &handle);
+	test_start_vfsapi_mount(lower_path, mount_path, callbacks,
+				0, &handle);
 	test_wait_signal();
 	test_stop_vfsapi_mount(handle);
 

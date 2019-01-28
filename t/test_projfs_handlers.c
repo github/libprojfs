@@ -59,7 +59,7 @@ int main(int argc, char *const argv[])
 {
 	const char *lower_path, *mount_path;
 	struct projfs *fs;
-	struct projfs_handlers handlers;
+	struct projfs_handlers handlers = { 0 };
 
 	test_parse_mount_opts(argc, argv, TEST_OPT_NONE,
 			      &lower_path, &mount_path, &retval);
@@ -68,7 +68,7 @@ int main(int argc, char *const argv[])
 	handlers.handle_perm_event = &test_perm_event;
 
 	fs = test_start_mount(lower_path, mount_path,
-			     &handlers, sizeof(handlers), NULL);
+			      &handlers, sizeof(handlers), NULL);
 	test_wait_signal();
 	test_stop_mount(fs);
 

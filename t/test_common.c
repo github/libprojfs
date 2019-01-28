@@ -49,7 +49,7 @@ struct retval {
 };
 
 // list based on VFS API convert_result_to_errno()
-static struct retval errno_retvals[] = {
+static const struct retval errno_retvals[] = {
 	{ "null",	0		},
 	{ "allow", 	PROJFS_ALLOW	},
 	{ "deny",	PROJFS_DENY	},
@@ -75,7 +75,7 @@ static struct retval errno_retvals[] = {
 #define retval_vfsapi_entry(s) #s, s
 
 // list based on VFS API convert_result_to_errno()
-static struct retval vfsapi_retvals[] = {
+static const struct retval vfsapi_retvals[] = {
 	{ "null",	PrjFS_Result_Invalid			},
 	{ "allow",	PrjFS_Result_Success			},
 	{ "deny",	PrjFS_Result_EAccessDenied		},

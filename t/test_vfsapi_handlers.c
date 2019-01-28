@@ -45,10 +45,10 @@ static PrjFS_Result TestNotifyOperation(
 	       relativePath, triggeringProcessId, triggeringProcessName,
 	       isDirectory, notificationType);
 
-	(void) commandId;
-	(void) providerId;
-	(void) contentId;
-	(void) destinationRelativePath;
+	(void)commandId;		// prevent compiler warnings
+	(void)providerId;
+	(void)contentId;
+	(void)destinationRelativePath;
 
 	return (retval == RETVAL_DEFAULT) ? PrjFS_Result_Success : retval;
 }
@@ -57,7 +57,7 @@ int main(int argc, char *const argv[])
 {
 	const char *lower_path, *mount_path;
 	PrjFS_MountHandle *handle;
-	PrjFS_Callbacks callbacks;
+	PrjFS_Callbacks callbacks = { 0 };
 
 	test_parse_mount_opts(argc, argv, TEST_OPT_VFSAPI,
 			      &lower_path, &mount_path, &retval);
@@ -65,7 +65,8 @@ int main(int argc, char *const argv[])
 	memset(&callbacks, 0, sizeof(PrjFS_Callbacks));
 	callbacks.NotifyOperation = TestNotifyOperation;
 
-	test_start_vfsapi_mount(lower_path, mount_path, callbacks, 0, &handle);
+	test_start_vfsapi_mount(lower_path, mount_path, callbacks,
+				0, &handle);
 	test_wait_signal();
 	test_stop_vfsapi_mount(handle);
 
