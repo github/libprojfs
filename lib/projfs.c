@@ -110,16 +110,6 @@ static int projfs_fuse_perm_event(uint64_t mask,
 		handler, mask, path, target_path, 1);
 }
 
-static const char *lower_path(char const *path)
-{
-	if (*(++path) == '\0') {
-		struct projfs *fs = projfs_context_fs();
-
-		return fs->lowerdir;
-	} else
-		return path;
-}
-
 // filesystem ops
 
 static const char *dotpath = ".";
@@ -504,34 +494,124 @@ static int projfs_op_utimens(char const *path, const struct timespec tv[2],
 	return res == -1 ? -errno : 0;
 }
 
+/* Try to avoid opening a FIFO pipe only to read/write xattrs, as this
+ * can result openat() entering an uninterruptable sleep while waiting
+ * for input/output on the pipe.
+ *
+ * However, there is a possible race after if path refers to a regular
+ * file which then is replaced with a pipe immediately after this check.
+ *
+ * We assume path has been converted with lowerpath(), and return
+ * a positive errno value on error, otherwise 0.
+ */
+static int check_fifo(const char *path)
+{
+	int res;
+	struct stat attr;
+	int err = 0;
+
+	res = fstatat(lowerdir_fd(), path, &attr, AT_SYMLINK_NOFOLLOW);
+	if (res == -1)
+		err = errno;
+	else if (S_ISFIFO(attr.st_mode)) {
+		res = -1;
+		err = ENOTSUP;
+	}
+	return res == -1 ? err : 0;
+}
+
 static int projfs_op_setxattr(char const *path, char const *name,
                               char const *value, size_t size, int flags)
 {
-	const char *lower = lower_path(path);
-	int res = lsetxattr(lower, name, value, size, flags);
-	return res == -1 ? -errno : 0;
+	int res = -1;
+	int err = 0;
+
+	path = lowerpath(path);
+	err = check_fifo(path);
+	if (err > 0)
+		goto out;
+	// TODO: any way to avoid the small race here after check_fifo()?
+	int fd = openat(lowerdir_fd(), path, O_NOFOLLOW | O_WRONLY);
+	if (fd == -1)
+		goto out;
+	res = fsetxattr(fd, name, value, size, flags);
+	if (res == -1)
+		err = errno;
+	// report error from close() unless prior fsetxattr() error
+	if (close(fd) == -1)
+		res = -1;
+out:
+	return res == -1 ? -(err > 0 ? err : errno) : 0;
 }
 
 static int projfs_op_getxattr(char const *path, char const *name,
                               char *value, size_t size)
 {
-	const char *lower = lower_path(path);
-	ssize_t res = lgetxattr(lower, name, value, size);
-	return res == -1 ? -errno : 0;
+	ssize_t res = -1;
+	int err = 0;
+
+	path = lowerpath(path);
+	err = check_fifo(path);
+	if (err > 0)
+		goto out;
+	// TODO: any way to avoid the small race here after check_fifo()?
+	int fd = openat(lowerdir_fd(), path, O_NOFOLLOW | O_RDONLY);
+	if (fd == -1)
+		goto out;
+	res = fgetxattr(fd, name, value, size);
+	if (res == -1)
+		err = errno;
+	// report error from close() unless prior fgetxattr() error
+	if (close(fd) == -1)
+		res = -1;
+out:
+	return res == -1 ? -(err > 0 ? err : errno) : res;
 }
 
 static int projfs_op_listxattr(char const *path, char *list, size_t size)
 {
-	const char *lower = lower_path(path);
-	ssize_t res = llistxattr(lower, list, size);
-	return res == -1 ? -errno : 0;
+	ssize_t res = -1;
+	int err = 0;
+
+	path = lowerpath(path);
+	err = check_fifo(path);
+	if (err > 0)
+		goto out;
+	// TODO: any way to avoid the small race here after check_fifo()?
+	int fd = openat(lowerdir_fd(), path, O_NOFOLLOW | O_RDONLY);
+	if (fd == -1)
+		goto out;
+	res = flistxattr(fd, list, size);
+	if (res == -1)
+		err = errno;
+	// report error from close() unless prior flistxattr() error
+	if (close(fd) == -1)
+		res = -1;
+out:
+	return res == -1 ? -(err > 0 ? err : errno) : res;
 }
 
 static int projfs_op_removexattr(char const *path, char const *name)
 {
-	const char *lower = lower_path(path);
-	int res = removexattr(lower, name);
-	return res == -1 ? -errno : 0;
+	int res = -1;
+	int err = 0;
+
+	path = lowerpath(path);
+	err = check_fifo(path);
+	if (err > 0)
+		goto out;
+	// TODO: any way to avoid the small race here after check_fifo()?
+	int fd = openat(lowerdir_fd(), path, O_NOFOLLOW | O_WRONLY);
+	if (fd == -1)
+		goto out;
+	res = fremovexattr(fd, name);
+	if (res == -1)
+		err = errno;
+	// report error from close() unless prior fremovexattr() error
+	if (close(fd) == -1)
+		res = -1;
+out:
+	return res == -1 ? -(err > 0 ? err : errno) : 0;
 }
 
 static int projfs_op_access(char const *path, int mode)
