@@ -217,12 +217,12 @@ static int projfs_op_create(char const *path, mode_t mode,
                             struct fuse_file_info *fi)
 {
 	int flags = fi->flags & ~O_NOFOLLOW;
-	const char *lower = lower_path(path);
-	int fd = open(lower, flags, mode);
+	int fd = openat(lowerdir_fd(), lowerpath(path), flags, mode);
 
 	if (fd == -1)
 		return -errno;
 	fi->fh = fd;
+
 	int res = projfs_fuse_notify_event(
 		PROJFS_CREATE_SELF,
 		path,
@@ -233,8 +233,7 @@ static int projfs_op_create(char const *path, mode_t mode,
 static int projfs_op_open(char const *path, struct fuse_file_info *fi)
 {
 	int flags = fi->flags & ~O_NOFOLLOW;
-	const char *lower = lower_path(path);
-	int fd = open(lower, flags);
+	int fd = openat(lowerdir_fd(), lowerpath(path), flags);
 
 	if (fd == -1)
 		return -errno;
