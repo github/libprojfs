@@ -294,9 +294,8 @@ static int projfs_op_unlink(char const *path)
 		NULL);
 	if (res < 0)
 		return res;
-	const char *lower = lower_path(path);
 
-	res = unlink(lower);
+	res = unlinkat(lowerdir_fd(), lowerpath(path), 0);
 	return res == -1 ? -errno : 0;
 }
 
@@ -321,9 +320,8 @@ static int projfs_op_rmdir(char const *path)
 		NULL);
 	if (res < 0)
 		return res;
-	const char *lower = lower_path(path);
 
-	res = rmdir(lower);
+	res = unlinkat(lowerdir_fd(), lowerpath(path), AT_REMOVEDIR);
 	return res == -1 ? -errno : 0;
 }
 
