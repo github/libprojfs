@@ -345,20 +345,38 @@ static int projfs_op_rename(char const *src, char const *dst,
 
 static int projfs_op_opendir(char const *path, struct fuse_file_info *fi)
 {
+	int res = 0;
+	int err = 0;
+
 	struct projfs_dir *d = calloc(1, sizeof(*d));
-	if (!d)
-		return -ENOMEM;
+	if (!d) {
+		res = -1;
+		goto out;
+	}
 
-	const char *lower = lower_path(path);
+	int flags = O_DIRECTORY | O_NOFOLLOW | O_RDONLY;
+	int fd = openat(lowerdir_fd(), lowerpath(path), flags);
+	if (fd == -1) {
+		res = -1;
+		goto out_free;
+	}
 
-	d->dir = opendir(lower);
+	d->dir = fdopendir(fd);
 	if (!d->dir) {
-		free(d);
-		return -errno;
+		res = -1;
+		err = errno;
+		goto out_close;
 	}
 
 	fi->fh = (uintptr_t)d;
-	return 0;
+	goto out;
+
+out_close:
+	close(fd);	// report fopendir() error and ignore any from close()
+out_free:
+	free(d);
+out:
+	return res == -1 ? -(err > 0 ? err : errno) : res;
 }
 
 static int projfs_op_readdir(char const *path, void *buf,
@@ -367,7 +385,7 @@ static int projfs_op_readdir(char const *path, void *buf,
                              enum fuse_readdir_flags flags)
 {
 	(void)path;
-
+	int err = 0;
 	struct projfs_dir *d = (struct projfs_dir *)fi->fh;
 
 	if (off != d->loc) {
@@ -380,8 +398,10 @@ static int projfs_op_readdir(char const *path, void *buf,
 		if (!d->ent) {
 			errno = 0;
 			d->ent = readdir(d->dir);
-			if (!d->ent)
+			if (!d->ent) {
+				err = errno;
 				break;
+			}
 		}
 
 		struct stat attr;
@@ -391,6 +411,7 @@ static int projfs_op_readdir(char const *path, void *buf,
 			int res = fstatat(
 					dirfd(d->dir), d->ent->d_name, &attr,
 					AT_SYMLINK_NOFOLLOW);
+			// TODO: break and report errors from fstatat()?
 			if (res != -1)
 				filled = FUSE_FILL_DIR_PLUS;
 		}
@@ -407,7 +428,7 @@ static int projfs_op_readdir(char const *path, void *buf,
 		d->ent = NULL;
 	}
 
-	return -errno;
+	return -err;
 }
 
 static int projfs_op_releasedir(char const *path, struct fuse_file_info *fi)
