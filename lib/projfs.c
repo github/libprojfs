@@ -536,8 +536,8 @@ static int projfs_op_removexattr(char const *path, char const *name)
 
 static int projfs_op_access(char const *path, int mode)
 {
-	const char *lower = lower_path(path);
-	int res = faccessat(AT_FDCWD, lower, mode, AT_SYMLINK_NOFOLLOW);
+	int res = faccessat(lowerdir_fd(), lowerpath(path), mode,
+			    AT_SYMLINK_NOFOLLOW);
 	return res == -1 ? -errno : 0;
 }
 
