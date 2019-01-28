@@ -158,9 +158,13 @@ static int projfs_op_readlink(char const *path, char *buf, size_t size)
 
 static int projfs_op_link(char const *src, char const *dst)
 {
-	const char *lower_src = lower_path(src);
-	const char *lower_dst = lower_path(dst);
-	int res = link(lower_src, lower_dst);
+	int lowerdir_fd = lowerdir_fd();
+
+	/* NOTE: We require lowerdir to be a directory, so this should
+	 *       fail when src is an empty path, as we expect.
+	 */
+	int res = linkat(lowerdir_fd, lowerpath(src),
+			 lowerdir_fd, lowerpath(dst), 0);
 	return res == -1 ? -errno : 0;
 }
 
