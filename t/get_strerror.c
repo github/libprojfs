@@ -19,8 +19,6 @@
    see <http://www.gnu.org/licenses/>.
 */
 
-#define _GNU_SOURCE		// for basename() in <string.h>
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -29,15 +27,13 @@
 
 int main(int argc, char *const argv[])
 {
+	char *errsym;
 	int errval;
 
-	if (argc != 2) {
-		fprintf(stderr, "Usage: %s <errno>\n", basename(argv[0]));
-		exit(EXIT_FAILURE);
-	}
+	test_parse_opts(argc, argv, TEST_OPT_NONE, 1, 1, &errsym, "<errsym>");
 
-	if (test_parse_retsym(0, argv[1], &errval) < 0 || errval > 0)
-		test_exit_error(argv[0], "invalid errno symbol: %s", argv[1]);
+	if (test_parse_retsym(0, errsym, &errval) < 0 || errval > 0)
+		test_exit_error(argv[0], "invalid errno symbol: %s", errsym);
 
 	printf("%s\n", strerror(-errval));
 
