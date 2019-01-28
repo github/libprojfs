@@ -122,6 +122,17 @@ static const char *lower_path(char const *path)
 
 // filesystem ops
 
+static const char *dotpath = ".";
+
+static inline const char *lowerpath(const char *path)
+{
+	while (*path == '/')
+		++path;
+	if (*path == '\0')
+		path = dotpath;
+	return path;
+}
+
 static int projfs_op_getattr(char const *path, struct stat *attr,
                              struct fuse_file_info *fi)
 {
@@ -129,10 +140,9 @@ static int projfs_op_getattr(char const *path, struct stat *attr,
 	int res;
 	if (fi)
 		res = fstat(fi->fh, attr);
-	else {
-		const char *lower = lower_path(path);
-		res = lstat(lower, attr);
-	}
+	else
+		res = fstatat(lowerdir_fd(), lowerpath(path), attr,
+			      AT_SYMLINK_NOFOLLOW);
 	return res == -1 ? -errno : 0;
 }
 
