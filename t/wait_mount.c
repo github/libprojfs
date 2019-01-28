@@ -19,14 +19,11 @@
    see <http://www.gnu.org/licenses/>.
 */
 
-#define _GNU_SOURCE		// for basename() in <string.h>
-				// and nanosleep() in <time.h>
+#define _GNU_SOURCE		// for nanosleep() in <time.h>
 
 #include <err.h>
 #include <errno.h>
-#include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/time.h>
 #include <time.h>
 
@@ -95,30 +92,28 @@ out:
 
 int main(int argc, char *const argv[])
 {
+	char *args[3];
 	long int prior_dev;
 	long int timeout;
+	unsigned int opt_flags;
 	time_t max_wait = MOUNT_WAIT_SEC_DEFAULT;
 
-	if (argc < 3 || argc > 4) {
-		fprintf(stderr, "Usage: %s <dev-id> <mount-path> "
-				"[<max-wait-sec>]\n",
-			basename(argv[0]));
-		exit(EXIT_FAILURE);
-	}
+	test_parse_opts(argc, argv, TEST_OPT_TIMEOUT, 2, 2, args,
+			"<device-id> <mount-path>");
 
-        prior_dev = test_parse_long(argv[1], 16);
-        if (errno > 0 || prior_dev <= 0)
-		test_exit_error(argv[0], "invalid device ID: %s", argv[1]);
+	prior_dev = test_parse_long(args[0], 16);
+	if (errno > 0 || prior_dev <= 0)
+		test_exit_error(argv[0], "invalid device ID: %s", args[0]);
 
-	if (argc == 4) {
-		timeout = test_parse_long(argv[3], 10);
-		if (errno > 0 || timeout < 0 || timeout > MOUNT_WAIT_SEC_MAX)
-			test_exit_error(argv[0], "invalid timeout value: %s",
-					argv[3]);
+	opt_flags = test_get_opts(TEST_OPT_TIMEOUT, &timeout);
+	if (opt_flags != TEST_OPT_NONE) {
+		if (timeout > MOUNT_WAIT_SEC_MAX)
+			test_exit_error(argv[0], "invalid timeout: %li",
+					timeout);
 		max_wait = timeout;
 	}
 
-	if (wait_for_mount((dev_t)prior_dev, argv[2], max_wait) < 0)
+	if (wait_for_mount((dev_t)prior_dev, args[1], max_wait) < 0)
 		exit(EXIT_FAILURE);
 
 	exit(EXIT_SUCCESS);

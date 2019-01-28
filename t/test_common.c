@@ -101,7 +101,9 @@ static const struct retval vfsapi_retvals[] = {
 
 static const struct option all_long_opts[] = {
 	{ "help", no_argument, NULL, TEST_OPT_NUM_HELP },
-	{ "retval", required_argument, NULL, TEST_OPT_NUM_RETVAL}
+	{ "retval", required_argument, NULL, TEST_OPT_NUM_RETVAL},
+	{ },	// TODO: retval-file
+	{ "timeout", required_argument, NULL, TEST_OPT_NUM_TIMEOUT}
 };
 
 struct opt_usage {
@@ -111,11 +113,14 @@ struct opt_usage {
 
 static const struct opt_usage all_opts_usage[] = {
 	{ NULL, 1 },
-	{ "allow|deny|null|<error>", 1 }
+	{ "allow|deny|null|<error>", 1 },
+	{ },	// TODO: <retval-file>
+	{ "<max-seconds>", 1 }
 };
 
 /* option values */
 static int retval;
+static long int timeout;
 
 static unsigned int opt_set_flags = TEST_OPT_NONE;
 
@@ -288,6 +293,14 @@ void test_parse_opts(int argc, char *const argv[], unsigned int opt_flags,
 				opt_set_flags |= TEST_OPT_RETVAL;
 			break;
 
+		case TEST_OPT_NUM_TIMEOUT:
+			timeout = test_parse_long(optarg, 10);
+			if (errno > 0 || timeout < 0)
+				test_exit_error(argv[0], "invalid timeout: %s",
+						optarg);
+			opt_set_flags |= TEST_OPT_TIMEOUT;
+			break;
+
 		case '?':
 			if (optopt > 0)
 				test_exit_error(argv[0], "invalid option: -%c",
@@ -339,6 +352,7 @@ unsigned int test_get_opts(unsigned int opt_flags, ...)
 	while (opt_flags != TEST_OPT_NONE) {
 		unsigned int ret_flag;
 		int *i;
+		long int *l;
 
 		opt_flag <<= 1;
 		if ((opt_flags & opt_flag) == TEST_OPT_NONE)
@@ -353,6 +367,12 @@ unsigned int test_get_opts(unsigned int opt_flags, ...)
 				i = va_arg(ap, int*);
 				if (ret_flag != TEST_OPT_NONE)
 					*i = retval;
+				break;
+
+			case TEST_OPT_TIMEOUT:
+				l = va_arg(ap, long int*);
+				if (ret_flag != TEST_OPT_NONE)
+					*l = timeout;
 				break;
 
 			default:
