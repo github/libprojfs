@@ -452,15 +452,25 @@ static int projfs_op_chown(char const *path, uid_t uid, gid_t gid,
 static int projfs_op_truncate(char const *path, off_t off,
                               struct fuse_file_info *fi)
 {
-	int res;
+	int res, err = 0;
 	if (fi)
 		res = ftruncate(fi->fh, off);
 	else {
-		const char *lower = lower_path(path);
-
-		res = truncate(lower, off);
+		int fd = openat(lowerdir_fd(), lowerpath(path),
+				O_NOFOLLOW | O_WRONLY);
+		if (fd == -1) {
+			res = -1;
+			goto out;
+		}
+		res = ftruncate(fd, off);
+		if (res == -1)
+			err = errno;
+		// report error from close() unless prior ftruncate() error
+		if (close(fd) == -1)
+			res = -1;
 	}
-	return res == -1 ? -errno : 0;
+out:
+	return res == -1 ? -(err > 0 ? err : errno) : 0;
 }
 
 static int projfs_op_utimens(char const *path, const struct timespec tv[2],
