@@ -741,8 +741,8 @@ projfs_start () {
 		>"$helper_log" 2>"$helper_err" &
 	projfs_pid=$!
 
-	"$TEST_DIRECTORY"/wait_mount "0x$lower_dev" "$mount_path" \
-		$PROJFS_TIMEOUT &&
+	"$TEST_DIRECTORY"/wait_mount --timeout $PROJFS_TIMEOUT \
+		"0x$lower_dev" "$mount_path" && \
 	mount_dev=$(stat -c %D "$mount_path")
 
 	if test $? -ne 0
@@ -760,8 +760,8 @@ projfs_stop () {
 	if test -n "$projfs_pid"
 	then
 		kill "$projfs_pid" &&
-		"$TEST_DIRECTORY"/wait_mount "0x$mount_dev" "$mount_path" \
-			$PROJFS_TIMEOUT &&
+		"$TEST_DIRECTORY"/wait_mount --timeout $PROJFS_TIMEOUT \
+			"0x$mount_dev" "$mount_path" && \
 		wait "$projfs_pid" &&
 		projfs_pid=""
 	fi

@@ -19,32 +19,23 @@
    see <http://www.gnu.org/licenses/>.
 */
 
-#define _GNU_SOURCE		// for basename() in <string.h>
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "test_common.h"
 
-int main(int argc, const char **argv)
+int main(int argc, char *const argv[])
 {
-	int err;
+	char *errsym;
+	int errval;
 
-	if (argc != 2) {
-		fprintf(stderr, "Usage: %s <errno>\n", basename(argv[0]));
-		exit(EXIT_FAILURE);
-	}
+	test_parse_opts(argc, argv, TEST_OPT_NONE, 1, 1, &errsym, "<errsym>");
 
-	err = tst_find_retval(0, argv[1], "errno");
+	if (test_parse_retsym(0, errsym, &errval) < 0 || errval > 0)
+		test_exit_error(argv[0], "invalid errno symbol: %s", errsym);
 
-	if (err > 0) {
-		fprintf(stderr, "%s: invalid errno: %s\n", basename(argv[0]),
-							   argv[1]);
-		exit(EXIT_FAILURE);
-	}
-
-	printf("%s\n", strerror(-err));
+	printf("%s\n", strerror(-errval));
 
 	exit(EXIT_SUCCESS);
 }

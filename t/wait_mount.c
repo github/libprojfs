@@ -19,20 +19,20 @@
    see <http://www.gnu.org/licenses/>.
 */
 
-#define _GNU_SOURCE		// for basename() in <string.h>
-				// and nanosleep()
+#define _GNU_SOURCE		// for nanosleep() in <time.h>
 
 #include <err.h>
-#include <sys/stat.h>
-#include <sys/time.h>
-#include <stdio.h>
+#include <errno.h>
 #include <stdlib.h>
-#include <string.h>
+#include <sys/time.h>
 #include <time.h>
-#include <unistd.h>
 
-#define MOUNT_MAX_WAIT_SEC 30
-#define MOUNT_WAIT_TIMESPEC { 0, 1000*1000 }
+#include "test_common.h"
+
+#define MOUNT_SLEEP_TIMESPEC { 0, 1000*1000 }
+
+#define MOUNT_WAIT_SEC_DEFAULT 30
+#define MOUNT_WAIT_SEC_MAX 3600
 
 static int get_curr_time(time_t *sec)
 {
@@ -53,7 +53,7 @@ static int wait_for_mount(dev_t prior_dev, const char *mountdir,
 			  time_t max_wait)
 {
 	struct stat mnt;
-	const struct timespec wait_req = MOUNT_WAIT_TIMESPEC;
+	const struct timespec wait_req = MOUNT_SLEEP_TIMESPEC;
 	time_t start, now, wait = 0;
 	time_t warn_sec = 0;
 	int ret = 0;
@@ -90,30 +90,30 @@ out:
 	return ret;
 }
 
-int main(int argc, const char *argv[])
+int main(int argc, char *const argv[])
 {
+	char *args[3];
 	long int prior_dev;
-	int max_wait = MOUNT_MAX_WAIT_SEC;
+	long int timeout;
+	unsigned int opt_flags;
+	time_t max_wait = MOUNT_WAIT_SEC_DEFAULT;
 
-	if (argc < 3 || argc > 4) {
-		fprintf(stderr, "Usage: %s <dev-id> <mount-path> "
-				"[<max-wait-sec>]\n",
-			basename(argv[0]));
-		exit(EXIT_FAILURE);
+	test_parse_opts(argc, argv, TEST_OPT_TIMEOUT, 2, 2, args,
+			"<device-id> <mount-path>");
+
+	prior_dev = test_parse_long(args[0], 16);
+	if (errno > 0 || prior_dev <= 0)
+		test_exit_error(argv[0], "invalid device ID: %s", args[0]);
+
+	opt_flags = test_get_opts(TEST_OPT_TIMEOUT, &timeout);
+	if (opt_flags != TEST_OPT_NONE) {
+		if (timeout > MOUNT_WAIT_SEC_MAX)
+			test_exit_error(argv[0], "invalid timeout: %li",
+					timeout);
+		max_wait = timeout;
 	}
 
-	if (sscanf(argv[1], "%li", &prior_dev) != 1 || prior_dev <= 0) {
-		fprintf(stderr, "invalid device ID: %s\n", argv[1]);
-		exit(EXIT_FAILURE);
-	}
-
-	if (argc == 4 && (sscanf(argv[3], "%d", &max_wait) != 1 ||
-			  max_wait < 0)) {
-		fprintf(stderr, "invalid timeout value: %s\n", argv[3]);
-		exit(EXIT_FAILURE);
-	}
-
-	if (wait_for_mount((dev_t) prior_dev, argv[2], (time_t) max_wait) < 0)
+	if (wait_for_mount((dev_t)prior_dev, args[1], max_wait) < 0)
 		exit(EXIT_FAILURE);
 
 	exit(EXIT_SUCCESS);

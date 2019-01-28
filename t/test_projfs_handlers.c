@@ -25,19 +25,20 @@
 
 #include "test_common.h"
 
-static int retval;
-
 static int test_handle_event(struct projfs_event *event, const char *desc,
 			     int perm)
 {
-	int ret = retval;
+	unsigned int opt_flags;
+	int ret;
 
 	printf("  test %s for %s: "
 	       "0x%04" PRIx64 "-%08" PRIx64 ", %d\n",
 	       desc, event->path,
 	       event->mask >> 32, event->mask & 0xFFFFFFFF, event->pid);
 
-	if (ret == RETVAL_DEFAULT)
+	opt_flags = test_get_opts(TEST_OPT_RETVAL, &ret);
+
+	if (opt_flags == TEST_OPT_NONE)
 		ret = perm ? PROJFS_ALLOW : 0;
 	else if(!perm && ret > 0)
 		ret = 0;
@@ -55,21 +56,22 @@ static int test_perm_event(struct projfs_event *event)
 	return test_handle_event(event, "permission request", 1);
 }
 
-int main(int argc, const char **argv)
+int main(int argc, char *const argv[])
 {
 	const char *lower_path, *mount_path;
 	struct projfs *fs;
-	struct projfs_handlers handlers;
+	struct projfs_handlers handlers = { 0 };
 
-	tst_parse_opts(argc, argv, 0, &lower_path, &mount_path, &retval);
+	test_parse_mount_opts(argc, argv, TEST_OPT_RETVAL,
+			      &lower_path, &mount_path);
 
 	handlers.handle_notify_event = &test_notify_event;
 	handlers.handle_perm_event = &test_perm_event;
 
-	fs = tst_start_mount(lower_path, mount_path,
-			     &handlers, sizeof(handlers), NULL);
-	tst_wait_signal();
-	tst_stop_mount(fs);
+	fs = test_start_mount(lower_path, mount_path,
+			      &handlers, sizeof(handlers), NULL);
+	test_wait_signal();
+	test_stop_mount(fs);
 
 	exit(EXIT_SUCCESS);
 }

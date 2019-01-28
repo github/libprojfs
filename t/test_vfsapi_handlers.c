@@ -27,8 +27,6 @@
 
 #include "test_common.h"
 
-static int retval;
-
 static PrjFS_Result TestNotifyOperation(
     _In_    unsigned long                           commandId,
     _In_    const char*                             relativePath,
@@ -41,32 +39,40 @@ static PrjFS_Result TestNotifyOperation(
     _In_    const char*                             destinationRelativePath
 )
 {
+	unsigned int opt_flags;
+	int retval;
+
 	printf("  TestNotifyOperation for %s: %d, %s, %hhd, 0x%08X\n",
 	       relativePath, triggeringProcessId, triggeringProcessName,
 	       isDirectory, notificationType);
 
-	(void) commandId;
-	(void) providerId;
-	(void) contentId;
-	(void) destinationRelativePath;
+	(void)commandId;		// prevent compiler warnings
+	(void)providerId;
+	(void)contentId;
+	(void)destinationRelativePath;
 
-	return (retval == RETVAL_DEFAULT) ? PrjFS_Result_Success : retval;
+	opt_flags = test_get_opts(TEST_OPT_RETVAL | TEST_OPT_VFSAPI, &retval);
+
+	return (opt_flags == TEST_OPT_NONE) ? PrjFS_Result_Success
+					    : retval;
 }
 
-int main(int argc, const char **argv)
+int main(int argc, char *const argv[])
 {
 	const char *lower_path, *mount_path;
 	PrjFS_MountHandle *handle;
-	PrjFS_Callbacks callbacks;
+	PrjFS_Callbacks callbacks = { 0 };
 
-	tst_parse_opts(argc, argv, 1, &lower_path, &mount_path, &retval);
+	test_parse_mount_opts(argc, argv, (TEST_OPT_VFSAPI | TEST_OPT_RETVAL),
+			      &lower_path, &mount_path);
 
 	memset(&callbacks, 0, sizeof(PrjFS_Callbacks));
 	callbacks.NotifyOperation = TestNotifyOperation;
 
-	tst_start_vfsapi_mount(lower_path, mount_path, callbacks, 0, &handle);
-	tst_wait_signal();
-	tst_stop_vfsapi_mount(handle);
+	test_start_vfsapi_mount(lower_path, mount_path, callbacks,
+				0, &handle);
+	test_wait_signal();
+	test_stop_vfsapi_mount(handle);
 
 	exit(EXIT_SUCCESS);
 }
