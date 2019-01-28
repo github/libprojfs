@@ -283,8 +283,9 @@ static int projfs_op_write_buf(char const *path, struct fuse_bufvec *src,
 static int projfs_op_release(char const *path, struct fuse_file_info *fi)
 {
 	(void)path;
-	close(fi->fh);
-	return 0;
+	int res = close(fi->fh);
+	// return value is ignored by libfuse, but be consistent anyway
+	return res == -1 ? -errno : 0;
 }
 
 static int projfs_op_unlink(char const *path)
@@ -417,9 +418,10 @@ static int projfs_op_releasedir(char const *path, struct fuse_file_info *fi)
 	(void)path;
 
 	struct projfs_dir *d = (struct projfs_dir *)fi->fh;
-	closedir(d->dir);
+	int res = closedir(d->dir);
 	free(d);
-	return 0;
+	// return value is ignored by libfuse, but be consistent anyway
+	return res == -1 ? -errno : 0;
 }
 
 static int projfs_op_chmod(char const *path, mode_t mode,
