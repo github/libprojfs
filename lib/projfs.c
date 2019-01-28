@@ -485,7 +485,7 @@ static int projfs_op_getxattr(char const *path, char const *name,
 static int projfs_op_listxattr(char const *path, char *list, size_t size)
 {
 	const char *lower = lower_path(path);
-	int res = llistxattr(lower, list, size);
+	ssize_t res = llistxattr(lower, list, size);
 	return res == -1 ? -errno : 0;
 }
 
