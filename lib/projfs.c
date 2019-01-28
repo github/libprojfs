@@ -802,12 +802,6 @@ static void *projfs_loop(void *data)
 		goto out_signal;
 	}
 
-	// change to lower directory so relative paths resolve in file ops
-	if (chdir(fs->lowerdir) < 0) {
-		res = 5;
-		goto out_unmount;
-	}
-
 	// TODO: support configs; ideally libfuse's full suite
 	loop.clone_fd = 0;
 	loop.max_idle_threads = 10;
@@ -817,10 +811,9 @@ static void *projfs_loop(void *data)
 	if ((err = fuse_loop_mt(fuse, &loop)) != 0) {
 		if (err > 0)
 			fprintf(stderr, "projfs: %s signal\n", strsignal(err));
-		res = 6;
+		res = 5;
 	}
 
-out_unmount:
 	fuse_session_unmount(se);
 out_signal:
 	fuse_remove_signal_handlers(se);
