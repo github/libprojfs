@@ -25,19 +25,20 @@
 
 #include "test_common.h"
 
-static int retval;
-
 static int test_handle_event(struct projfs_event *event, const char *desc,
 			     int perm)
 {
-	int ret = retval;
+	unsigned int opt_flags;
+	int ret;
 
 	printf("  test %s for %s: "
 	       "0x%04" PRIx64 "-%08" PRIx64 ", %d\n",
 	       desc, event->path,
 	       event->mask >> 32, event->mask & 0xFFFFFFFF, event->pid);
 
-	if (ret == RETVAL_DEFAULT)
+	opt_flags = test_get_opts(TEST_OPT_RETVAL, &ret);
+
+	if (opt_flags == TEST_OPT_NONE)
 		ret = perm ? PROJFS_ALLOW : 0;
 	else if(!perm && ret > 0)
 		ret = 0;
@@ -61,8 +62,8 @@ int main(int argc, char *const argv[])
 	struct projfs *fs;
 	struct projfs_handlers handlers = { 0 };
 
-	test_parse_mount_opts(argc, argv, TEST_OPT_NONE,
-			      &lower_path, &mount_path, &retval);
+	test_parse_mount_opts(argc, argv, TEST_OPT_RETVAL,
+			      &lower_path, &mount_path);
 
 	handlers.handle_notify_event = &test_notify_event;
 	handlers.handle_perm_event = &test_perm_event;

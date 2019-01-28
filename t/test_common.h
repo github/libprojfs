@@ -19,12 +19,18 @@
    see <http://www.gnu.org/licenses/>.
 */
 
+#include <getopt.h>
+
 #include "../include/projfs.h"
 #ifdef PROJFS_VFSAPI
 #include "../include/projfs_vfsapi.h"
 #endif /* PROJFS_VFSAPI */
 
-#define RETVAL_DEFAULT 1000		// magic unused value
+#define TEST_OPT_NUM_HELP	0
+#define TEST_OPT_NUM_RETVAL	1
+
+#define TEST_OPT_HELP		(0x0001 << TEST_OPT_NUM_HELP)
+#define TEST_OPT_RETVAL		(0x0001 << TEST_OPT_NUM_RETVAL)
 
 #define TEST_OPT_NONE		0x0000
 #define TEST_OPT_VFSAPI		0x8000		// not a command-line option
@@ -35,14 +41,15 @@ long int test_parse_long(const char *arg, int base);
 
 int test_parse_retsym(int vfsapi, const char *retsym, int *retval);
 
-void test_parse_opts(int argc, char *const argv[], int vfsapi,
-		     const char **lower_path, const char **mount_path,
-		     int *retval);
+void test_parse_opts(int argc, char *const argv[], unsigned int opt_flags,
+		     int min_args, int max_args, char *args[],
+		     const char *args_usage);
 
 void test_parse_mount_opts(int argc, char *const argv[],
 			   unsigned int opt_flags,
-			   const char **lower_path, const char **mount_path,
-			   int *retval);
+			   const char **lower_path, const char **mount_path);
+
+unsigned int test_get_opts(unsigned int opt_flags, ...);
 
 struct projfs *test_start_mount(const char *lowerdir, const char *mountdir,
 				const struct projfs_handlers *handlers,

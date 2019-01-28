@@ -34,7 +34,7 @@ int main(int argc, char *const argv[])
 	PrjFS_Callbacks callbacks;
 
 	test_parse_mount_opts(argc, argv, TEST_OPT_VFSAPI,
-			      &lower_path, &mount_path, NULL);
+			      &lower_path, &mount_path);
 
 	memset(&callbacks, 0, sizeof(PrjFS_Callbacks));
 

@@ -20,6 +20,7 @@
 */
 
 #define _GNU_SOURCE		// for basename() in <string.h>
+				// and getopt_long() in <getopt.h>
 
 #include "../include/config.h"
 
@@ -38,8 +39,7 @@
 
 #define MOUNT_ARGS_USAGE "<lower-path> <mount-path>"
 
-#define RETVAL_OPT_NAME "--retval"
-#define RETVAL_OPT_HELP "allow|deny|null|<error>"
+#define MAX_RETVAL_NAME_LEN 40
 
 #define retval_entry(s) #s, -s
 
@@ -99,6 +99,26 @@ static const struct retval vfsapi_retvals[] = {
 #define get_retvals(v) errno_retvals
 #endif /* !PROJFS_VFSAPI */
 
+static const struct option all_long_opts[] = {
+	{ "help", no_argument, NULL, TEST_OPT_NUM_HELP },
+	{ "retval", required_argument, NULL, TEST_OPT_NUM_RETVAL}
+};
+
+struct opt_usage {
+	const char *usage;
+	int req;
+};
+
+static const struct opt_usage all_opts_usage[] = {
+	{ NULL, 1 },
+	{ "allow|deny|null|<error>", 1 }
+};
+
+/* option values */
+static int retval;
+
+static unsigned int opt_set_flags = TEST_OPT_NONE;
+
 static const char *get_program_name(const char *program)
 {
 	const char *basename;
@@ -114,16 +134,27 @@ static const char *get_program_name(const char *program)
 	return program;
 }
 
-static void exit_usage(int err, const char *argv0, int retval_opt,
+static void exit_usage(int err, const char *argv0, struct option *long_opts,
 		       const char *args_usage)
 {
 	FILE *file = err ? stderr : stdout;
 
 	fprintf(file, "Usage: %s", get_program_name(argv0));
 
-	if (retval_opt)
-		fprintf(stderr, " [%s %s]",
-			RETVAL_OPT_NAME, RETVAL_OPT_HELP);
+	while (long_opts->name != NULL) {
+		const struct opt_usage *opt_usage;
+
+		opt_usage = &all_opts_usage[long_opts->val];
+
+		fprintf(file, " %s--%s%s%s%s",
+			(opt_usage->req ? "[" : ""),
+			long_opts->name,
+			(opt_usage->usage == NULL ? "" : " "),
+			(opt_usage->usage == NULL ? "" : opt_usage->usage),
+			(opt_usage->req ? "]" : ""));
+
+		++long_opts;
+	}
 
 	fprintf(file, "%s%s\n",
 		(*args_usage == '\0' ? "" : " "),
@@ -186,41 +217,153 @@ int test_parse_retsym(int vfsapi, const char *retsym, int *retval)
 	return ret;
 }
 
-void test_parse_opts(int argc, char *const argv[], int vfsapi,
-		    const char **lower_path, const char **mount_path,
-		    int *retval)
+static struct option *get_long_opts(unsigned int opt_flags)
 {
-	const char *retname = NULL;
-	int arg_offset = 0;
+	struct option *long_opts;
+	unsigned int tmp_flags = opt_flags;
+	size_t num_opts = 0;
+	int opt_idx = 0;
+	int opt_num = 0;
 
-	if (retval != NULL && argc > 2 && !strcmp(argv[1], RETVAL_OPT_NAME)) {
-		retname = argv[2];
-		arg_offset = 2;
+	// slow counting, but obvious, and only needs to execute once
+	while (tmp_flags > 0) {
+		if ((tmp_flags & 1) == 1)
+			++num_opts;
+		tmp_flags >>= 1;
 	}
 
-	if (argc - arg_offset != 3)
-		exit_usage(1, argv[0], (retval == NULL) ? 0 : 1,
-			   MOUNT_ARGS_USAGE);
-
-	*lower_path = argv[1 + arg_offset];
-	*mount_path = argv[2 + arg_offset];
-
-	if (retval != NULL) {
-		if (retname == NULL)
-			*retval = RETVAL_DEFAULT;
-		else if (test_parse_retsym(vfsapi, retname, retval) < 0)
-			test_exit_error(argv[0], "invalid %s option: %s",
-					RETVAL_OPT_NAME, retname);
+	long_opts = calloc(num_opts + 1, sizeof(struct option));
+	if (long_opts == NULL) {
+		fprintf(stderr, "unable to get options array: %s\n",
+			strerror(errno));
+		exit(EXIT_FAILURE);
 	}
+
+	while (opt_flags > 0) {
+		unsigned int opt_flag = (0x0001 << opt_num);
+
+		if ((opt_flags & opt_flag) > 0)
+			memcpy(&long_opts[opt_idx++], &all_long_opts[opt_num],
+			       sizeof(struct option));
+
+		opt_flags &= ~opt_flag;
+		++opt_num;
+	}
+
+	return long_opts;
+}
+
+void test_parse_opts(int argc, char *const argv[], unsigned int opt_flags,
+		     int min_args, int max_args, char *args[],
+		     const char *args_usage)
+{
+	int vfsapi = (opt_flags & TEST_OPT_VFSAPI) ? 1 : 0;
+	struct option *long_opts;
+	int num_args;
+	int arg_idx = 0;
+	int err = 0;
+	int val;
+
+	opt_flags |= TEST_OPT_HELP;
+	opt_flags &= ~TEST_OPT_VFSAPI;		// exclude VFS API option
+
+	long_opts = get_long_opts(opt_flags);
+
+	opterr = 0;
+	do {
+		val = getopt_long(argc, argv, "h", long_opts, NULL);
+		if (val < 0)
+			break;
+
+		switch (val) {
+		case 'h':
+		case TEST_OPT_NUM_HELP:
+			exit_usage(0, argv[0], long_opts, args_usage);
+
+		case TEST_OPT_NUM_RETVAL:
+			if (test_parse_retsym(vfsapi, optarg, &retval) < 0)
+				test_exit_error(argv[0], "invalid retval: %s",
+						optarg);
+			else
+				opt_set_flags |= TEST_OPT_RETVAL;
+			break;
+
+		case '?':
+			if (optopt > 0)
+				test_exit_error(argv[0], "invalid option: -%c",
+						optopt);
+			else
+				test_exit_error(argv[0], "invalid option: %s",
+						argv[optind - 1]);
+
+		default:
+			test_exit_error(argv[0], "unknown getopt code: %d",
+					val);
+		}
+	}
+	while (!err);
+
+	num_args = argc - optind;
+	if (err || num_args < min_args || num_args > max_args)
+		exit_usage(1, argv[0], long_opts, args_usage);
+
+	while (optind < argc)
+		args[arg_idx++] = argv[optind++];
+
+	while (num_args++ < max_args)
+		args[arg_idx++] = NULL;
 }
 
 void test_parse_mount_opts(int argc, char *const argv[],
 			   unsigned int opt_flags,
-			   const char **lower_path, const char **mount_path,
-			   int *retval)
+			   const char **lower_path, const char **mount_path)
 {
-	test_parse_opts(argc, argv, (opt_flags & TEST_OPT_VFSAPI) ? 1 : 0,
-			lower_path, mount_path, retval);
+	char *args[2];
+
+	test_parse_opts(argc, argv, opt_flags, 2, 2, args, MOUNT_ARGS_USAGE);
+
+	*lower_path = args[0];
+	*mount_path = args[1];
+}
+
+unsigned int test_get_opts(unsigned int opt_flags, ...)
+{
+	unsigned int opt_flag = TEST_OPT_HELP;
+	unsigned int ret_flags = TEST_OPT_NONE;
+	va_list ap;
+
+	opt_flags &= ~TEST_OPT_VFSAPI;		// exclude VFS API option
+
+	va_start(ap, opt_flags);
+
+	while (opt_flags != TEST_OPT_NONE) {
+		unsigned int ret_flag;
+		int *i;
+
+		opt_flag <<= 1;
+		if ((opt_flags & opt_flag) == TEST_OPT_NONE)
+			continue;
+		opt_flags &= ~opt_flag;
+
+		ret_flag = opt_set_flags & opt_flag;
+		ret_flags |= ret_flag;
+
+		switch (opt_flag) {
+			case TEST_OPT_RETVAL:
+				i = va_arg(ap, int*);
+				if (ret_flag != TEST_OPT_NONE)
+					*i = retval;
+				break;
+
+			default:
+				err(EXIT_FAILURE,
+				    "unknown option flag: %u", opt_flag);
+		}
+	}
+
+	va_end(ap);
+
+	return ret_flags;
 }
 
 struct projfs *test_start_mount(const char *lowerdir, const char *mountdir,

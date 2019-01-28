@@ -27,8 +27,6 @@
 
 #include "test_common.h"
 
-static int retval;
-
 static PrjFS_Result TestNotifyOperation(
     _In_    unsigned long                           commandId,
     _In_    const char*                             relativePath,
@@ -41,6 +39,9 @@ static PrjFS_Result TestNotifyOperation(
     _In_    const char*                             destinationRelativePath
 )
 {
+	unsigned int opt_flags;
+	int retval;
+
 	printf("  TestNotifyOperation for %s: %d, %s, %hhd, 0x%08X\n",
 	       relativePath, triggeringProcessId, triggeringProcessName,
 	       isDirectory, notificationType);
@@ -50,7 +51,10 @@ static PrjFS_Result TestNotifyOperation(
 	(void)contentId;
 	(void)destinationRelativePath;
 
-	return (retval == RETVAL_DEFAULT) ? PrjFS_Result_Success : retval;
+	opt_flags = test_get_opts(TEST_OPT_RETVAL | TEST_OPT_VFSAPI, &retval);
+
+	return (opt_flags == TEST_OPT_NONE) ? PrjFS_Result_Success
+					    : retval;
 }
 
 int main(int argc, char *const argv[])
@@ -59,8 +63,8 @@ int main(int argc, char *const argv[])
 	PrjFS_MountHandle *handle;
 	PrjFS_Callbacks callbacks = { 0 };
 
-	test_parse_mount_opts(argc, argv, TEST_OPT_VFSAPI,
-			      &lower_path, &mount_path, &retval);
+	test_parse_mount_opts(argc, argv, (TEST_OPT_VFSAPI | TEST_OPT_RETVAL),
+			      &lower_path, &mount_path);
 
 	memset(&callbacks, 0, sizeof(PrjFS_Callbacks));
 	callbacks.NotifyOperation = TestNotifyOperation;

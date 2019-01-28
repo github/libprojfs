@@ -30,9 +30,9 @@ int main(int argc, char *const argv[])
 	struct projfs *fs;
 
 	test_parse_mount_opts(argc, argv, TEST_OPT_NONE,
-			      &lower_path, &mount_path, NULL);
+			      &lower_path, &mount_path);
 
-	fs = test_start_mount(lower_path, mount_path, NULL, 0, NULL);
+	fs = test_start_mount(lower_path, mount_path, NULL, 0, 0);
 	test_wait_signal();
 	test_stop_mount(fs);
 
