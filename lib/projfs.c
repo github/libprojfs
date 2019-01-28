@@ -468,11 +468,9 @@ static int projfs_op_utimens(char const *path, const struct timespec tv[2],
 	int res;
 	if (fi)
 		res = futimens(fi->fh, tv);
-	else {
-		const char *lower = lower_path(path);
-
-		res = utimensat(AT_FDCWD, lower, tv, AT_SYMLINK_NOFOLLOW);
-	}
+	else
+		res = utimensat(lowerdir_fd(), lowerpath(path), tv,
+				AT_SYMLINK_NOFOLLOW);
 	return res == -1 ? -errno : 0;
 }
 
