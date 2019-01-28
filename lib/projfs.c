@@ -332,15 +332,13 @@ static int projfs_op_rmdir(char const *path)
 static int projfs_op_rename(char const *src, char const *dst,
                             unsigned int flags)
 {
-	const char *lower_src = lower_path(src);
-	const char *lower_dst = lower_path(dst);
-
+	// TODO: may prevent us compiling on BSD; would renameat() suffice?
 	int res = syscall(
 		SYS_renameat2,
-		0,
-		lower_src,
-		0,
-		lower_dst,
+		lowerdir_fd(),
+		lowerpath(src),
+		lowerdir_fd(),
+		lowerpath(dst),
 		flags);
 	return res == -1 ? -errno : 0;
 }
