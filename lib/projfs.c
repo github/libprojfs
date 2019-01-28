@@ -216,8 +216,9 @@ static int projfs_op_symlink(char const *link, char const *path)
 static int projfs_op_create(char const *path, mode_t mode,
                             struct fuse_file_info *fi)
 {
+	int flags = fi->flags & ~O_NOFOLLOW;
 	const char *lower = lower_path(path);
-	int fd = open(lower, fi->flags, mode);
+	int fd = open(lower, flags, mode);
 
 	if (fd == -1)
 		return -errno;
@@ -231,8 +232,9 @@ static int projfs_op_create(char const *path, mode_t mode,
 
 static int projfs_op_open(char const *path, struct fuse_file_info *fi)
 {
+	int flags = fi->flags & ~O_NOFOLLOW;
 	const char *lower = lower_path(path);
-	int fd = open(lower, fi->flags);
+	int fd = open(lower, flags);
 
 	if (fd == -1)
 		return -errno;
