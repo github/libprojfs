@@ -419,6 +419,8 @@ static int projfs_op_chmod(char const *path, mode_t mode,
 	else {
 		const char *lower = lower_path(path);
 
+		// NOTE: if path is a symlink pointing out of our filesystem,
+		//       chmod() will follow it and change the target
 		res = chmod(lower, mode);
 	}
 	return res == -1 ? -errno : 0;
