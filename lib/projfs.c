@@ -428,13 +428,10 @@ static int projfs_op_chmod(char const *path, mode_t mode,
 	int res;
 	if (fi)
 		res = fchmod(fi->fh, mode);
-	else {
-		const char *lower = lower_path(path);
-
-		// NOTE: if path is a symlink pointing out of our filesystem,
-		//       chmod() will follow it and change the target
-		res = chmod(lower, mode);
-	}
+	else
+		// TODO: as AT_SYMLINK_NOFOLLOW is not implemented,
+		//       should we open(..., O_NOFOLLOW) and then fchmod()?
+		res = fchmodat(lowerdir_fd(), lowerpath(path), mode, 0);
 	return res == -1 ? -errno : 0;
 }
 
@@ -444,11 +441,10 @@ static int projfs_op_chown(char const *path, uid_t uid, gid_t gid,
 	int res;
 	if (fi)
 		res = fchown(fi->fh, uid, gid);
-	else {
-		const char *lower = lower_path(path);
-
-		res = chown(lower, uid, gid);
-	}
+	else
+		// disallow chown() on lowerdir itself, so no AT_EMPTY_PATH
+		res = fchownat(lowerdir_fd(), lowerpath(path), uid, gid,
+			       AT_SYMLINK_NOFOLLOW);
 	return res == -1 ? -errno : 0;
 }
 
