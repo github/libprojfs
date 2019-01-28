@@ -244,8 +244,9 @@ static int projfs_op_open(char const *path, struct fuse_file_info *fi)
 
 static int projfs_op_statfs(char const *path, struct statvfs *buf)
 {
-	const char *lower = lower_path(path);
-	int res = statvfs(lower, buf);
+	(void)path;
+	// TODO: should we return our own filesystem's global info?
+	int res = fstatvfs(lowerdir_fd(), buf);
 	return res == -1 ? -errno : 0;
 }
 
