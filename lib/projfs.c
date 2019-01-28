@@ -148,8 +148,7 @@ static int projfs_op_getattr(char const *path, struct stat *attr,
 
 static int projfs_op_readlink(char const *path, char *buf, size_t size)
 {
-	const char *lower = lower_path(path);
-	int res = readlink(lower, buf, size - 1);
+	int res = readlinkat(lowerdir_fd(), lowerpath(path), buf, size - 1);
 	if (res == -1)
 		return -errno;
 	buf[res] = 0;
@@ -211,7 +210,7 @@ static int projfs_op_mknod(char const *path, mode_t mode, dev_t rdev)
 
 static int projfs_op_symlink(char const *link, char const *path)
 {
-	int res = symlink(link, lower_path(path));
+	int res = symlinkat(link, lowerdir_fd(), lowerpath(path));
 	return res == -1 ? -errno : 0;
 }
 
