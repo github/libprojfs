@@ -45,6 +45,8 @@
 #include "projfs_vfsapi.h"
 #endif
 
+#define lowerdir_fd() (projfs_context_fs()->lowerdir_fd)
+
 struct projfs_dir {
 	DIR *dir;
 	long loc;
@@ -651,11 +653,23 @@ static void *projfs_loop(void *data)
 	// TODO: verify the way we're setting signal handlers on the underlying
 	// session works correctly when using the high-level API
 
+	/* open lower directory file descriptor to resolve relative paths
+	 * in file ops
+	 */
+	fs->lowerdir_fd = open(fs->lowerdir, O_DIRECTORY | O_NOFOLLOW
+							 | O_PATH);
+	if (fs->lowerdir_fd == -1) {
+		fprintf(stderr, "projfs: failed to open lowerdir: %s: %s\n",
+			fs->lowerdir, strerror(errno));
+		res = 1;
+		goto out;
+	}
+
 	struct fuse *fuse =
 		fuse_new(&args, &projfs_ops, sizeof(projfs_ops), fs);
 	if (fuse == NULL) {
-		res = 1;
-		goto out;
+		res = 2;
+		goto out_close;
 	}
 
 	struct fuse_session *se = fuse_get_session(fuse);
@@ -663,19 +677,19 @@ static void *projfs_loop(void *data)
 
 	// TODO: defer all signal handling to user, once we remove FUSE
 	if (fuse_set_signal_handlers(se) != 0) {
-		res = 2;
+		res = 3;
 		goto out_session;
 	}
 
 	// TODO: mount with x-gvfs-hide option and maybe others for KDE, etc.
 	if (fuse_mount(fuse, fs->mountdir) != 0) {
-		res = 3;
+		res = 4;
 		goto out_signal;
 	}
 
 	// change to lower directory so relative paths resolve in file ops
 	if (chdir(fs->lowerdir) < 0) {
-		res = 4;
+		res = 5;
 		goto out_unmount;
 	}
 
@@ -688,7 +702,7 @@ static void *projfs_loop(void *data)
 	if ((err = fuse_loop_mt(fuse, &loop)) != 0) {
 		if (err > 0)
 			fprintf(stderr, "projfs: %s signal\n", strsignal(err));
-		res = 5;
+		res = 6;
 	}
 
 out_unmount:
@@ -698,6 +712,11 @@ out_signal:
 out_session:
 	projfs_set_session(fs, NULL);
 	fuse_session_destroy(se);
+out_close:
+	if (close(fs->lowerdir_fd) == -1)
+		fprintf(stderr, "projfs: failed to close lowerdir: %s: %s\n",
+			fs->lowerdir, strerror(errno));
+	fs->lowerdir_fd = 0;
 out:
 	fs->error = res;
 
