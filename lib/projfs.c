@@ -198,12 +198,10 @@ static int projfs_op_fsync(char const *path, int datasync,
 static int projfs_op_mknod(char const *path, mode_t mode, dev_t rdev)
 {
 	int res;
-	const char *lower = lower_path(path);
-
 	if (S_ISFIFO(mode))
-		res = mkfifo(lower, mode);
+		res = mkfifoat(lowerdir_fd(), lowerpath(path), mode);
 	else
-		res = mknod(lower, mode, rdev);
+		res = mknodat(lowerdir_fd(), lowerpath(path), mode, rdev);
 	return res == -1 ? -errno : 0;
 }
 
@@ -304,11 +302,10 @@ static int projfs_op_unlink(char const *path)
 
 static int projfs_op_mkdir(char const *path, mode_t mode)
 {
-	const char *lower = lower_path(path);
-
-	int res = mkdir(lower, mode);
+	int res = mkdirat(lowerdir_fd(), lowerpath(path), mode);
 	if (res == -1)
 		return -errno;
+
 	res = projfs_fuse_notify_event(
 		PROJFS_CREATE_SELF | PROJFS_ONDIR,
 		path,
