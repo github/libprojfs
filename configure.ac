@@ -40,36 +40,49 @@ AX_COMPILER_FLAGS()
 
 AC_ARG_ENABLE([debug],
   [AS_HELP_STRING([--enable-debug],
-    [Enable libprojfs debugging output])],
+    [Enable libprojfs debugging output])]
+)dnl
+
+AS_IF([test ":$enable_debug" = ":yes"],
   [AC_DEFINE(PROJFS_DEBUG, 1, [Enable libprojfs debugging output])]
 )dnl
 
 AC_ARG_ENABLE([fuse_debug],
   [AS_HELP_STRING([--enable-fuse-debug],
-    [Enable FUSE library debugging output])],
-  [AC_DEFINE(PROJFS_FUSE_DEBUG, 1, [Enable FUSE library debugging output])]dnl
+    [Enable FUSE library debugging output])]
 )dnl
 
-enable_vfsapi=false
+AS_IF([test ":$enable_fuse_debug" = ":yes"],
+  [AC_DEFINE(PROJFS_FUSE_DEBUG, 1, [Enable FUSE library debugging output])]
+)dnl
+
 libprojfs_export_regex='projfs'
 
 AC_ARG_ENABLE([vfs_api],
   [AS_HELP_STRING([--enable-vfs-api],
-    [Enable .NET VFSForGit API])],
+    [Enable .NET VFSForGit API])]
+)dnl
+
+AS_IF([test ":$enable_vfs_api" = ":yes"],
   [AC_DEFINE(PROJFS_VFSAPI, 1, [Enable .NET VFSForGit API])
-    enable_vfsapi=true
     libprojfs_export_regex='(projfs|PrjFS)'
   ]dnl
 )dnl
 
-AM_CONDITIONAL([ENABLE_VFSAPI], [test :$enable_vfsapi = :true])
+AM_CONDITIONAL([ENABLE_VFSAPI], [test ":$enable_vfs_api" = ":yes"])
 AC_SUBST([libprojfs_export_regex])
+
+pkgconfigdir='${libdir}/pkgconfig'
 
 AC_ARG_WITH([pkgconfigdir],
   [AS_HELP_STRING([--with-pkgconfigdir=DIR],
-    [Install pkgconfig file in DIR @<:@LIBDIR/pkgconfig@:>@])],
-  [pkgconfigdir=$withval],
-  [pkgconfigdir='${libdir}/pkgconfig']dnl
+    [Install pkgconfig file in DIR @<:@LIBDIR/pkgconfig@:>@])]
+)dnl
+
+AS_IF([test ":$with_pkgconfigdir" != ":no" &&
+       test ":$with_pkgconfigdir" != ":yes" &&
+       test ":$with_pkgconfigdir" != ":"],
+  [pkgconfigdir=$with_pkgconfigdir]
 )dnl
 
 AC_SUBST([pkgconfigdir])
