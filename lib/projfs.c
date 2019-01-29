@@ -439,8 +439,6 @@ static int projfs_op_chmod(char const *path, mode_t mode,
 	if (fi)
 		res = fchmod(fi->fh, mode);
 	else
-		// TODO: as AT_SYMLINK_NOFOLLOW is not implemented,
-		//       should we open(..., O_NOFOLLOW) and then fchmod()?
 		res = fchmodat(lowerdir_fd(), lowerpath(path), mode, 0);
 	return res == -1 ? -errno : 0;
 }
@@ -466,7 +464,7 @@ static int projfs_op_truncate(char const *path, off_t off,
 		res = ftruncate(fi->fh, off);
 	else {
 		int fd = openat(lowerdir_fd(), lowerpath(path),
-				O_NOFOLLOW | O_WRONLY);
+				O_WRONLY);
 		if (fd == -1) {
 			res = -1;
 			goto out;
@@ -531,7 +529,7 @@ static int projfs_op_setxattr(char const *path, char const *name,
 	if (err > 0)
 		goto out;
 	// TODO: any way to avoid the small race here after check_fifo()?
-	int fd = openat(lowerdir_fd(), path, O_NOFOLLOW | O_WRONLY);
+	int fd = openat(lowerdir_fd(), path, O_WRONLY);
 	if (fd == -1)
 		goto out;
 	res = fsetxattr(fd, name, value, size, flags);
@@ -555,7 +553,7 @@ static int projfs_op_getxattr(char const *path, char const *name,
 	if (err > 0)
 		goto out;
 	// TODO: any way to avoid the small race here after check_fifo()?
-	int fd = openat(lowerdir_fd(), path, O_NOFOLLOW | O_RDONLY);
+	int fd = openat(lowerdir_fd(), path, O_RDONLY);
 	if (fd == -1)
 		goto out;
 	res = fgetxattr(fd, name, value, size);
@@ -578,7 +576,7 @@ static int projfs_op_listxattr(char const *path, char *list, size_t size)
 	if (err > 0)
 		goto out;
 	// TODO: any way to avoid the small race here after check_fifo()?
-	int fd = openat(lowerdir_fd(), path, O_NOFOLLOW | O_RDONLY);
+	int fd = openat(lowerdir_fd(), path, O_RDONLY);
 	if (fd == -1)
 		goto out;
 	res = flistxattr(fd, list, size);
@@ -601,7 +599,7 @@ static int projfs_op_removexattr(char const *path, char const *name)
 	if (err > 0)
 		goto out;
 	// TODO: any way to avoid the small race here after check_fifo()?
-	int fd = openat(lowerdir_fd(), path, O_NOFOLLOW | O_WRONLY);
+	int fd = openat(lowerdir_fd(), path, O_WRONLY);
 	if (fd == -1)
 		goto out;
 	res = fremovexattr(fd, name);
