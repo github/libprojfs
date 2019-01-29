@@ -34,26 +34,28 @@ test_expect_success 'create source tree' '
 '
 
 test_expect_success 'check directory stat' '
-	stat target/dir | remove_stat_minutiae >stat.dir &&
 	stat source/dir | remove_stat_minutiae >stat.dir.source &&
+	stat target/dir | remove_stat_minutiae >stat.dir &&
 	test_cmp stat.dir stat.dir.source
 '
 
 test_expect_success 'check file stat' '
-	stat target/file | remove_stat_minutiae >stat.file &&
 	stat source/file | remove_stat_minutiae >stat.file.source &&
+	stat target/file | remove_stat_minutiae >stat.file &&
 	test_cmp stat.file stat.file.source
 '
 
 test_expect_success 'check fifo stat' '
-	stat target/fifo | remove_stat_minutiae >stat.fifo &&
 	stat source/fifo | remove_stat_minutiae >stat.fifo.source &&
+	stat target/fifo | remove_stat_minutiae >stat.fifo &&
 	test_cmp stat.fifo stat.fifo.source
 '
 
+# stat source/link once to update atime
 test_expect_success 'check link stat' '
-	stat target/link | remove_stat_minutiae >stat.link &&
+	stat source/link &&
 	stat source/link | remove_stat_minutiae >stat.link.source &&
+	stat target/link | remove_stat_minutiae >stat.link &&
 	test_cmp stat.link stat.link.source
 '
 
