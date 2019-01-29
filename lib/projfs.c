@@ -375,13 +375,14 @@ static int projfs_op_fsync(char const *path, int datasync,
 
 static int projfs_op_mknod(char const *path, mode_t mode, dev_t rdev)
 {
+	(void)rdev;
 	int res = projfs_fuse_proj_dir("mknod", lowerpath(path), 1);
 	if (res)
 		return -res;
 	if (S_ISFIFO(mode))
 		res = mkfifoat(lowerdir_fd(), lowerpath(path), mode);
 	else
-		res = mknodat(lowerdir_fd(), lowerpath(path), mode, rdev);
+		return -ENOSYS;
 	return res == -1 ? -errno : 0;
 }
 
