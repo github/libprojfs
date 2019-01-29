@@ -20,7 +20,14 @@ Copyright (C) Junio C Hamano <gitster@pobox.com> and Git contributors.
 https://git-scm.com/
 License: GPLv2
 
-The LGPLv2 license text can be found in the COPYING file.  The other two
+Project: GNU Build Tools
+Copyright (C) Free Software Foundation, Inc.
+https://www.gnu.org/software/autoconf/
+https://www.gnu.org/software/automake/
+https://www.gnu.org/software/libtool/
+License: GPLv2 or later, with special exception
+
+The LGPLv2 license text can be found in the COPYING file.  The other
 licenses follow.
 
 --- 
@@ -388,3 +395,13 @@ proprietary programs.  If your program is a subroutine library, you may
 consider it more useful to permit linking proprietary applications with the
 library.  If this is what you want to do, use the GNU Lesser General
 Public License instead of this License.
+
+---
+
+GNU Build Tools Special Exception to GPL
+
+As a special exception to the GNU General Public License,
+if you distribute this file as part of a program or library that
+is built using GNU Libtool, you may include this file under the
+same distribution terms that you use for the rest of that program.
+
