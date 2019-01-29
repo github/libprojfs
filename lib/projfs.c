@@ -350,6 +350,7 @@ static void *projfs_op_init(struct fuse_conn_info *conn,
 	cfg->entry_timeout = 0;
 	cfg->attr_timeout = 0;
 	cfg->negative_timeout = 0;
+	cfg->use_ino = 1;
 
 	return projfs_context_fs();
 }

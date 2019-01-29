@@ -15,9 +15,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see http://www.gnu.org/licenses/ .
 
-test_description='projfs filesystem mirroring symlink tests
+test_description='projfs filesystem mirroring link tests
 
-Check that symlinks function as expected.
+Check that links function as expected.
 '
 
 . ./test-lib.sh
@@ -26,15 +26,25 @@ projfs_start test_projfs_simple source target || exit 1
 
 EXPECT_DIR="$TEST_DIRECTORY/$(basename "$0" .t | sed 's/-.*//')"
 
-test_expect_success 'create link' '
-	ln -s file target/link
+test_expect_success 'create links' '
+	echo text > target/file &&
+	ln target/file target/link &&
+	ls -li target &&
+	ln -s file target/symlink
 '
 
-test_expect_success 'check stat' '
-	stat target/link >stat &&
-	grep "File: target/link -> file" stat &&
-	grep "symbolic link" stat &&
-	grep "Access: (0777/lrwxrwxrwx)" stat
+test_expect_success 'check link stat' '
+	stat target/file >link.file.stat &&
+	stat target/link >link.stat &&
+	grep "Inode: " link.file.stat | awk "{print \$4}" >inode &&
+	grep "Inode: $(cat inode)" link.stat
+'
+
+test_expect_success 'check symlink stat' '
+	stat target/symlink >symlink.stat &&
+	grep "File: target/symlink -> file" symlink.stat &&
+	grep "symbolic link" symlink.stat &&
+	grep "Access: (0777/lrwxrwxrwx)" symlink.stat
 '
 
 projfs_stop || exit 1
