@@ -15,9 +15,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see http://www.gnu.org/licenses/ .
 
-test_description='projfs filesystem mirroring statfs tests
+test_description='projfs filesystem mirroring attribute tests
 
-Check that the filesystem stat function works as expected.
+Check that chmod, chown and utimens functionas expected.
 '
 
 . ./test-lib.sh
@@ -26,13 +26,20 @@ projfs_start test_projfs_simple source target || exit 1
 
 EXPECT_DIR="$TEST_DIRECTORY/$(basename "$0" .t | sed 's/-.*//')"
 
-test_expect_success 'check statfs' '
-	stat -f target > stat &&
-	grep "Type: fuseblk" stat &&
-	grep "Blocks: Total: " stat | awk "{print \$3}" > stat.blocks.total &&
-	grep "Inodes: Total: " stat | awk "{print \$3}" > stat.inodes.total &&
-	stat -f . | grep "Blocks: Total: "`cat stat.blocks.total` &&
-	stat -f . | grep "Inodes: Total: "`cat stat.inodes.total`
+test_expect_success 'create source tree' '
+	echo hello > source/xyz &&
+	chmod 0600 source/xyz &&
+	ln -s xyz source/symlink
+'
+
+test_expect_success 'chmod' '
+	stat source/xyz | grep "Access: (0600/-rw-------)" &&
+	chmod 0777 target/xyz &&
+	stat source/xyz | grep "Access: (0777/-rwxrwxrwx)" &&
+	stat source/symlink | grep "Access: (0777/lrwxrwxrwx)" &&
+	chmod 0513 target/symlink &&
+	stat source/symlink | grep "Access: (0777/lrwxrwxrwx)" &&
+	stat source/xyz | grep "Access: (0513/-r-x--x-wx)"
 '
 
 projfs_stop || exit 1
