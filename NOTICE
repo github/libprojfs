@@ -27,6 +27,11 @@ https://www.gnu.org/software/automake/
 https://www.gnu.org/software/libtool/
 License: GPLv2 or later, with special exception
 
+Project: GNU Autoconf Macro Archive
+Copyright (C) GNU Autoconf contributors.
+https://www.gnu.org/software/autoconf-archive/
+License: FSF All Permissive
+
 The LGPLv2 license text can be found in the COPYING file.  The other
 licenses follow.
 
@@ -404,4 +409,13 @@ As a special exception to the GNU General Public License,
 if you distribute this file as part of a program or library that
 is built using GNU Libtool, you may include this file under the
 same distribution terms that you use for the rest of that program.
+
+---
+
+FSF All-Permissive License
+
+Copying and distribution of this file, with or without modification,
+are permitted in any medium without royalty provided the copyright
+notice and this notice are preserved.  This file is offered as-is,
+without any warranty.
 
