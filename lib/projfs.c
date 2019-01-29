@@ -439,8 +439,6 @@ static int projfs_op_chmod(char const *path, mode_t mode,
 	if (fi)
 		res = fchmod(fi->fh, mode);
 	else
-		// TODO: as AT_SYMLINK_NOFOLLOW is not implemented,
-		//       should we open(..., O_NOFOLLOW) and then fchmod()?
 		res = fchmodat(lowerdir_fd(), lowerpath(path), mode, 0);
 	return res == -1 ? -errno : 0;
 }
@@ -466,7 +464,7 @@ static int projfs_op_truncate(char const *path, off_t off,
 		res = ftruncate(fi->fh, off);
 	else {
 		int fd = openat(lowerdir_fd(), lowerpath(path),
-				O_NOFOLLOW | O_WRONLY);
+				O_WRONLY);
 		if (fd == -1) {
 			res = -1;
 			goto out;
@@ -494,31 +492,6 @@ static int projfs_op_utimens(char const *path, const struct timespec tv[2],
 	return res == -1 ? -errno : 0;
 }
 
-/* Try to avoid opening a FIFO pipe only to read/write xattrs, as this
- * can result openat() entering an uninterruptable sleep while waiting
- * for input/output on the pipe.
- *
- * However, there is a possible race after if path refers to a regular
- * file which then is replaced with a pipe immediately after this check.
- *
- * We assume path has been converted with lowerpath(), and return
- * a positive errno value on error, otherwise 0.
- */
-static int check_fifo(const char *path)
-{
-	int res;
-	struct stat attr;
-	int err = 0;
-
-	res = fstatat(lowerdir_fd(), path, &attr, AT_SYMLINK_NOFOLLOW);
-	if (res == -1)
-		err = errno;
-	else if (S_ISFIFO(attr.st_mode)) {
-		res = -1;
-		err = ENOTSUP;
-	}
-	return res == -1 ? err : 0;
-}
 
 static int projfs_op_setxattr(char const *path, char const *name,
                               char const *value, size_t size, int flags)
@@ -527,11 +500,7 @@ static int projfs_op_setxattr(char const *path, char const *name,
 	int err = 0;
 
 	path = lowerpath(path);
-	err = check_fifo(path);
-	if (err > 0)
-		goto out;
-	// TODO: any way to avoid the small race here after check_fifo()?
-	int fd = openat(lowerdir_fd(), path, O_NOFOLLOW | O_WRONLY);
+	int fd = openat(lowerdir_fd(), path, O_WRONLY | O_NONBLOCK);
 	if (fd == -1)
 		goto out;
 	res = fsetxattr(fd, name, value, size, flags);
@@ -551,11 +520,7 @@ static int projfs_op_getxattr(char const *path, char const *name,
 	int err = 0;
 
 	path = lowerpath(path);
-	err = check_fifo(path);
-	if (err > 0)
-		goto out;
-	// TODO: any way to avoid the small race here after check_fifo()?
-	int fd = openat(lowerdir_fd(), path, O_NOFOLLOW | O_RDONLY);
+	int fd = openat(lowerdir_fd(), path, O_RDONLY | O_NONBLOCK);
 	if (fd == -1)
 		goto out;
 	res = fgetxattr(fd, name, value, size);
@@ -574,11 +539,7 @@ static int projfs_op_listxattr(char const *path, char *list, size_t size)
 	int err = 0;
 
 	path = lowerpath(path);
-	err = check_fifo(path);
-	if (err > 0)
-		goto out;
-	// TODO: any way to avoid the small race here after check_fifo()?
-	int fd = openat(lowerdir_fd(), path, O_NOFOLLOW | O_RDONLY);
+	int fd = openat(lowerdir_fd(), path, O_RDONLY | O_NONBLOCK);
 	if (fd == -1)
 		goto out;
 	res = flistxattr(fd, list, size);
@@ -597,11 +558,7 @@ static int projfs_op_removexattr(char const *path, char const *name)
 	int err = 0;
 
 	path = lowerpath(path);
-	err = check_fifo(path);
-	if (err > 0)
-		goto out;
-	// TODO: any way to avoid the small race here after check_fifo()?
-	int fd = openat(lowerdir_fd(), path, O_NOFOLLOW | O_WRONLY);
+	int fd = openat(lowerdir_fd(), path, O_WRONLY | O_NONBLOCK);
 	if (fd == -1)
 		goto out;
 	res = fremovexattr(fd, name);
