@@ -627,8 +627,8 @@ static int projfs_op_readdir(char const *path, void *buf,
 		}
 		if (filled == 0) {
 			memset(&attr, 0, sizeof(attr));
-			attr.st_ino = d->ent->d_ino,
-				attr.st_mode = d->ent->d_type << 12;
+			attr.st_ino = d->ent->d_ino;
+			attr.st_mode = d->ent->d_type << 12;
 		}
 
 		if (filler(buf, d->ent->d_name, &attr, d->ent->d_off, filled))
