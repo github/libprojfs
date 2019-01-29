@@ -19,7 +19,6 @@
   * [Phase 3 – Kernel Module](#phase-3--kernel-module)
 * [Distribution](#distribution)
   * [Naming](#naming)
-  * [Licensing](#licensing)
 
 ## Scope
 
@@ -557,21 +556,3 @@ Further, the hidden `.gvfs` file used by the Windows and MacOS implementations
 will conflict with the GNOME GVfs filesystem's use of a `.gvfs` file on Linux
 systems, and so will need to be given a different name in the Linux VFSForGit
 client.
-
-### Licensing
-
-The projfs kernel module must be GPLv2 licensed, both to link into the Linux
-kernel and because we are using GPLv2-licensed code from ecryptfs, overlayfs,
-and wrapfs.
-
-The libprojfs library can be licensed under the Lesser GPL (LGPLv2), because
-libfuse3 is distributed under that license and so we can reuse its code
-(especially its communication channel framework) so long as we use the LGPLv2
-as well.
-
-The LGPLv2 explicitly allows linking of a library against non-copyleft code,
-which is why it is often used for libraries like libfuse.  This means we can
-link our libprojfs against the MIT-licensed .NET VFSForGit codebase.  (The
-GPLv2 explicitly disallows this; GPLv2 code can use APIs from non-copyleft
-code, but can not directly link against such code, either statically or
-dynamically.)
