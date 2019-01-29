@@ -49,7 +49,11 @@ AC_ARG_ENABLE([debug],
   [AC_DEFINE(PROJFS_DEBUG, 1, [Enable debugging output])]dnl
 )dnl
 
-AC_SUBST([libprojfs_cflags])
+AC_ARG_ENABLE([fuse_debug],
+  [AS_HELP_STRING([--enable-fuse-debug],
+    [Enable FUSE library debugging output])],
+  [AC_DEFINE(PROJFS_FUSE_DEBUG, 1, [Enable FUSE library debugging output])]dnl
+)dnl
 
 enable_vfsapi=false
 libprojfs_export_regex='projfs'

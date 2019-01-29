@@ -630,12 +630,12 @@ static struct fuse_operations projfs_ops = {
 	// copy_file_range
 };
 
-#ifdef PROJFS_DEBUG
-#define DEBUG_ARGV "--debug",
-#define DEBUG_ARGC 1
+#ifdef PROJFS_FUSE_DEBUG
+#define PROJFS_FUSE_DEBUG_ARGV "--debug",
+#define PROJFS_FUSE_DEBUG_ARGC 1
 #else
-#define DEBUG_ARGV
-#define DEBUG_ARGC 0
+#define PROJFS_FUSE_DEBUG_ARGV
+#define PROJFS_FUSE_DEBUG_ARGC 0
 #endif
 
 static void projfs_set_session(struct projfs *fs, struct fuse_session *se)
@@ -716,8 +716,8 @@ out:
 static void *projfs_loop(void *data)
 {
 	struct projfs *fs = (struct projfs *)data;
-	const char *argv[] = { "projfs", DEBUG_ARGV NULL };
-	int argc = 1 + DEBUG_ARGC;
+	const char *argv[] = { "projfs", PROJFS_FUSE_DEBUG_ARGV NULL };
+	int argc = 1 + PROJFS_FUSE_DEBUG_ARGC;
 	struct fuse_args args = FUSE_ARGS_INIT(argc, (char **)argv);
 	struct fuse_loop_config loop;
 	int res = 0;
