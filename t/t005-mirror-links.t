@@ -37,11 +37,6 @@ test_expect_success 'check stat' '
 	grep "Access: (0777/lrwxrwxrwx)" stat
 '
 
-test_expect_success 'check readlink' '
-	readlink target/link >readlink &&
-	test_cmp readlink "$EXPECT_DIR/readlink"
-'
-
 projfs_stop || exit 1
 
 test_done
