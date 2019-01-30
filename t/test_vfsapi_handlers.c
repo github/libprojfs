@@ -39,8 +39,8 @@ static PrjFS_Result TestNotifyOperation(
     _In_    const char*                             destinationRelativePath
 )
 {
-	unsigned int opt_flags;
-	int retval;
+	unsigned int ret_flags;
+	int ret;
 
 	printf("  TestNotifyOperation for %s: %d, %s, %hhd, 0x%08X\n",
 	       relativePath, triggeringProcessId, triggeringProcessName,
@@ -51,10 +51,12 @@ static PrjFS_Result TestNotifyOperation(
 	(void)contentId;
 	(void)destinationRelativePath;
 
-	opt_flags = test_get_opts(TEST_OPT_RETVAL | TEST_OPT_VFSAPI, &retval);
+	test_get_opts((TEST_OPT_VFSAPI | TEST_OPT_RETVAL), &ret, &ret_flags);
 
-	return (opt_flags == TEST_OPT_NONE) ? PrjFS_Result_Success
-					    : retval;
+	if ((ret_flags & TEST_VAL_SET) == TEST_VAL_UNSET)
+		ret = PrjFS_Result_Success;
+
+	return ret;
 }
 
 int main(int argc, char *const argv[])

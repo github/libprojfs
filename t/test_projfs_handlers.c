@@ -28,7 +28,7 @@
 static int test_handle_event(struct projfs_event *event, const char *desc,
 			     int perm)
 {
-	unsigned int opt_flags;
+	unsigned int ret_flags;
 	int ret;
 
 	printf("  test %s for %s: "
@@ -36,9 +36,9 @@ static int test_handle_event(struct projfs_event *event, const char *desc,
 	       desc, event->path,
 	       event->mask >> 32, event->mask & 0xFFFFFFFF, event->pid);
 
-	opt_flags = test_get_opts(TEST_OPT_RETVAL, &ret);
+	test_get_opts(TEST_OPT_RETVAL, &ret, &ret_flags);
 
-	if (opt_flags == TEST_OPT_NONE)
+	if ((ret_flags & TEST_VAL_SET) == TEST_VAL_UNSET)
 		ret = perm ? PROJFS_ALLOW : 0;
 	else if(!perm && ret > 0)
 		ret = 0;
