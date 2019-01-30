@@ -8,6 +8,7 @@ While the libprojfs C library may also be used independently of VFSForGit,
 our primary goal is to enable users to run the VFSForGit client
 on a Linux system.
 
+**PLEASE NOTE:**
 At present libprojfs is undergoing rapid development and its design
 and APIs may change significantly; some features are also incomplete,
 and so we do not recommend libprojfs for any production environments.
@@ -70,15 +71,97 @@ So long as libprojfs remains based on [FUSE][fuse-man], the primary
 depedency for libprojfs is the user-space [libfuse][libfuse] library,
 as well as having the Linux [`fuse`][fuse-mod] kernel module installed.
 
-*TBD* building libfuse (plus dependencies meson, ninja, custom patches)\
-*TBD* install libprojfs dependencies (autoconf, libtool, make)
+If you are using a [Docker](https://www.docker.com) container, you
+may need to ensure the `fuse` kernel module is installed on your
+host OS.  See the [Using Docker containers](#using-docker-containers)
+section below for more details.
 
-To build libprojfs with the VFS API option (which is required if you
-plan to run a VFSForGit "provider", including `MirrorProvider`):
+At present we require some custom modifications to the libfuse version 3.x
+library, and therefore building libprojfs against a default installation
+of libfuse will not work.  We hope to work with the libfuse maintainers
+to develop patches will can eventually be accepted upstream; see
+[PR #346](libfuse/libfuse#346) in the libfuse project for the current
+status of this work.
+
+To test libprojfs with the Microsoft VFSForGit `MirrorProvider`
+(as we do not support the primary VFSForGit GVFS provider yet),
+.NET Core must be installed and parts of the VFSForGit project
+built.  See the [Running MirrorProvider](#running-mirrorprovider)
+section below for details.
+
+### Installing Dependencies
+
+The libfuse version 3.x source requires the [Meson][meson] and
+[Ninja][ninja] build systems (specifically Meson version 0.42 or higher),
+while the libprojfs project depends (for now, at least) on the
+traditional [GNU Build System][gnu-build].
+
+Assuming you are using a Debian-based distribution like Ubuntu,
+the following commands should install the necessary build dependencies
+for libfuse:
+```
+echo 'deb http://deb.debian.org/debian stretch-backports main' >> \
+  /etc/apt/sources.list.d/stretch-backports.list && \
+apt-get update -qq && \
+apt-get install -y -qq --no-install-recommends \
+  build-essential ca-certificates pkg-config udev && \
+apt-get install -y -qq --no-install-recommends -t=stretch-backports meson
+```
+
+For libprojfs, use the following additional commands:
+```
+apt-get install -y -qq --no-install-recommends \
+  attr automake build-essential dpkg-dev libtool pkg-config
+```
+
+While it is difficult to provide a comprehensive list of dependencies
+suitable for all Linux distributions, we hope the preceding information
+will suffice to assist those using other distros.  Please let us know
+if there are specific dependencies we should further enumerate!
+
+### Building Custom libfuse Library
+
+*TBD* building libfuse with custom patches
+
+### Building libprojfs
+
+Because we have not yet made a tagged, versioned release package,
+you will need to clone our repository:
+```
+git clone https://github.com/github/libprojfs.git
+```
+(Alternatively you could download and unzip a package of the libprojfs
+source code using the "Clone or download" button on this page.)
+
+Next, run the `autogen.sh` script to generate an [Autoconf][autoconf]
+`configure` script:
+```
+./autogen.sh
+```
+(This step will not be necessary in the future for those downloading
+a versioned release package of libprojfs.)
+
+The basic build process at this point is the typical Autoconf and
+Make one:
+```
+./configure
+make
+make test
+```
+
+Running `./configure --help` will output the full set of configuration
+options available.
+
+To build libprojfs with the VFSForGit API option (which is required if you
+plan to run a VFSForGit "provider" such as `MirrorProvider`, the test
+provider we are developing against for now), add the `--enable-vfs-api`
+flag to the arguments for `configure`:
 
 ```
 ./configure --enable-vfs-api && make && make test
 ```
+
+### Installing libprojfs
 
 If you would like to install the library in a location other than
 `/usr/local`, supply the usual `--prefix=/path/to/install` argument
@@ -94,15 +177,38 @@ or `/usr/local`:
 sudo make install
 ```
 
-*TBD* running VFSForGit (plus dependencies including dotnet):\
+If you do not install the library into a system location where your
+linker will automatically find it, you will need to supply a path to
+its build location in the `LD_LIBRARY_PATH` environment variable when
+running the `MirrorProvider` scripts, as shown in the section below.
+
+### Running MirrorProvider
+
+*TBD* running VFSForGit (plus dependencies including apt-get dotnet):\
+`Build.sh`\
 `[LD_LIBRARY_PATH=...] ./MirrorProvider_Clone.sh`\
 `[LD_LIBRARY_PATH=...] ./MirrorProvider_Mount.sh`\
 
-*TBD* Docker is used for repeatable builds and to facilitate cross-platform
-development, see our [Docker documentation](docker/README.md) for more
-details.\
-*TBD* The `Dockerfile.*` files provide some examples for how to
-build and install some of our depedendices.
+### Using Docker Containers
+
+We are using Docker containers for our Continuous Integration repeatable
+builds and to facilitate cross-platform development.
+
+To this end we have some `Dockerfile`s and a command-line `projfs` script
+which may be useful; please see our [`docker` directory](docker/README.md)
+for these files and more details.
+
+Before using Docker, you will want to ensure that the `fuse`
+kernel module is available in your Host OS.  If you are running on macOS,
+note that we have had difficulty with [Docker Machine][docker-machine]
+and prefer [Docker for Mac][docker4mac], as it appears to come with
+the `fuse` module in its Host OS.
+
+*TBD*
+```
+build_options: ['--build-arg', "UID=#{Process.uid}"],
+options: ['--device', '/dev/fuse', '--cap-add', 'SYS_ADMIN'])
+```
 
 ## Contributing
 
@@ -148,13 +254,19 @@ several members of GitHub's Engineering organization, including:
 You can also contact the GitHub project team at
 [opensource+libprojfs@github.com](mailto:opensource+libprojfs@github.com).
 
+[autoconf]: https://www.gnu.org/software/autoconf/
+[docker-machine]: https://docs.docker.com/machine/
+[docker4mac]: https://docs.docker.com/docker-for-mac/
 [fanotify]: https://github.com/torvalds/linux/blob/master/include/uapi/linux/fanotify.h
 [fsnotify]: https://github.com/torvalds/linux/blob/master/include/linux/fsnotify_backend.h
 [fuse-man]: http://man7.org/linux/man-pages/man4/fuse.4.html
 [fuse-mod]: https://www.kernel.org/doc/Documentation/filesystems/fuse.txt
+[gnu-build]: https://www.gnu.org/savannah-checkouts/gnu/autoconf/manual/autoconf-2.69/html_node/The-GNU-Build-System.html#The-GNU-Build-System
 [inotify]: https://github.com/torvalds/linux/blob/master/include/uapi/linux/inotify.h
 [libfuse]: https://github.com/libfuse/libfuse
+[meson]: https://mesonbuild.com/
 [mirror]: https://github.com/github/VFSForGit/tree/features/linuxprototype/MirrorProvider
+[ninja]: https://ninja-build.org/
 [projfs-linux]: https://github.com/github/VFSForGit/tree/features/linuxprototype/ProjFS.Linux
 [winprojfs]: https://docs.microsoft.com/en-us/windows/desktop/api/_projfs/
 [vfs4git]: https://github.com/Microsoft/VFSForGit
