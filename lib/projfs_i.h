@@ -22,23 +22,6 @@
 #ifndef PROJFS_I_H
 #define PROJFS_I_H
 
-#include <dirent.h>
-
-struct projfs_node {
-	struct projfs_node *prev, *next;
-	int fd;
-	char *path;
-	ino_t ino;
-	dev_t dev;
-	uint64_t nlookup;
-};
-
-struct projfs_dir {
-	DIR *dir;
-	long loc;
-	struct dirent *ent;
-};
-
 /** Private projfs filesystem handle */
 struct projfs {
 	char *lowerdir;
@@ -47,10 +30,9 @@ struct projfs {
 	void *user_data;
 	pthread_mutex_t mutex;
 	struct fuse_session *session;
+	int lowerdir_fd;
 	pthread_t thread_id;
 	int error;
-
-	struct projfs_node root;
 };
 
 /** Private event handler type */
