@@ -26,7 +26,7 @@ We will only make a first, official versioned release once initial
 development is complete.
 
 A libprojfs filesystem can currently be used to mount a VFSForGit
-[`MirrorProvider`][mirror] test client; we expect to continue our
+[`MirrorProvider`][vfs4git-mirror] test client; we expect to continue our
 pre-release development until the VFSForGit client proper is also
 functional with libprojfs, at which point we may make an initial
 tagged release.
@@ -80,13 +80,13 @@ At present we require some custom modifications to the libfuse version 3.x
 library, and therefore building libprojfs against a default installation
 of libfuse will not work.  We hope to work with the libfuse maintainers
 to develop patches will can eventually be accepted upstream; see
-[PR #346](libfuse/libfuse#346) in the libfuse project for the current
-status of this work.
+[PR #346](https://github.com/libfuse/libfuse/pull/346) in the libfuse
+project for the current status of this work.
 
 To test libprojfs with the Microsoft VFSForGit `MirrorProvider`
-(as we do not support the primary VFSForGit GVFS provider yet),
-.NET Core must be installed and parts of the VFSForGit project
-built.  See the [Running MirrorProvider](#running-mirrorprovider)
+(as we do not support the primary VFSForGit GVFS provider yet), .NET Core
+must be installed and parts of the VFSForGit project built.  See the
+[Building and Running MirrorProvider](#building-and-running-mirrorprovider)
 section below for details.
 
 ### Installing Dependencies
@@ -142,10 +142,10 @@ Next, run the `autogen.sh` script to generate an [Autoconf][autoconf]
 a versioned release package of libprojfs.)
 
 The basic build process at this point is the typical Autoconf and
-Make one:
+[Make][make] one:
 ```
-./configure
-make
+./configure && \
+make && \
 make test
 ```
 
@@ -182,7 +182,52 @@ linker will automatically find it, you will need to supply a path to
 its build location in the `LD_LIBRARY_PATH` environment variable when
 running the `MirrorProvider` scripts, as shown in the section below.
 
-### Running MirrorProvider
+### Installing Microsoft .NET Core SDK
+
+Because there is no VFSForGit Linux release package, building from
+VFSForGit sources (specifically the
+[`features/linuxprototype` branch][vfs4git-linux]) is required.
+
+You will need to install the Microsoft [.NET Core][dotnet-core]
+packages before you can build or run the VFSForGit `MirrorProvider`
+source code.
+
+Your best resource here is Microsoft's [own documentation][dotnet-ubuntu].
+You will need the [dotnet-github][.NET Core SDK], not just the Runtime,
+because you will be building the VFSForGit application as well as running it.
+
+Per Microsoft's [Preparing your Linux system for .NET Core][dotnet-linux]
+instructions, you will need to install some of the .Net Core dependencies
+first, including [ICU][icu], [OpenSSL][openssl], and optionally
+[Kerberos][kerberos] version 5, [libunwind][libunwind], and [LTTng][lttng],
+although we have only found ICU and OpenSSL to be required (but YMMV).
+
+On an Ubuntu 18.10 system, the following commands should install
+the .NET Core SDK and its dependencies:
+```
+wget -q \
+  https://packages.microsoft.com/config/ubuntu/18.10/packages-microsoft-prod.deb
+sudo dpkg -i packages-microsoft-prod.deb
+sudo apt-get install apt-transport-https
+```
+
+Instructions for other distributions are given on Microsoft's Linux
+installation page, for example, for [Ubuntu 18.04][dotnet-ubuntu],
+or one may choose another distribution from that page's menu.
+
+If you need to download packages directly (e.g., to unpack a `.rpm`
+package and install its contents manually), Microsoft maintains a
+set of packages for common distributions on its
+[package distribution][dotnet-pkgs] site, such as individual
+[RPM packages for Fedora 27][dotnet-fedora].
+
+If you are using Docker containers, you may find it simplest to use
+the latest available [`dotnet`][dotnet-docker] image in your `Dockerfile`:
+```
+FROM microsoft/dotnet:latest
+```
+
+### Building and Running MirrorProvider
 
 *TBD* running VFSForGit (plus dependencies including apt-get dotnet):\
 `Build.sh`\
@@ -257,17 +302,31 @@ You can also contact the GitHub project team at
 [autoconf]: https://www.gnu.org/software/autoconf/
 [docker-machine]: https://docs.docker.com/machine/
 [docker4mac]: https://docs.docker.com/docker-for-mac/
+[dotnet-core]: https://dotnet.microsoft.com/download
+[dotnet-docker]: https://hub.docker.com/r/microsoft/dotnet/
+[dotnet-fedora]: https://packages.microsoft.com/fedora/27/prod/
+[dotnet-github]: https://github.com/dotnet/core/blob/master/release-notes/download-archive.md#net-core-runtime-and-sdk-download-archive
+[dotnet-linux]: https://github.com/dotnet/core/blob/master/Documentation/linux-setup.md
+[dotnet-pkgs]: https://packages.microsoft.com/
+[dotnet-ubuntu]: https://dotnet.microsoft.com/download/linux-package-manager/ubuntu18-04/sdk-current
 [fanotify]: https://github.com/torvalds/linux/blob/master/include/uapi/linux/fanotify.h
 [fsnotify]: https://github.com/torvalds/linux/blob/master/include/linux/fsnotify_backend.h
 [fuse-man]: http://man7.org/linux/man-pages/man4/fuse.4.html
 [fuse-mod]: https://www.kernel.org/doc/Documentation/filesystems/fuse.txt
 [gnu-build]: https://www.gnu.org/savannah-checkouts/gnu/autoconf/manual/autoconf-2.69/html_node/The-GNU-Build-System.html#The-GNU-Build-System
+[icu]: http://site.icu-project.org/home
 [inotify]: https://github.com/torvalds/linux/blob/master/include/uapi/linux/inotify.h
+[kerberos]: https://web.mit.edu/kerberos/
 [libfuse]: https://github.com/libfuse/libfuse
+[libunwind]: https://www.nongnu.org/libunwind/
+[lttng]: https://lttng.org/
+[make]: https://www.gnu.org/software/make/
 [meson]: https://mesonbuild.com/
-[mirror]: https://github.com/github/VFSForGit/tree/features/linuxprototype/MirrorProvider
 [ninja]: https://ninja-build.org/
+[openssl]: https://www.openssl.org/
 [projfs-linux]: https://github.com/github/VFSForGit/tree/features/linuxprototype/ProjFS.Linux
 [winprojfs]: https://docs.microsoft.com/en-us/windows/desktop/api/_projfs/
 [vfs4git]: https://github.com/Microsoft/VFSForGit
-
+[vfs4git-github]: https://github.com/github/VFSForGit
+[vfs4git-linux]: https://github.com/Microsoft/VFSForGit/tree/features/linuxprototype
+[vfs4git-mirror]: https://github.com/Microsoft/VFSForGit/tree/features/linuxprototype/MirrorProvider
