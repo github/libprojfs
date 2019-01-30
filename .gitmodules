@@ -1,0 +1,3 @@
+[submodule "docker/VFSForGit"]
+	path = docker/VFSForGit
+	url = https://github.com/github/VFSForGit.git
