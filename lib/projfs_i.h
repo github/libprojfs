@@ -30,6 +30,7 @@ struct projfs {
 	void *user_data;
 	pthread_mutex_t mutex;
 	struct fuse_session *session;
+	int lowerdir_fd;
 	pthread_t thread_id;
 	int error;
 };
