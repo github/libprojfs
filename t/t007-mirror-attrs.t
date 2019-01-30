@@ -77,6 +77,18 @@ test_expect_success 'truncate' '
 	test $(stat -c%s target/trnc) -eq 20
 '
 
+test_expect_success 'xattrs' '
+	touch target/file &&
+	test $(getfattr target/file | wc -l) -eq 0 &&
+
+	setfattr -n user.testing -v hello target/file &&
+	test $(getfattr target/file | grep ^[^#] | wc -l) -eq 1 &&
+	test $(getfattr -n user.testing --only-values target/file) = hello &&
+
+	setfattr -x user.testing target/file &&
+	test $(getfattr target/file | wc -l) -eq 0
+'
+
 projfs_stop || exit 1
 
 test_done
