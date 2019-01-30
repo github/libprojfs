@@ -45,7 +45,37 @@ more details.
 
 ## Getting Started
 
-*TBD*
+*TBD* building libfuse (plus dependencies meson, ninja, custom patches)
+*TBD* install libprojfs dependencies (autoconf, libtool, make)
+
+To build libprojfs with the VFS API option (which is required if you
+plan to run a VFSForGit "provider", including `MirrorProvider`):
+
+```
+./configure --enable-vfs-api && make && make test
+```
+
+If you would like to install the library in a location other than
+`/usr/local`, supply the usual `--prefix=/path/to/install` argument
+to the `configure` command, for example:
+```
+./configure --prefix=/usr && make && make test
+```
+
+You may then choose to install the library; note that `sudo` may be
+required if you are installed to a system location such as `/usr`
+or `/usr/local`:
+```
+sudo make install
+```
+
+*TBD* running VFSForGit (plus dependencies including dotnet):
+`[LD_LIBRARY_PATH=...] ./MirrorProvider_Clone.sh`
+`[LD_LIBRARY_PATH=...] ./MirrorProvider_Mount.sh`
+
+*TBD* Docker is used for repeatable builds and to facilitate cross-platform
+development, see our [Docker documentation](/Docker/README.md) for more
+details.
 
 ## Contributing
 
@@ -86,6 +116,7 @@ several members of GitHub's Engineering organization, including:
 
 * [@chrisd8088](https://github.com/chrisd8088)
 * [@kivikakk](https://github.com/kivikakk)
+* [@wrighty](https://github.com/wrighty)
 
 You can also contact the GitHub project team at
 [opensource+libprojfs@github.com](mailto:opensource+libprojfs@github.com).
@@ -95,7 +126,7 @@ You can also contact the GitHub project team at
 [lgpl-v2]: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
 [mirror]: https://github.com/github/VFSForGit/tree/features/linuxprototype/MirrorProvider
 [mit]: https://github.com/Microsoft/VFSForGit/blob/master/License.md
-[projfs-linux]: https://github.com/github/VFSForGit/tree/features/linuxprototype/ProjFS.Linux)
+[projfs-linux]: https://github.com/github/VFSForGit/tree/features/linuxprototype/ProjFS.Linux
 [winprojfs]: https://docs.microsoft.com/en-us/windows/desktop/api/_projfs/
 [vfs4git]: https://github.com/Microsoft/VFSForGit
 
