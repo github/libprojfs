@@ -77,27 +77,31 @@ test_expect_success 'utimensat' '
 	test $(stat -c%Y target/xyz) -eq 0
 '
 
+test_must_fail 'utimensat on symlinks' '
+	test $(stat -c%Y target/symlink) -ne 0 &&
+	touch -d"1970-01-01 00:00:00 Z" target/symlink &&
+	test $(stat -c%Y target/symlink) -eq 0
+'
+
 test_expect_success 'truncate' '
-	echo hello > target/trnc &&
-	test $(stat -c%s target/trnc) -eq 6 &&
-	truncate -s0 target/trnc &&
-	test $(stat -c%s target/trnc) -eq 0 &&
-	truncate -s+10 target/trnc &&
-	test $(stat -c%s target/trnc) -eq 10 &&
-	truncate -s+10 target/trnc &&
-	test $(stat -c%s target/trnc) -eq 20
+	test $(stat -c%s target/xyz) -eq 6 &&
+	truncate -s0 target/xyz &&
+	test $(stat -c%s target/xyz) -eq 0 &&
+	truncate -s+10 target/xyz &&
+	test $(stat -c%s target/xyz) -eq 10 &&
+	truncate -s+10 target/xyz &&
+	test $(stat -c%s target/xyz) -eq 20
 '
 
 test_expect_success 'xattrs' '
-	touch target/file &&
-	test $(getfattr target/file | wc -l) -eq 0 &&
+	test $(getfattr target/xyz | wc -l) -eq 0 &&
 
-	setfattr -n user.testing -v hello target/file &&
-	test $(getfattr target/file | grep ^[^#] | wc -l) -eq 1 &&
-	test $(getfattr -n user.testing --only-values target/file) = hello &&
+	setfattr -n user.testing -v hello target/xyz &&
+	test $(getfattr target/xyz | grep ^[^#] | wc -l) -eq 1 &&
+	test $(getfattr -n user.testing --only-values target/xyz) = hello &&
 
-	setfattr -x user.testing target/file &&
-	test $(getfattr target/file | wc -l) -eq 0
+	setfattr -x user.testing target/xyz &&
+	test $(getfattr target/xyz | wc -l) -eq 0
 '
 
 projfs_stop || exit 1
