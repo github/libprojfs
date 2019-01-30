@@ -193,7 +193,7 @@ packages before you can build or run the VFSForGit `MirrorProvider`
 source code.
 
 Your best resource here is Microsoft's [own documentation][dotnet-ubuntu].
-You will need the [dotnet-github][.NET Core SDK], not just the Runtime,
+You will need the [.NET Core SDK][dotnet-github], not just the Runtime,
 because you will be building the VFSForGit application as well as running it.
 
 Per Microsoft's [Preparing your Linux system for .NET Core][dotnet-linux]
@@ -221,13 +221,48 @@ set of packages for common distributions on its
 [package distribution][dotnet-pkgs] site, such as individual
 [RPM packages for Fedora 27][dotnet-fedora].
 
+Once you have the .NET Core SDK and its dependencies installed, you
+should be able to run the `dotnet` command and build a
+[small example .NET application][dotnet-hello]:
+```
+dotnet new console && \
+dotnet run
+```
+
+If you want to avoid the default .NET Core behavior of collecting
+and publishing anonymous [telemetry data][dotnet-telemetry], you can
+set the `DOTNET_CLI_TELEMETRY_OPTOUT` environment variable to `1`.
+We have also found the following other environment variables useful
+in simplifying some .NET defaults:
+```
+export DOTNET_CLI_TELEMETRY_OPTOUT="1"
+export DOTNET_SKIP_FIRST_TIME_EXPERIENCE="1"
+export NUGET_XMLDOC_MODE="skip"
+```
+
+Finally, if you installed the .NET Core packages into a non-standard
+location, you may need to set the `DOTNET_ROOT` variable before running
+the `dotnet` command, e.g.:
+```
+DOTNET_ROOT=/usr/local/share/dotnet dotnet new --help
+```
+
 If you are using Docker containers, you may find it simplest to use
-the latest available [`dotnet`][dotnet-docker] image in your `Dockerfile`:
+the latest available [`microsoft/dotnet` image][dotnet-docker]
+in your `Dockerfile`:
 ```
 FROM microsoft/dotnet:latest
 ```
 
 ### Building and Running MirrorProvider
+
+We are maintaining a [GitHub fork][vfs4git-github] of the upstream Microsoft
+[VFSForGit][vfs4git] repository, where any changes to the
+`features/linuxprototype` branch will be committed first.  While
+you are welcome to watch our repository, we recommend only forking
+the primary upstream Microsoft repository.
+
+
 
 *TBD* running VFSForGit (plus dependencies including apt-get dotnet):\
 `Build.sh`\
@@ -306,8 +341,10 @@ You can also contact the GitHub project team at
 [dotnet-docker]: https://hub.docker.com/r/microsoft/dotnet/
 [dotnet-fedora]: https://packages.microsoft.com/fedora/27/prod/
 [dotnet-github]: https://github.com/dotnet/core/blob/master/release-notes/download-archive.md#net-core-runtime-and-sdk-download-archive
-[dotnet-linux]: https://github.com/dotnet/core/blob/master/Documentation/linux-setup.md
+[dotnet-hello]: https://docs.microsoft.com/en-us/dotnet/core/tutorials/using-with-xplat-cli
+[dotnet-linux]: https://github.com/dotnet/core/blob/master/Documentation/linux-setup.md#preparing-your-linux-system-for-net-core
 [dotnet-pkgs]: https://packages.microsoft.com/
+[dotnet-telemetry]: https://docs.microsoft.com/en-us/dotnet/core/tools/telemetry
 [dotnet-ubuntu]: https://dotnet.microsoft.com/download/linux-package-manager/ubuntu18-04/sdk-current
 [fanotify]: https://github.com/torvalds/linux/blob/master/include/uapi/linux/fanotify.h
 [fsnotify]: https://github.com/torvalds/linux/blob/master/include/linux/fsnotify_backend.h
