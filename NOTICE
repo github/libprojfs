@@ -8,7 +8,7 @@ license information below.
 Project: libfuse (Linux Filesystem in USErspace reference implementation)
 Copyright (C) Miklos Szeredi <miklos@szeredi.hu> and FUSE contributors.
 https://github.com/libfuse/libfuse
-License: LGPLv2
+License: LGPLv2.1
 
 Project: VFSForGit (Virtual Filesystem for Git)
 Copyright (C) Microsoft Corporation.
@@ -20,19 +20,19 @@ Copyright (C) Junio C Hamano <gitster@pobox.com> and Git contributors.
 https://git-scm.com/
 License: GPLv2
 
-Project: GNU Build Tools
+Project: GNU Build Tools (autoconf, automake, libtool)
 Copyright (C) Free Software Foundation, Inc.
 https://www.gnu.org/software/autoconf/
 https://www.gnu.org/software/automake/
 https://www.gnu.org/software/libtool/
-License: GPLv2 or later, with special exception
+License: GPLv2 or later, with special GPLv3 exception
 
 Project: GNU Autoconf Macro Archive
 Copyright (C) GNU Autoconf contributors.
 https://www.gnu.org/software/autoconf-archive/
 License: FSF All Permissive
 
-The LGPLv2 license text can be found in the COPYING file.  The other
+The LGPLv2.1 license text can be found in the COPYING file.  The other
 licenses follow.
 
 --- 
