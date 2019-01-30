@@ -60,7 +60,7 @@ test_expect_success MULTIPLE_GROUPS 'chown/chgrp' '
 	stat source/xyz | grep -E "Gid: \\(\s*[0-9]+/\s*$second"
 '
 
-test_must_fail MULTIPLE_GROUPS 'chown/chgrp on symlinks' '
+test_expect_success MULTIPLE_GROUPS 'chown/chgrp on symlinks' '
 	ids=$(id -nG | tr " " "\\n") &&
 	first=$(echo $ids | cut -d" " -f1) &&
 	second=$(echo $ids | cut -d" " -f2) &&
@@ -68,7 +68,7 @@ test_must_fail MULTIPLE_GROUPS 'chown/chgrp on symlinks' '
 	chgrp $first target/symlink &&
 	stat target/symlink | grep -E "Gid: \\(\s*[0-9]+/\s*$first" &&
 	chgrp $second target/symlink &&
-	stat source/symlink | grep -E "Gid: \\(\s*[0-9]+/\s*$second"
+	stat source/symlink | grep -Ev "Gid: \\(\s*[0-9]+/\s*$second"
 '
 
 test_expect_success 'utimensat' '
@@ -77,19 +77,29 @@ test_expect_success 'utimensat' '
 	test $(stat -c%Y target/xyz) -eq 0
 '
 
-test_must_fail 'utimensat on symlinks' '
+test_expect_success 'utimensat on symlinks' '
 	test $(stat -c%Y target/symlink) -ne 0 &&
 	touch -d"1970-01-01 00:00:00 Z" target/symlink &&
-	test $(stat -c%Y target/symlink) -eq 0
+	test $(stat -c%Y target/symlink) -ne 0
 '
 
 test_expect_success 'truncate' '
+	chmod 0644 target/xyz &&
 	test $(stat -c%s target/xyz) -eq 6 &&
 	truncate -s0 target/xyz &&
 	test $(stat -c%s target/xyz) -eq 0 &&
 	truncate -s+10 target/xyz &&
 	test $(stat -c%s target/xyz) -eq 10 &&
 	truncate -s+10 target/xyz &&
+	test $(stat -c%s target/xyz) -eq 20
+'
+
+test_expect_success 'truncate on symlinks' '
+	truncate -s0 target/symlink &&
+	test $(stat -c%s target/xyz) -eq 0 &&
+	truncate -s+10 target/symlink &&
+	test $(stat -c%s target/xyz) -eq 10 &&
+	truncate -s+10 target/symlink &&
 	test $(stat -c%s target/xyz) -eq 20
 '
 
