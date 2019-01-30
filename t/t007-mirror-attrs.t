@@ -61,9 +61,20 @@ test_expect_success MULTIPLE_GROUPS 'chown/chgrp' '
 '
 
 test_expect_success 'utimensat' '
-	stat -c%Y target/xyz | grep -v ^0$ &&
+	test $(stat -c%Y target/xyz) -ne 0 &&
 	touch -d"1970-01-01 00:00:00 Z" target/xyz &&
-	stat -c%Y target/xyz | grep ^0$
+	test $(stat -c%Y target/xyz) -eq 0
+'
+
+test_expect_success 'truncate' '
+	echo hello > target/trnc &&
+	test $(stat -c%s target/trnc) -eq 6 &&
+	truncate -s0 target/trnc &&
+	test $(stat -c%s target/trnc) -eq 0 &&
+	truncate -s+10 target/trnc &&
+	test $(stat -c%s target/trnc) -eq 10 &&
+	truncate -s+10 target/trnc &&
+	test $(stat -c%s target/trnc) -eq 20
 '
 
 projfs_stop || exit 1
