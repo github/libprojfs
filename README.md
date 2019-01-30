@@ -44,6 +44,9 @@ several members of GitHub's Engineering organization, including:
 * [@chrisd8088](https://github.com/chrisd8088)
 * [@kivikakk](https://github.com/kivikakk)
 
+You can also contact the GitHub project team at
+[opensource+libprojfs@github.com](mailto:opensource+libprojfs@github.com).
+
 [gnu-build]: https://www.gnu.org/software/automake/manual/html_node/GNU-Build-System.html
 [gpl-v2]: https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html
 [lgpl-v2]: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
