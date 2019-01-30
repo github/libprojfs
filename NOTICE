@@ -9,28 +9,32 @@ Project: libfuse (Linux Filesystem in USErspace reference implementation)
 Copyright (C) Miklos Szeredi <miklos@szeredi.hu> and FUSE contributors.
 https://github.com/libfuse/libfuse
 License: LGPLv2.1
+SPDX-License-Identifier: LGPL-2.1-only
 
 Project: VFSForGit (Virtual Filesystem for Git)
 Copyright (C) Microsoft Corporation.
 https://github.com/Microsoft/VFSForGit
 License: MIT
+SPDX-License-Identifier: MIT
 
 Project: Git (stupid content tracker)
 Copyright (C) Junio C Hamano <gitster@pobox.com> and Git contributors.
 https://git-scm.com/
 License: GPLv2
+SPDX-License-Identifier: GPL-2.0-only
 
-Project: GNU Build Tools (autoconf, automake, libtool)
+Project: GNU Build Tools (autoconf, automake, libtool, m4)
 Copyright (C) Free Software Foundation, Inc.
-https://www.gnu.org/software/autoconf/
-https://www.gnu.org/software/automake/
-https://www.gnu.org/software/libtool/
-License: GPLv2 or later, with special GPLv3 exception
+https://www.gnu.org/software/#allgnupkgs
+Licenses: GPLv2 or later, or GPLv3 or later, with Autoconf exceptions
+SPDX-License-Identifier: GPL-2.0-or-later WITH Autoconf-exception-2.0
+SPDX-License-Identifier: GPL-3.0-or-later WITH Autoconf-exception-3.0
 
 Project: GNU Autoconf Macro Archive
 Copyright (C) GNU Autoconf contributors.
 https://www.gnu.org/software/autoconf-archive/
 License: FSF All Permissive
+SPDX-License-Identifier: FSFAP
 
 The LGPLv2.1 license text can be found in the COPYING file.  The other
 licenses follow.
