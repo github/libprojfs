@@ -60,6 +60,12 @@ test_expect_success MULTIPLE_GROUPS 'chown/chgrp' '
 	stat source/xyz | grep -E "Gid: \\(\s*[0-9]+/\s*$second"
 '
 
+test_expect_success 'utimensat' '
+	stat -c%Y target/xyz | grep -v ^0$ &&
+	touch -d"1970-01-01 00:00:00 Z" target/xyz &&
+	stat -c%Y target/xyz | grep ^0$
+'
+
 projfs_stop || exit 1
 
 test_done
