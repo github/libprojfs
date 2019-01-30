@@ -4,20 +4,31 @@ A Linux projected filesystem library, similar in concept to the Windows
 [Projected File System][winprojfs] and developed in conjunction with the
 [VFSForGit][vfs4git] project.
 
-The libprojfs C library may also be used independently of VFSForGit.
+While the libprojfs C library may also be used independently of VFSForGit,
+our primary goal is to enable users to run the VFSForGit client
+on a Linux system.
+
+At present libprojfs is undergoing rapid development and its design
+and APIs may change significantly; some features are also incomplete,
+and so we do not recommend libprojfs for any production environments.
+
+However, we wanted to share our progress to date, and we hope others
+are as excited as we are at the prospect of running the VFSForGit
+client on Linux in the not-too-distant future!
 
 ## Current Status
 
 The library is under active development and supports basic
-directory projection, with additional features being added regularly.
+directory projection, with additional features added regularly.
 
 We will only make a first, official versioned release once initial
 development is complete.
 
 A libprojfs filesystem can currently be used to mount a VFSForGit
-[`MirrorProvider`][mirror] test client; we expect to continue
-initial pre-release development until the actual VFSForGit client
-is also functional with libprojfs.
+[`MirrorProvider`][mirror] test client; we expect to continue our
+pre-release development until the VFSForGit client proper is also
+functional with libprojfs, at which point we may make an initial
+tagged release.
 
 ## Design
 
@@ -43,7 +54,21 @@ querying the provider again.
 See our [design document](docs/design.md#vfsforgit-on-linux) for
 more details.
 
+We anticipate that whether libprojfs remains a [FUSE][fuse-man]-based
+library, or becomes a [libfuse][libfuse]-like interface to a Linux kernel
+module, it may be useful for purposes other than running a VFSForGit
+client.
+
+For this reason, we have tried to ensure that our native
+[event notification API](include/projfs_notify.h)
+is aligned closely with the Linux kernel's
+[fanotify][fanotify]/[inotify][inotify]/[fsnotify][fsnotify] APIs.
+
 ## Getting Started
+
+So long as libprojfs remains based on [FUSE][fuse-man], the primary
+depedency for libprojfs is the user-space [libfuse][libfuse] library,
+as well as having the Linux [`fuse`][fuse-mod] kernel module installed.
 
 *TBD* building libfuse (plus dependencies meson, ninja, custom patches)\
 *TBD* install libprojfs dependencies (autoconf, libtool, make)
@@ -123,11 +148,13 @@ several members of GitHub's Engineering organization, including:
 You can also contact the GitHub project team at
 [opensource+libprojfs@github.com](mailto:opensource+libprojfs@github.com).
 
-[gnu-build]: https://www.gnu.org/software/automake/manual/html_node/GNU-Build-System.html
-[gpl-v2]: https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html
-[lgpl-v2]: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
+[fanotify]: https://github.com/torvalds/linux/blob/master/include/uapi/linux/fanotify.h
+[fsnotify]: https://github.com/torvalds/linux/blob/master/include/linux/fsnotify_backend.h
+[fuse-man]: http://man7.org/linux/man-pages/man4/fuse.4.html
+[fuse-mod]: https://www.kernel.org/doc/Documentation/filesystems/fuse.txt
+[inotify]: https://github.com/torvalds/linux/blob/master/include/uapi/linux/inotify.h
+[libfuse]: https://github.com/libfuse/libfuse
 [mirror]: https://github.com/github/VFSForGit/tree/features/linuxprototype/MirrorProvider
-[mit]: https://github.com/Microsoft/VFSForGit/blob/master/License.md
 [projfs-linux]: https://github.com/github/VFSForGit/tree/features/linuxprototype/ProjFS.Linux
 [winprojfs]: https://docs.microsoft.com/en-us/windows/desktop/api/_projfs/
 [vfs4git]: https://github.com/Microsoft/VFSForGit
