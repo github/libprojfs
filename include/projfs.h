@@ -111,6 +111,28 @@ int projfs_start(struct projfs *fs);
  */
 void *projfs_stop(struct projfs *fs);
 
+/**
+ * Create a directory whose contents will be projected until written.
+ *
+ * @param[in] fs Projected filesystem handle.
+ * @param[in] path Relative path of new directory under projfs mount point.
+ * @return Zero on success or an \p errno(3) code on failure.
+ */
+int projfs_create_proj_dir(struct projfs *fs, const char *path);
+
+/**
+ * Create a file whose contents will be projected until written.
+ *
+ * @param[in] fs Projected filesystem handle.
+ * @param[in] path Relative path of new file under projfs mount point.
+ * @param[in] size File size to be projected until file is written.
+ * @param[in] mode File mode with which to create the new projected file.
+ *	TODO: add extra arg for private user data
+ * @return Zero on success or an \p errno(3) code on failure.
+ */
+int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
+			    mode_t mode);
+
 #ifdef __cplusplus
 }
 #endif

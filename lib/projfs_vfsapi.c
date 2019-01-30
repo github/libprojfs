@@ -378,3 +378,37 @@ PrjFS_Result PrjFS_ConvertDirectoryToVirtualizationRoot(
 	return PrjFS_Result_Success;
 }
 
+PrjFS_Result PrjFS_WritePlaceholderDirectory(
+    _In_    const PrjFS_MountHandle*                mountHandle,
+    _In_    const char*                             relativePath
+)
+{
+	struct projfs *fs = (struct projfs *) mountHandle;
+	int ret;
+
+	fprintf(stderr, "create proj dir %s\n", relativePath);
+	ret = projfs_create_proj_dir(fs, relativePath);
+
+	return convert_errno_to_result(ret);
+}
+
+PrjFS_Result PrjFS_WritePlaceholderFile(
+    _In_    const PrjFS_MountHandle*                mountHandle,
+    _In_    const char*                             relativePath,
+    _In_    unsigned char                           providerId[PrjFS_PlaceholderIdLength],
+    _In_    unsigned char                           contentId[PrjFS_PlaceholderIdLength],
+    _In_    unsigned long                           fileSize,
+    _In_    uint16_t                                fileMode
+)
+{
+	struct projfs *fs = (struct projfs *) mountHandle;
+	int ret;
+
+	// TODO: need to wrap the content+provider IDs into a private struct
+	//	 until then, prevent compiler warnings
+	ret = projfs_create_proj_file(fs, relativePath, fileSize, fileMode);
+	(void)providerId;
+	(void)contentId;
+
+	return convert_errno_to_result(ret);
+}
