@@ -45,7 +45,7 @@ more details.
 
 ## Getting Started
 
-*TBD* building libfuse (plus dependencies meson, ninja, custom patches)
+*TBD* building libfuse (plus dependencies meson, ninja, custom patches)\
 *TBD* install libprojfs dependencies (autoconf, libtool, make)
 
 To build libprojfs with the VFS API option (which is required if you
@@ -63,19 +63,21 @@ to the `configure` command, for example:
 ```
 
 You may then choose to install the library; note that `sudo` may be
-required if you are installed to a system location such as `/usr`
+required if you are installing into a system location such as `/usr`
 or `/usr/local`:
 ```
 sudo make install
 ```
 
-*TBD* running VFSForGit (plus dependencies including dotnet):
-`[LD_LIBRARY_PATH=...] ./MirrorProvider_Clone.sh`
-`[LD_LIBRARY_PATH=...] ./MirrorProvider_Mount.sh`
+*TBD* running VFSForGit (plus dependencies including dotnet):\
+`[LD_LIBRARY_PATH=...] ./MirrorProvider_Clone.sh`\
+`[LD_LIBRARY_PATH=...] ./MirrorProvider_Mount.sh`\
 
 *TBD* Docker is used for repeatable builds and to facilitate cross-platform
-development, see our [Docker documentation](/Docker/README.md) for more
-details.
+development, see our [Docker documentation](docker/README.md) for more
+details.\
+*TBD* The `Dockerfile.*` files provide some examples for how to
+build and install some of our depedendices.
 
 ## Contributing
 
