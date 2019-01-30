@@ -14,7 +14,7 @@ See the [design document](/docs/design.md).
 
 ## Contributing
 
-*TBD with Code of Conduct*
+See [CONTRIBUTING](CONTRIBUTING.md) and [CODE_OF_CONDUCT](CODE_OF_CONDUCT.md).
 
 ## Licensing
 
