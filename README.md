@@ -24,10 +24,11 @@ each file for the licenses applicable to them.
 
 ## Development Roadmap
 
-We are developing the libprojfs library first, using FUSE to prototype
-and test its performance, before migrating functionality into a
-Linux kernel module (assuming that proves to be necessary to meet
-our performance criteria).
+We are developing the libprojfs library first, using FUSE to prototype and
+test its performance, before migrating functionality into a Linux kernel
+module (assuming that proves to be necessary to meet our performance
+criteria).  For more details on the planned development phases, see the
+[design document](docs/design.md#development-process).
 
 The VFSForGit API, which is currently supported through the use of
 the `--enable-vfs-api` configuration option to libprojfs, may at some

@@ -482,10 +482,18 @@ without even referencing the lower-level filesystem or its extended attributes.
 
 ## Development Process
 
-We anticipate following the development process outlined in the VFSForGit Linux
-Development Proposal.  In particular, we will develop the Linux VFSForGit
-client in three phases.
+We anticipate following a staged, iterative development process, with the
+following principal goals:
 
+* Iterative and incremental process
+* Functional from an early stage so test suite can be developed in parallel
+* Conducive to CI/CD best practices
+* Supports multiple environments, including Linux distros and containers
+* Compatibility with .NET Core components where possible (i.e., the
+  VFSForGit providers)
+* Optimized for performance in stages, based on test suite results
+
+In particular, we will develop the Linux VFSForGit client in three phases.
 
 ### Phase 1 – FUSE User Mode
 
