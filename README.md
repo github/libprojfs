@@ -118,9 +118,58 @@ suitable for all Linux distributions, we hope the preceding information
 will suffice to assist those using other distros.  Please let us know
 if there are specific dependencies we should further enumerate!
 
-### Building Custom libfuse Library
+### Building libfuse with Modifications
 
-*TBD* building libfuse with custom patches
+We are currently using a slightly-modified fork of the upstream
+libfuse project which allows libprojfs to store custom per-inode
+data in memory, specifically a mutex and an empty-vs-full projection
+status flag.
+
+To build our modified version of libfuse, clone (or download as a
+Zip archive) the [`context-node-userdata` branch][libfuse-userdata]
+of our forked libfuse repository, and then build libfuse using Meson
+and Ninja:
+```
+git clone https://github.com/kivikakk/libfuse.git libfuse-userdata
+cd libfuse-userdata
+git checkout context-node-userdata
+
+mkdir build
+cd build
+
+meson ..
+ninja
+```
+
+If you wish to install the modified libfuse, you may want to specify
+the installation location when running Meson, and finally run the
+`ninja install` command:
+```
+meson --prefix=/path/to/install ..
+ninja
+ninja install
+```
+
+If you are installing into a system location (e.g., `/usr` or `/usr/local`),
+you will likely need to use `sudo ninja install`.  **Please note** that in
+this case you should be cautious not to overwrite your distribution's
+default libfuse v3.x package!
+
+Because many distributions still supply libfuse v2.x as their default
+libfuse package under `/usr`, however, unless you specifically have a
+system which has a libfuse v3.x installation already, you may be safe
+installing our modified libfuse into a system location.  Note also that
+libfuse v3.x is designed to co-exist with libfuse v2.x; both libraries
+can be installed under `/usr` as the v3.x libfuse header files will be
+located in `/usr/include/fuse3`.  But please *be cautious* and check
+your system before trying this!
+
+If you choose to leave your modified libfuse library un-installed, or
+install it into a custom location, you will need to supply the path
+to this location when building libprojfs (see below) and possibly
+also in your `LD_LIBRARY_PATH` environment variable when running the
+VFSForGit `MirrorProvider` test programs, unless you build libprojfs
+with a `-Wl,-R` flag and path.
 
 ### Building libprojfs
 
@@ -443,6 +492,7 @@ You can also contact the GitHub project team at
 [inotify]: https://github.com/torvalds/linux/blob/master/include/uapi/linux/inotify.h
 [kerberos]: https://web.mit.edu/kerberos/
 [libfuse]: https://github.com/libfuse/libfuse
+[libfuse-userdata]: https://github.com/kivikakk/libfuse/tree/context-node-userdata
 [libunwind]: https://www.nongnu.org/libunwind/
 [lttng]: https://lttng.org/
 [make]: https://www.gnu.org/software/make/
