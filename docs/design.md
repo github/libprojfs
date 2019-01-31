@@ -554,8 +554,9 @@ implementation.
 
 In keeping with standard Linux/Unix practice, most component names will be
 lowercase only.  The kernel module will be named projfs, to conform to the
-naming scheme for Linux kernel filesystem modules (e.g., `overlay`).  The
-name "projfs" does not appear to reference any existing projects or Web sites.
+naming scheme for Linux kernel filesystem modules (e.g., `ecryptfs.ko`,
+`squashfs.ko`).  The name "projfs" does not appear to reference any existing
+projects or Web sites.
 
 Again, to conform to Unix practice, the user-space library which communicates
 with the kernel module will be installed as `libprojfs.so`, and most of its
