@@ -255,7 +255,7 @@ static int projfs_fuse_proj_dir_locked(struct node_userdata *user,
 	if (err < 0)
 		return -err;
 
-	int fd = openat(lowerdir_fd(), mapped_path, O_RDWR);
+	int fd = openat(lowerdir_fd(), mapped_path, O_RDONLY);
 	if (fd == -1)
 		return errno;
 
@@ -1189,14 +1189,20 @@ int _projfs_make_dir(struct projfs *fs, const char *path, mode_t mode,
 {
 	(void)fs;
 
-	int res = mkdir(path, mode);
+	int res = mkdirat(lowerdir_fd(), path, mode);
 	if (res == -1)
-		return -errno;
+		return errno;
 	if (proj_flag) {
+		int fd = openat(lowerdir_fd(), path, O_RDONLY);
+		if (fd == -1)
+			return errno;
+
 		char v = 1;
-		res = lsetxattr(path, USER_PROJECTION_EMPTY, &v, 1, 0);
+		res = fsetxattr(fd, USER_PROJECTION_EMPTY, &v, 1, 0);
+		int err = errno;
+		close(fd);
 		if (res == -1)
-			return -errno;
+			return err;
 	}
 	return 0;
 }
