@@ -137,7 +137,7 @@ git checkout context-node-userdata
 mkdir build
 cd build
 
-meson ..
+meson .. && \
 ninja
 ```
 
@@ -145,14 +145,14 @@ If you wish to install the modified libfuse, you may want to specify
 the installation location when running Meson, and finally run the
 `ninja install` command:
 ```
-meson --prefix=/path/to/install ..
-ninja
+meson --prefix=/path/to/install .. && \
+ninja && \
 ninja install
 ```
 
 If you are installing into a system location (e.g., `/usr` or `/usr/local`),
 you will likely need to use `sudo ninja install`.  **Please note** that in
-this case you should be cautious not to overwrite your distribution's
+this case you should be *very cautious* not to overwrite your distribution's
 default libfuse v3.x package!
 
 Because many distributions still supply libfuse v2.x as their default
@@ -417,11 +417,13 @@ note that we have had difficulty with [Docker Machine][docker-machine]
 and prefer [Docker for Mac][docker4mac], as it appears to come with
 the `fuse` module in its Host OS.
 
-*TBD*
+The [`docker run`][docker-run] command will need at least the
+following arguments:
 ```
-build_options: ['--build-arg', "UID=#{Process.uid}"],
-options: ['--device', '/dev/fuse', '--cap-add', 'SYS_ADMIN'])
+--device /dev/fuse --cap-add SYS_ADMIN --pid=host
 ```
+and you may also want to use the `--user <user|pid>` argument to
+specify the user ID which should run the libprojfs process.
 
 ## Contributing
 
@@ -471,6 +473,7 @@ You can also contact the GitHub project team at
 [design-linux]: docs/design.md#vfsforgit-on-linux
 [design-process]: docs/design.md#development-process
 [docker-machine]: https://docs.docker.com/machine/
+[docker-run]: https://docs.docker.com/engine/reference/commandline/run/
 [docker4mac]: https://docs.docker.com/docker-for-mac/
 [dotnet-build]: https://docs.microsoft.com/en-us/dotnet/core/tools/dotnet-build
 [dotnet-core]: https://dotnet.microsoft.com/download
