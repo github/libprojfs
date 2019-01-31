@@ -829,7 +829,7 @@ out:
 
 static int projfs_op_access(char const *path, int mode)
 {
-	int res = projfs_fuse_proj_dir(path, 1);
+	int res = projfs_fuse_proj_dir(lowerpath(path), 1);
 	if (res)
 		return -res;
 	res = faccessat(lowerdir_fd(), lowerpath(path), mode,
