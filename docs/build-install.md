@@ -197,8 +197,8 @@ sudo apt-get install apt-transport-https
 ```
 
 Instructions for other distributions are given on Microsoft's Linux
-installation page, for example, for [Ubuntu 18.04][dotnet-ubuntu]
-one may choose another distribution from that page's menu.
+installation page, for example, for [Ubuntu 18.04][dotnet-ubuntu].
+One may also choose another distribution from that page's menu.
 
 If you need to download packages directly (e.g., to unpack a `.rpm`
 package and install its contents manually), Microsoft maintains a
