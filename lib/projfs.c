@@ -63,6 +63,9 @@ static struct projfs *projfs_context_fs(void)
 	return (struct projfs *)fuse_get_context()->private_data;
 }
 
+/**
+ * @return 0 or a negative errno
+ */
 static int projfs_fuse_send_event(projfs_handler_t handler,
                                   uint64_t mask,
                                   const char *path,
@@ -95,6 +98,9 @@ static int projfs_fuse_send_event(projfs_handler_t handler,
 	return err;
 }
 
+/**
+ * @return 0 or a negative errno
+ */
 static int projfs_fuse_proj_event(uint64_t mask,
                                   const char *path,
                                   int fd)
@@ -106,6 +112,9 @@ static int projfs_fuse_proj_event(uint64_t mask,
 		handler, mask, path, NULL, fd, 0);
 }
 
+/**
+ * @return 0 or a negative errno
+ */
 static int projfs_fuse_notify_event(uint64_t mask,
                                     const char *path,
                                     const char *target_path)
@@ -117,6 +126,9 @@ static int projfs_fuse_notify_event(uint64_t mask,
 		handler, mask, path, target_path, 0, 0);
 }
 
+/**
+ * @return 0 or a negative errno
+ */
 static int projfs_fuse_perm_event(uint64_t mask,
                                   const char *path,
                                   const char *target_path)
@@ -151,6 +163,9 @@ static void set_mapped_path(char const *path, int parent)
 		mapped_path = strndup(path, last - path);
 }
 
+/**
+ * @return the userdata struct pointer, or NULL and sets errno
+ */
 static struct node_userdata *get_path_userdata_locked(int parent)
 {
 	struct node_userdata *user =
@@ -160,7 +175,7 @@ static struct node_userdata *get_path_userdata_locked(int parent)
 
 	user = calloc(1, sizeof(*user));
 	if (!user)
-		abort();
+		return NULL;
 
 	// fill cache from xattrs
 	ssize_t sz = lgetxattr(mapped_path, USER_PROJECTION_EMPTY, NULL, 0);
@@ -171,6 +186,9 @@ static struct node_userdata *get_path_userdata_locked(int parent)
 	return user;
 }
 
+/**
+ * @return 0 or an errno
+ */
 static int projfs_fuse_proj_lock(pthread_mutex_t *lock)
 {
 	struct timespec abs_timeout;
@@ -182,6 +200,9 @@ static int projfs_fuse_proj_lock(pthread_mutex_t *lock)
 	return pthread_mutex_timedlock(lock, &abs_timeout);
 }
 
+/**
+ * @return the userdata struct pointer, or NULL and sets errno
+ */
 static struct node_userdata *get_path_userdata(int parent)
 {
 	struct node_userdata *user =
@@ -204,6 +225,9 @@ static struct node_userdata *get_path_userdata(int parent)
 	return user;
 }
 
+/**
+ * @return 0 or an errno
+ */
 static int projfs_fuse_proj_dir_locked(struct node_userdata *user,
                                        const char *path)
 {
@@ -234,6 +258,7 @@ static int projfs_fuse_proj_dir_locked(struct node_userdata *user,
  * @param path the lower path (from lower_path)
  * @param parent 1 if we should look at the parent directory containing path, 0
  *               if we look at path itself
+ * @return 0 or an errno
  */
 static int projfs_fuse_proj_dir(const char *path, int parent)
 {
