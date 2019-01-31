@@ -164,45 +164,11 @@ static void set_mapped_path(char const *path, int parent)
 }
 
 /**
- * @return the userdata struct pointer, or NULL and sets errno
+ * @return the userdata struct pointer, or NULL and sets errno.  If non-NULL is
+ *         returned, the FUSE userdata is acquired and must be released with
+ *         fuse_context_node_userdata_release.
  */
-static struct node_userdata *get_path_userdata_locked(int parent)
-{
-	struct node_userdata *user =
-		(struct node_userdata *)fuse_get_context_node_userdata(parent);
-	if (user)
-		return user;
-
-	user = calloc(1, sizeof(*user));
-	if (!user)
-		return NULL;
-
-	// fill cache from xattrs
-	int fd = openat(lowerdir_fd(), mapped_path, O_RDONLY);
-	if (fd == -1) {
-		free(user);
-		return NULL;
-	}
-
-	ssize_t sz = fgetxattr(fd, USER_PROJECTION_EMPTY, NULL, 0);
-	int err = errno;
-	close(fd);
-	if (sz == -1 && err != ENOATTR) {
-		free(user);
-		errno = err;
-		return NULL;
-	}
-	user->proj_flag = sz > 0;
-
-	fuse_set_context_node_userdata(parent, user, free);
-
-	return user;
-}
-
-/**
- * @return 0 or an errno
- */
-static int projfs_fuse_proj_lock(pthread_mutex_t *lock)
+static struct node_userdata *get_path_userdata(int parent)
 {
 	struct timespec abs_timeout;
 
@@ -210,38 +176,46 @@ static int projfs_fuse_proj_lock(pthread_mutex_t *lock)
 	abs_timeout.tv_sec += PROJ_WAIT_SEC;
 	abs_timeout.tv_nsec += PROJ_WAIT_NSEC;
 
-	return pthread_mutex_timedlock(lock, &abs_timeout);
-}
+	struct fuse_node_userdata *fuserdata =
+		fuse_context_node_userdata_timedacquire(parent, &abs_timeout);
 
-/**
- * @return the userdata struct pointer, or NULL and sets errno
- */
-static struct node_userdata *get_path_userdata(int parent)
-{
-	struct node_userdata *user =
-		(struct node_userdata *)fuse_get_context_node_userdata(parent);
-	if (user)
-		return user;
-
-	pthread_mutex_t *user_lock =
-		fuse_get_context_node_userdata_lock(parent);
-	if (!user_lock) {
-		// XXX only happens if we ask for the parent of the root node
-		// return nothing with no error
-		// this behaviour is correct but should be done in a more
-		// obviously-correct way
+	if (!fuserdata) {
 		errno = 0;
 		return NULL;
 	}
-	int res = projfs_fuse_proj_lock(user_lock);
-	if (res != 0) {
-		errno = res;
+
+	if (fuserdata->data)
+		return (struct node_userdata *)fuserdata->data;
+
+	struct node_userdata *user = calloc(1, sizeof(*user));
+	if (!user) {
+		fuse_context_node_userdata_release(parent);
 		return NULL;
 	}
 
-	user = get_path_userdata_locked(parent);
+	// fill cache from xattrs
+	int fd = openat(lowerdir_fd(), mapped_path, O_RDONLY);
+	int err = errno;
+	if (fd == -1) {
+		free(user);
+		fuse_context_node_userdata_release(parent);
+		errno = err;
+		return NULL;
+	}
 
-	pthread_mutex_unlock(user_lock);
+	ssize_t sz = fgetxattr(fd, USER_PROJECTION_EMPTY, NULL, 0);
+	err = errno;
+	close(fd);
+	if (sz == -1 && err != ENOATTR) {
+		free(user);
+		fuse_context_node_userdata_release(parent);
+		errno = err;
+		return NULL;
+	}
+	user->proj_flag = sz > 0;
+
+	fuserdata->data = user;
+	fuserdata->finalize = free;
 
 	return user;
 }
@@ -296,18 +270,14 @@ static int projfs_fuse_proj_dir(const char *op, const char *path, int parent)
 	if (!user)
 		return errno;
 
-	if (!user->proj_flag)
+	if (!user->proj_flag) {
+		fuse_context_node_userdata_release(parent);
 		return 0;
+	}
 
-	pthread_mutex_t *user_lock =
-		fuse_get_context_node_userdata_lock(parent);
-	int res = projfs_fuse_proj_lock(user_lock);
-	if (res != 0)
-		return res;
+	int res = projfs_fuse_proj_dir_locked(user, path);
 
-	res = projfs_fuse_proj_dir_locked(user, path);
-
-	pthread_mutex_unlock(user_lock);
+	fuse_context_node_userdata_release(parent);
 
 	return res;
 }

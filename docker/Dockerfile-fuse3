@@ -13,8 +13,8 @@ RUN \
 	rm -rf /var/lib/apt/lists/*
 
 ARG FUSE_NWO=kivikakk/libfuse
-ARG FUSE_VERSION=3.4.1-kivikakk-userdata1
-ARG FUSE_SHA256=9b3ee6ea4cf280b038836fc99bb38f18ed7499e982f60501782175323c15a553
+ARG FUSE_VERSION=3.4.1-kivikakk-userdata2
+ARG FUSE_SHA256=94bf33301a8c40d88b16c79141b717ea5a7a4873d40c63acd0017346ad8fb425
 
 WORKDIR /tmp
 
