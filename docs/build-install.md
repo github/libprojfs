@@ -251,7 +251,7 @@ own pull requests.
 To build the VFSForGit `MirrorProvider`, first check out (or download
 as a Zip archive) the repository:
 ```
-git clone https://github.com/Microsoft/VFSForGit.git
+git clone https://github.com/Microsoft/VFSForGit.git -b features/linuxprototype
 ```
 
 Next, run the `MirrorProvider/Scripts/Linux/Build.sh` script:
