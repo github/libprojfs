@@ -140,8 +140,10 @@ static __thread char *mapped_path;
 static void set_mapped_path(char const *path, int parent)
 {
 	free(mapped_path);
-	if (!parent)
+	if (!parent) {
 		mapped_path = strdup(path);
+		return;
+	}
 	const char *last = strrchr(path, '/');
 	if (!last)
 		mapped_path = strdup(".");
