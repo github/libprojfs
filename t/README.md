@@ -1,19 +1,16 @@
 # libprojfs Test Suite
 
 Both this [README](README.md) and the shell test suite libraries used in this
-project are derived in large part from those written for the
-[git](https://git-scm.com/) version control system.  Please see the
-[COPYING](../COPYING) file distributed with this library for additional
-information regarding copyright ownership, and the
-[git/t source](https://github.com/git/git/tree/master/t) for
-further reading.
+project are derived in large part from those written for the [git][git]
+version control system.  Please see the [NOTICE](../NOTICE) file
+distributed with this library for additional information regarding copyright
+ownership, and the [git/t source][git-tests] for further reading.
 
 ## Running Tests
 
 The easiest way to run tests is to say `make test` (or `make check`, which
 is equivalent).  This runs all the tests, using the
-[Automake](https://www.gnu.org/software/automake/manual/html_node/Tests.html)
-TAP test harness:
+[Automake][automake-tests] TAP test harness:
 ```
 PASS: t000-mirror-read.t 1 - create source tree
 PASS: t000-mirror-read.t 2 - check target tree structure
@@ -32,9 +29,8 @@ Testsuite summary for libprojfs 0.1
 ============================================================================
 ```
 
-Since the tests all output [TAP](http://testanything.org/) they can
-be run with any TAP harness.  If [prove(1)](https://metacpan.org/pod/prove)
-is available, it can be run using `make prove`:
+Since the tests all output [TAP][tap] they can be run with any TAP harness.
+If [prove(1)][prove] is available, it can be run using `make prove`:
 ```
 ./t000-mirror-read.t ...... ok
 ./t001-mirror-mkdir.t ..... ok
@@ -66,7 +62,7 @@ for example:
 ```
 $ LOG_DRIVER_FLAGS='--comments --merge' make test
 ```
-See [Command-line arguments for test drivers][automake-tests]
+See [Command-line arguments for test drivers][automake-cmd]
 and [Use TAP with the Automake test harness][automake-tap] for more details.
 
 By contrast, the options available to `prove` are much richer and
@@ -75,7 +71,7 @@ for example:
 ```
 $ PROJFS_PROVE_OPTS='--timer --jobs 4' make prove
 ```
-See [man 1 prove](https://perldoc.perl.org/prove.html) for more details.
+See [man 1 prove][prove-man] for more details.
 
 ### Re-Running Failed Tests
 
@@ -369,7 +365,7 @@ This test harness library does the following things:
   `--debug` (or `-d`), and `--immediate` (or `-i`) are given.
 
 * Creates an empty trash directory under `t/test-mounts` and
-  and [chdir(2)](http://man7.org/linux/man-pages/man2/chdir.2.html) into it.
+  and [chdir(2)][chdir] into it.
   This directory is `t/test-mounts/<test-name>`,
   with `t/` subject to change by the `--root` option documented above.
 
@@ -561,9 +557,8 @@ And here are the "don'ts":
   their output.
 
   You can glean some further possible issues from the
-  [TAP grammar](https://metacpan.org/pod/TAP::Parser::Grammar#TAP-GRAMMAR)
-  but the best indication is to just run the tests with `make prove`
-  as `prove` will complain if anything is amiss.
+  [TAP grammar][tap-grammar] but the best indication is to just run the
+  tests with `make prove` as `prove` will complain if anything is amiss.
 
 ### Programmatically Skipping Tests
 
@@ -782,8 +777,7 @@ library for your script to use.
 * `test_line_count <op> <length> <file>`
 
   Check whether a file has the length it is expected to, using an
-  `<op>` test operator available to the
-  [test(1)](http://man7.org/linux/man-pages/man1/test.1.html) command.
+  `<op>` test operator available to the [test(1)][test-man] command.
   For example:
   ```
   test_write_lines 1 2 3 4 5 >foo &&
@@ -902,7 +896,7 @@ prerequisite flags.
 * `PIPE`
 
   The filesystem we're on supports creation of FIFOs (named pipes)
-  via [mkfifo(1)](http://man7.org/linux/man-pages/man1/mkfifo.1.html).
+  via [mkfifo(1)][mkfifo].
 
 * `SYMLINKS`
 
@@ -917,6 +911,15 @@ prerequisite flags.
   Test is not run by the super-user, and an attempt to write to an
   unwritable file is expected to fail correctly.
 
-[automake-tests]: https://www.gnu.org/software/automake/manual/html_node/Command_002dline-arguments-for-test-drivers.html
+[automake-cmd]: https://www.gnu.org/software/automake/manual/html_node/Command_002dline-arguments-for-test-drivers.html
 [automake-tap]: https://www.gnu.org/software/automake/manual/html_node/Use-TAP-with-the-Automake-test-harness.html
-
+[automake-tests]: https://www.gnu.org/software/automake/manual/html_node/Tests.html
+[chdir]: http://man7.org/linux/man-pages/man2/chdir.2.html
+[git]: https://git-scm.com/
+[git-tests]: https://github.com/git/git/tree/master/t
+[mkfifo]: https://man7.org/linux/man-pages/man1/mkfifo.1.html
+[prove]: https://metacpan.org/pod/prove
+[prove-man]: https://perldoc.perl.org/prove.html
+[tap]: https://testanything.org/
+[tap-grammar]: https://metacpan.org/pod/TAP::Parser::Grammar#TAP-GRAMMAR
+[test-man]: http://man7.org/linux/man-pages/man1/test.1.html

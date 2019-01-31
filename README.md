@@ -66,14 +66,27 @@ is aligned closely with the Linux kernel's
 
 ## Getting Started
 
+Please see our detailed [Build and Installation][build]
+page for step-by-step instructions on how to build and install
+libprojfs and its depedencies on Linux, and (optionally) also build and
+run the VFSForGit `MirrorProvider` test utility with libprojfs.
+
 So long as libprojfs remains based on [FUSE][fuse-man], the primary
 depedency for libprojfs is the user-space [libfuse][libfuse] library,
 as well as having the Linux [`fuse`][fuse-mod] kernel module installed.
 
+Support for [`user.*` extended attributes][xattr] must also be enabled
+on the "lower" storage filesystem.  Your Linux kernel should have
+been compiled with the necessary configuration options (e.g.,
+`CONFIG_EXT2_FS_XATTR` for [ext2/3/4][ext2]) and the underlying filesystem
+you use for libprojfs should be mounted with appropriate settings
+(e.g., [user_xattr][xattr-ext2] for ext2/3/4).
+
 If you are using a [Docker](https://www.docker.com) container, you
 may need to ensure the `fuse` kernel module is installed on your
-host OS.  See the [Using Docker containers][build-docker]
-section for more details.
+host OS, and `user.*` extended attributes are supported on your host's
+filesystem.  See the [Using Docker containers][build-docker] section for
+more details.
 
 At present we require some custom modifications to the libfuse version 3.x
 library, and therefore building libprojfs against a default installation
@@ -86,11 +99,6 @@ To test libprojfs with the Microsoft VFSForGit `MirrorProvider`
 (as we do not support the primary VFSForGit GVFS provider yet), .NET Core
 must be installed and parts of the VFSForGit project built.  See the
 [Building and Running MirrorProvider][build-mirror] section for details.
-
-Please see our detailed [Build and Installation][build]
-page for step-by-step instructions on how to build and install
-libprojfs and its depedencies on Linux, and (optionally) also build and
-run the VFSForGit `MirrorProvider` test utility with libprojfs.
 
 ## Contributing
 
@@ -141,6 +149,7 @@ You can also contact the GitHub project team at
 [build-mirror]: docs/build-install.md#building-and-running-mirrorprovider
 [design-linux]: docs/design.md#vfsforgit-on-linux
 [design-process]: docs/design.md#development-process
+[ext2]: https://www.kernel.org/doc/Documentation/filesystems/ext2.txt
 [fanotify]: https://github.com/torvalds/linux/blob/master/include/uapi/linux/fanotify.h
 [fsnotify]: https://github.com/torvalds/linux/blob/master/include/linux/fsnotify_backend.h
 [fuse-man]: http://man7.org/linux/man-pages/man4/fuse.4.html
@@ -151,3 +160,5 @@ You can also contact the GitHub project team at
 [winprojfs]: https://docs.microsoft.com/en-us/windows/desktop/api/_projfs/
 [vfs4git]: https://github.com/Microsoft/VFSForGit
 [vfs4git-mirror]: https://github.com/Microsoft/VFSForGit/tree/features/linuxprototype/MirrorProvider
+[xattr]: http://man7.org/linux/man-pages/man7/xattr.7.html
+[xattr-ext2]: http://man7.org/linux/man-pages/man5/ext4.5.html#MOUNT_OPTIONS

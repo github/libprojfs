@@ -72,10 +72,12 @@ ninja && \
 ninja install
 ```
 
-If you are installing into a system location (e.g., `/usr` or `/usr/local`),
-you will likely need to use `sudo ninja install`.  **Please note** that in
-this case you should be *very cautious* not to overwrite your distribution's
-default libfuse v3.x package!
+If you are installing into a system location (e.g., `--prefix=/usr` or
+`--prefix=/usr/local`), you will likely need to use `sudo ninja install`.
+
+**Please note** that in this case you should be *very cautious* not to
+overwrite your distribution's default libfuse v3.x package, if one
+is already in place!
 
 Because many distributions still supply libfuse v2.x as their default
 libfuse package under `/usr`, however, unless you specifically have a
@@ -85,6 +87,12 @@ libfuse v3.x is designed to co-exist with libfuse v2.x; both libraries
 can be installed under `/usr` as the v3.x libfuse header files will be
 located in `/usr/include/fuse3`.  But please *be cautious* and check
 your system before trying this!
+
+After installing in a system location such as `/usr`, you may need to
+refresh the linker's cache using [`ldconfig`][ldconfig-man]:
+```
+sudo ldconfig
+```
 
 If you choose to leave your modified libfuse library un-installed, or
 install it into a custom location, you will need to supply the path
@@ -120,7 +128,7 @@ make test
 ```
 
 Running `./configure --help` will output the full set of configuration
-options available.
+options available, including the usual `--prefix` option.
 
 To build libprojfs with the VFSForGit API option (which is
 required if you plan to run a VFSForGit "provider" such as `MirrorProvider`,
@@ -130,6 +138,11 @@ the test provider we are developing against for now), add the
 ```
 ./configure --enable-vfs-api && make && make test
 ```
+
+Note that as described in the [Getting Started][readme-start] section,
+support for `user.*` extended attributes will be required for libprojfs
+to function, including the test suite, which may fail if extended
+attributes are not available on the filesystem used to build libprojfs.
 
 ## Installing libprojfs
 
@@ -142,9 +155,11 @@ to the `configure` command, for example:
 
 You may then choose to install the library; note that `sudo` may be
 required if you are installing into a system location such as `/usr`
-or `/usr/local`:
+or `/usr/local`, and you may also want to run `ldconfig` to refresh
+the linker's shared library cache:
 ```
 sudo make install
+sudo ldconfig
 ```
 
 If you do not install the library into a system location where your
@@ -330,7 +345,7 @@ We are using Docker containers for our Continuous Integration repeatable
 builds and to facilitate cross-platform development.
 
 To this end we have some `Dockerfile`s and a command-line `projfs` script
-which may be useful; please see our [`docker` directory](docker/README.md)
+which may be useful; please see our [`docker` directory][readme-docker]
 for these files and more details.
 
 Before using Docker, you will want to ensure that the `fuse`
@@ -350,7 +365,7 @@ specify the user ID which should run the libprojfs process.
 [autoconf]: https://www.gnu.org/software/autoconf/
 [debian-stretch]: https://www.debian.org/releases/stretch/
 [debian-meson]: https://packages.debian.org/stretch-backports/meson
-[design-linux]: docs/design.md#vfsforgit-on-linux
+[design-linux]: design.md#vfsforgit-on-linux
 [docker-machine]: https://docs.docker.com/machine/
 [docker-run]: https://docs.docker.com/engine/reference/commandline/run/
 [docker4mac]: https://docs.docker.com/docker-for-mac/
@@ -369,6 +384,7 @@ specify the user ID which should run the libprojfs process.
 [icu]: http://site.icu-project.org/home
 [inotify]: https://github.com/torvalds/linux/blob/master/include/uapi/linux/inotify.h
 [kerberos]: https://web.mit.edu/kerberos/
+[ldconfig-man]: http://man7.org/linux/man-pages/man8/ldconfig.8.html
 [libfuse]: https://github.com/libfuse/libfuse
 [libfuse-userdata]: https://github.com/kivikakk/libfuse/tree/context-node-userdata
 [libunwind]: https://www.nongnu.org/libunwind/
@@ -377,6 +393,8 @@ specify the user ID which should run the libprojfs process.
 [meson]: https://mesonbuild.com/
 [ninja]: https://ninja-build.org/
 [openssl]: https://www.openssl.org/
+[readme-docker]: ../docker/README.md
+[readme-start]: ../README.md#getting-started
 [vfs4git]: https://github.com/Microsoft/VFSForGit
 [vfs4git-github]: https://github.com/github/VFSForGit
 [vfs4git-linux]: https://github.com/Microsoft/VFSForGit/tree/features/linuxprototype
