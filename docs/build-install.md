@@ -197,8 +197,8 @@ sudo apt-get install apt-transport-https
 ```
 
 Instructions for other distributions are given on Microsoft's Linux
-installation page, for example, for [Ubuntu 18.04][dotnet-ubuntu],
-or one may choose another distribution from that page's menu.
+installation page, for example, for [Ubuntu 18.04][dotnet-ubuntu]
+one may choose another distribution from that page's menu.
 
 If you need to download packages directly (e.g., to unpack a `.rpm`
 package and install its contents manually), Microsoft maintains a
@@ -280,7 +280,7 @@ you should be able to run the two other scripts in the
 
 If the `libprojfs.so` dynamic library you built in the preceding
 [Building libprojfs](#building-libprojfs) section is not installed,
-or if its installed in a custom location, you will need to provide
+or if it's installed in a custom location, you will need to provide
 that path in the `LD_LIBRARY_PATH` environment variable, e.g., to
 use the `libprojfs.so` within your `libprojfs` build directory:
 ```
