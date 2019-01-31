@@ -80,7 +80,7 @@ static int projfs_fuse_send_event(projfs_handler_t handler,
 	event.fs = projfs_context_fs();
 	event.mask = mask;
 	event.pid = fuse_get_context()->pid;
-	event.path = path + 1;
+	event.path = path;
 	event.target_path = target_path ? (target_path + 1) : NULL;
 	event.fd = fd;
 
@@ -123,7 +123,7 @@ static int projfs_fuse_notify_event(uint64_t mask,
 		projfs_context_fs()->handlers.handle_notify_event;
 
 	return projfs_fuse_send_event(
-		handler, mask, path, target_path, 0, 0);
+		handler, mask, path + 1, target_path, 0, 0);
 }
 
 /**
@@ -137,7 +137,7 @@ static int projfs_fuse_perm_event(uint64_t mask,
 		projfs_context_fs()->handlers.handle_perm_event;
 
 	return projfs_fuse_send_event(
-		handler, mask, path, target_path, 0, 1);
+		handler, mask, path + 1, target_path, 0, 1);
 }
 
 struct node_userdata
@@ -225,6 +225,10 @@ static struct node_userdata *get_path_userdata(int parent)
 
 	pthread_mutex_t *user_lock =
 		fuse_get_context_node_userdata_lock(parent);
+	if (!user_lock) {
+		errno = 0;
+		return NULL;
+	}
 	int res = projfs_fuse_proj_lock(user_lock);
 	if (res != 0) {
 		errno = res;
