@@ -287,8 +287,9 @@ static int projfs_fuse_proj_dir_locked(struct node_userdata *user,
  *               if we look at path itself
  * @return 0 or an errno
  */
-static int projfs_fuse_proj_dir(const char *path, int parent)
+static int projfs_fuse_proj_dir(const char *op, const char *path, int parent)
 {
+	(void)op;
 	set_mapped_path(path, parent);
 
 	struct node_userdata *user = get_path_userdata(parent);
@@ -332,7 +333,7 @@ static int projfs_op_getattr(char const *path, struct stat *attr,
 	if (fi)
 		res = fstat(fi->fh, attr);
 	else {
-		res = projfs_fuse_proj_dir(lowerpath(path), 1);
+		res = projfs_fuse_proj_dir("getattr", lowerpath(path), 1);
 		if (res)
 			return -res;
 		res = fstatat(lowerdir_fd(), lowerpath(path), attr,
@@ -343,7 +344,7 @@ static int projfs_op_getattr(char const *path, struct stat *attr,
 
 static int projfs_op_readlink(char const *path, char *buf, size_t size)
 {
-	int res = projfs_fuse_proj_dir(lowerpath(path), 1);
+	int res = projfs_fuse_proj_dir("readlink", lowerpath(path), 1);
 	if (res)
 		return -res;
 	res = readlinkat(lowerdir_fd(), lowerpath(path), buf, size - 1);
@@ -360,10 +361,10 @@ static int projfs_op_link(char const *src, char const *dst)
 	/* NOTE: We require lowerdir to be a directory, so this should
 	 *       fail when src is an empty path, as we expect.
 	 */
-	int res = projfs_fuse_proj_dir(lowerpath(src), 1);
+	int res = projfs_fuse_proj_dir("link", lowerpath(src), 1);
 	if (res)
 		return -res;
-	res = projfs_fuse_proj_dir(lowerpath(dst), 1);
+	res = projfs_fuse_proj_dir("link2", lowerpath(dst), 1);
 	if (res)
 		return -res;
 	res = linkat(lowerdir_fd, lowerpath(src),
@@ -404,7 +405,7 @@ static int projfs_op_fsync(char const *path, int datasync,
 
 static int projfs_op_mknod(char const *path, mode_t mode, dev_t rdev)
 {
-	int res = projfs_fuse_proj_dir(lowerpath(path), 1);
+	int res = projfs_fuse_proj_dir("mknod", lowerpath(path), 1);
 	if (res)
 		return -res;
 	if (S_ISFIFO(mode))
@@ -416,7 +417,7 @@ static int projfs_op_mknod(char const *path, mode_t mode, dev_t rdev)
 
 static int projfs_op_symlink(char const *link, char const *path)
 {
-	int res =  projfs_fuse_proj_dir(lowerpath(path), 1);
+	int res =  projfs_fuse_proj_dir("symlink", lowerpath(path), 1);
 	if (res)
 		return -res;
 	res = symlinkat(link, lowerdir_fd(), lowerpath(path));
@@ -426,7 +427,7 @@ static int projfs_op_symlink(char const *link, char const *path)
 static int projfs_op_create(char const *path, mode_t mode,
                             struct fuse_file_info *fi)
 {
-	int res = projfs_fuse_proj_dir(lowerpath(path), 1);
+	int res = projfs_fuse_proj_dir("create", lowerpath(path), 1);
 	if (res)
 		return -res;
 	int flags = fi->flags & ~O_NOFOLLOW;
@@ -445,7 +446,7 @@ static int projfs_op_create(char const *path, mode_t mode,
 
 static int projfs_op_open(char const *path, struct fuse_file_info *fi)
 {
-	int res = projfs_fuse_proj_dir(lowerpath(path), 1);
+	int res = projfs_fuse_proj_dir("open", lowerpath(path), 1);
 	if (res)
 		return -res;
 	int flags = fi->flags & ~O_NOFOLLOW;
@@ -513,7 +514,7 @@ static int projfs_op_unlink(char const *path)
 		NULL);
 	if (res < 0)
 		return res;
-	res = projfs_fuse_proj_dir(lowerpath(path), 1);
+	res = projfs_fuse_proj_dir("unlink", lowerpath(path), 1);
 	if (res)
 		return -res;
 
@@ -523,7 +524,7 @@ static int projfs_op_unlink(char const *path)
 
 static int projfs_op_mkdir(char const *path, mode_t mode)
 {
-	int res = projfs_fuse_proj_dir(lowerpath(path), 1);
+	int res = projfs_fuse_proj_dir("mkdir", lowerpath(path), 1);
 	if (res)
 		return -res;
 	res = mkdirat(lowerdir_fd(), lowerpath(path), mode);
@@ -545,7 +546,7 @@ static int projfs_op_rmdir(char const *path)
 		NULL);
 	if (res < 0)
 		return res;
-	res = projfs_fuse_proj_dir(lowerpath(path), 1);
+	res = projfs_fuse_proj_dir("rmdir", lowerpath(path), 1);
 	if (res)
 		return -res;
 
@@ -556,10 +557,10 @@ static int projfs_op_rmdir(char const *path)
 static int projfs_op_rename(char const *src, char const *dst,
                             unsigned int flags)
 {
-	int res = projfs_fuse_proj_dir(lowerpath(src), 1);
+	int res = projfs_fuse_proj_dir("rename", lowerpath(src), 1);
 	if (res)
 		return -res;
-	res = projfs_fuse_proj_dir(lowerpath(dst), 1);
+	res = projfs_fuse_proj_dir("rename2", lowerpath(dst), 1);
 	if (res)
 		return -res;
 	// TODO: may prevent us compiling on BSD; would renameat() suffice?
@@ -578,10 +579,10 @@ static int projfs_op_opendir(char const *path, struct fuse_file_info *fi)
 	int res = 0;
 	int err = 0;
 
-	res = projfs_fuse_proj_dir(lowerpath(path), 1);
+	res = projfs_fuse_proj_dir("opendir", lowerpath(path), 1);
 	if (res)
 		return -res;
-	res = projfs_fuse_proj_dir(lowerpath(path), 0);
+	res = projfs_fuse_proj_dir("opendir2", lowerpath(path), 0);
 	if (res)
 		return -res;
 
@@ -686,7 +687,7 @@ static int projfs_op_chmod(char const *path, mode_t mode,
 	if (fi)
 		res = fchmod(fi->fh, mode);
 	else {
-		res = projfs_fuse_proj_dir(lowerpath(path), 1);
+		res = projfs_fuse_proj_dir("chmod", lowerpath(path), 1);
 		if (res)
 			return -res;
 		res = fchmodat(lowerdir_fd(), lowerpath(path), mode, 0);
@@ -701,7 +702,7 @@ static int projfs_op_chown(char const *path, uid_t uid, gid_t gid,
 	if (fi)
 		res = fchown(fi->fh, uid, gid);
 	else {
-		res = projfs_fuse_proj_dir(lowerpath(path), 1);
+		res = projfs_fuse_proj_dir("chown", lowerpath(path), 1);
 		if (res)
 			return -res;
 		// disallow chown() on lowerdir itself, so no AT_EMPTY_PATH
@@ -718,7 +719,7 @@ static int projfs_op_truncate(char const *path, off_t off,
 	if (fi)
 		res = ftruncate(fi->fh, off);
 	else {
-		res = projfs_fuse_proj_dir(lowerpath(path), 1);
+		res = projfs_fuse_proj_dir("truncate", lowerpath(path), 1);
 		if (res)
 			return -res;
 
@@ -746,7 +747,7 @@ static int projfs_op_utimens(char const *path, const struct timespec tv[2],
 	if (fi)
 		res = futimens(fi->fh, tv);
 	else {
-		res = projfs_fuse_proj_dir(lowerpath(path), 1);
+		res = projfs_fuse_proj_dir("utimens", lowerpath(path), 1);
 		if (res)
 			return -res;
 		res = utimensat(lowerdir_fd(), lowerpath(path), tv,
@@ -764,7 +765,7 @@ static int projfs_op_setxattr(char const *path, char const *name,
 
 	path = lowerpath(path);
 
-	res = projfs_fuse_proj_dir(path, 1);
+	res = projfs_fuse_proj_dir("setxattr", path, 1);
 	if (res)
 		return -res;
 
@@ -789,7 +790,7 @@ static int projfs_op_getxattr(char const *path, char const *name,
 
 	path = lowerpath(path);
 
-	res = projfs_fuse_proj_dir(path, 1);
+	res = projfs_fuse_proj_dir("getxattr", path, 1);
 	if (res)
 		return -res;
 
@@ -813,7 +814,7 @@ static int projfs_op_listxattr(char const *path, char *list, size_t size)
 
 	path = lowerpath(path);
 
-	res = projfs_fuse_proj_dir(path, 1);
+	res = projfs_fuse_proj_dir("listxattr", path, 1);
 	if (res)
 		return -res;
 
@@ -837,7 +838,7 @@ static int projfs_op_removexattr(char const *path, char const *name)
 
 	path = lowerpath(path);
 
-	res = projfs_fuse_proj_dir(path, 1);
+	res = projfs_fuse_proj_dir("removexattr", path, 1);
 	if (res)
 		return -res;
 
@@ -856,7 +857,7 @@ out:
 
 static int projfs_op_access(char const *path, int mode)
 {
-	int res = projfs_fuse_proj_dir(lowerpath(path), 1);
+	int res = projfs_fuse_proj_dir("access", lowerpath(path), 1);
 	if (res)
 		return -res;
 	res = faccessat(lowerdir_fd(), lowerpath(path), mode,
