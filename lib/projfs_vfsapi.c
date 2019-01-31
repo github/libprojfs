@@ -386,7 +386,6 @@ PrjFS_Result PrjFS_WritePlaceholderDirectory(
 	struct projfs *fs = (struct projfs *) mountHandle;
 	int ret;
 
-	fprintf(stderr, "create proj dir %s\n", relativePath);
 	ret = projfs_create_proj_dir(fs, relativePath);
 
 	return convert_errno_to_result(ret);
