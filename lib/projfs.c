@@ -226,6 +226,10 @@ static struct node_userdata *get_path_userdata(int parent)
 	pthread_mutex_t *user_lock =
 		fuse_get_context_node_userdata_lock(parent);
 	if (!user_lock) {
+		// XXX only happens if we ask for the parent of the root node
+		// return nothing with no error
+		// this behaviour is correct but should be done in a more
+		// obviously-correct way
 		errno = 0;
 		return NULL;
 	}
