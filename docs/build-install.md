@@ -7,21 +7,31 @@ The [libfuse][libfuse] version 3.x source requires the [Meson][meson] and
 while the libprojfs project depends (for now, at least) on the
 traditional [GNU Build System][gnu-build].
 
-Assuming you are using a Debian-based distribution like Ubuntu,
-the following commands should install the necessary build dependencies
-for libfuse:
+On a recent Ubuntu system (version 18.04 or higher), the version of
+Meson installed by `apt-get` should be sufficient, but on some other
+distributions you may need to locate a newer version than is installed
+by default.
+
+For example, on Ubuntu 18.04:
+```
+apt-get install -y build-essential pkg-config udev
+apt-get install -y meson
+```
+
+On [Debian stretch][debian-stretch], a more recent version of Meson
+is only available from [`stretch-backports`][debian-meson]:
 ```
 echo 'deb http://deb.debian.org/debian stretch-backports main' >> \
-  /etc/apt/sources.list.d/stretch-backports.list && \
-apt-get update -qq && \
-apt-get install -y -qq --no-install-recommends \
-  build-essential ca-certificates pkg-config udev && \
-apt-get install -y -qq --no-install-recommends -t=stretch-backports meson
+  /etc/apt/sources.list.d/stretch-backports.list
+apt-get update
+
+apt-get install -y build-essential pkg-config udev
+apt-get install -y -t=stretch-backports meson
 ```
 
 For libprojfs, use the following additional commands:
 ```
-apt-get install -y -qq --no-install-recommends \
+apt-get install -y \
   attr automake build-essential dpkg-dev libtool pkg-config
 ```
 
@@ -112,7 +122,7 @@ make test
 Running `./configure --help` will output the full set of configuration
 options available.
 
-To build libprojfs with the [VFSForGit][vfs4git] API option (which is
+To build libprojfs with the VFSForGit API option (which is
 required if you plan to run a VFSForGit "provider" such as `MirrorProvider`,
 the test provider we are developing against for now), add the
 `--enable-vfs-api` flag to the arguments for `configure`:
@@ -338,6 +348,8 @@ and you may also want to use the `--user <user|pid>` argument to
 specify the user ID which should run the libprojfs process.
 
 [autoconf]: https://www.gnu.org/software/autoconf/
+[debian-stretch]: https://www.debian.org/releases/stretch/
+[debian-meson]: https://packages.debian.org/stretch-backports/meson
 [design-linux]: docs/design.md#vfsforgit-on-linux
 [docker-machine]: https://docs.docker.com/machine/
 [docker-run]: https://docs.docker.com/engine/reference/commandline/run/
