@@ -32,7 +32,7 @@ apt-get install -y -t=stretch-backports meson
 For libprojfs, use the following additional commands:
 ```
 apt-get install -y \
-  attr automake build-essential dpkg-dev libtool pkg-config
+  attr libattr1-dev automake build-essential dpkg-dev libtool pkg-config
 ```
 
 While it is difficult to provide a comprehensive list of dependencies
