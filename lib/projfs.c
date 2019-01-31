@@ -48,6 +48,10 @@
 #define lowerdir_fd() (projfs_context_fs()->lowerdir_fd)
 #define PROJ_DIR_MODE 0777
 
+// TODO: make this value configurable
+#define PROJ_WAIT_SEC 5
+#define PROJ_WAIT_NSEC 0
+
 struct projfs_dir {
 	DIR *dir;
 	long loc;
@@ -165,6 +169,17 @@ static struct node_userdata *get_path_userdata_locked(int parent)
 	return user;
 }
 
+static int projfs_fuse_proj_lock(pthread_mutex_t *lock)
+{
+	struct timespec abs_timeout;
+
+	clock_gettime(CLOCK_REALTIME, &abs_timeout);
+	abs_timeout.tv_sec += PROJ_WAIT_SEC;
+	abs_timeout.tv_nsec += PROJ_WAIT_NSEC;
+
+	return pthread_mutex_timedlock(lock, &abs_timeout);
+}
+
 static struct node_userdata *get_path_userdata(int parent)
 {
 	struct node_userdata *user =
@@ -174,8 +189,11 @@ static struct node_userdata *get_path_userdata(int parent)
 
 	pthread_mutex_t *user_lock =
 		fuse_get_context_node_userdata_lock(parent);
-	if (pthread_mutex_lock(user_lock) != 0)
-		abort();
+	int res = projfs_fuse_proj_lock(user_lock);
+	if (res != 0) {
+		errno = res;
+		return NULL;
+	}
 
 	user = get_path_userdata_locked(parent);
 
@@ -217,16 +235,19 @@ static int projfs_fuse_proj_dir(const char *path, int parent)
 	set_mapped_path(path, parent);
 
 	struct node_userdata *user = get_path_userdata(parent);
+	if (!user)
+		return errno;
 
 	if (!user->proj_flag)
 		return 0;
 
 	pthread_mutex_t *user_lock =
 		fuse_get_context_node_userdata_lock(parent);
-	if (pthread_mutex_lock(user_lock) != 0)
-		abort();
+	int res = projfs_fuse_proj_lock(user_lock);
+	if (res != 0)
+		return res;
 
-	int res = projfs_fuse_proj_dir_locked(user, path);
+	res = projfs_fuse_proj_dir_locked(user, path);
 
 	pthread_mutex_unlock(user_lock);
 
