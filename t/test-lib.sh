@@ -835,7 +835,7 @@ then
 fi
 
 # Test mount points
-TRASH_DIRECTORY="test-mounts/$(basename "$0" .t)"
+TRASH_DIRECTORY="/tmp/test-mounts/$(basename "$0" .t)"
 test -n "$root" && TRASH_DIRECTORY="$root/$TRASH_DIRECTORY"
 case "$TRASH_DIRECTORY" in
 /*) ;; # absolute path is good
