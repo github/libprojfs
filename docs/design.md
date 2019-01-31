@@ -45,7 +45,7 @@ The client-side Windows architecture of a virtualized Git working tree includes 
 * [VFSForGit][vfs4git], including the GVFS
   provider which provides callbacks via the ProjFS library to the PrjFlt filter
   driver, as well as scripts which are installed as Git hooks.
-* [Git for Windows][git4win] with [GVFS][vfs4git-git] patches, which functions
+* [Git for Windows][git4win] with [GVFS patches][vfs4git-git], which functions
   as a normal Git client but with adjustments for a virtualized working tree.
 
 ![VFSForGit on Windows architecture diagram](images/vfsforgit-windows.png)
@@ -74,11 +74,11 @@ The client-side macOS architecture of a virtualized Git working tree includes th
 
 * [PrjFSKext][projfs-mac-kext], a kernel extension (kext) providing "kauth"
   authorization hooks which run prior to key filesystem operations, and a
-  [PrjFSLib][projfs-mac] user-space library to interact with it.
+  [PrjFSLib][projfs-mac-lib] user-space library to interact with it.
 * [VFSForGit][vfs4git], including the GVFS
   provider which provides callbacks via the PrjFSLib library to the PrjFSKext
   kext, as well as scripts which are installed as Git hooks.
-* [Git for Windows][git4win] with [GVFS][vfs4git-git] patches, compiled for
+* [Git for Windows][git4win] with [GVFS patches][vfs4git-git], compiled for
   macOS, which functions as a normal Git client but with adjustments for a
   virtualized working tree.
 
@@ -122,7 +122,7 @@ virtualized Git working tree will ultimately include three components:
   through a Linux [PrjFSLib C# wrapper][projfs-linux] to the projfs kernel
   module, as well as scripts which are installed as Git hooks.
 * The upstream [Git client][git-src], modified with Linux-specific
-  variants of the Git for Windows [GVFS][vfs4git-git] patches,
+  variants of the Git for Windows [GVFS patches][vfs4git-git],
   which will function as a normal Git client but with adjustments for a
   virtualized working tree.
 
@@ -163,14 +163,14 @@ eCryptfs filesystem does not, itself, perform any storage.  It merely
 intercepts all file operations, encrypts or decrypts file names and content as
 necessary, and relies on a second "true" filesystem to perform the actual
 storage.  Another stackable filesystem in the Linux mainline kernel is
-[overlayfs][overlayfs], which provides union-mount functionality,
+[OverlayFS][overlayfs], which provides union-mount functionality,
 including making a read-write overlay on a read-only filesystem,
 or a read-only snapshot of a read-write filesystem.
 
 ![Diagram illustrating how stackable filesystems work](images/stackable.png)
 
 In fact, stackable file systems can be stacked on top of each other (just like
-Windows NTFS filters), so an overlayfs mount could use ecryptfs mounts which
+Windows NTFS filters), so an OverlayFS mount could use eCryptfs mounts which
 use ext4 mounts for storage.
 
 It is worth noting that the stackable filesystem model in Linux does not, in
@@ -182,7 +182,7 @@ reading through the higher-level filesystem at its own, necessarily different,
 mount point.
 
 For instance, if the lower-level filesystem was mounted at `/mnt/ext4`, and an
-ecryptfs filesystem was mounted at `/mnt/crypt` using the `/mnt/ext4` directory
+eCryptfs filesystem was mounted at `/mnt/crypt` using the `/mnt/ext4` directory
 as its underlying storage, then when a file named `foo.txt` is written to
 `/mnt/crypt/foo.txt`, a corresponding new file will be readable at
 `/mnt/ext4/<encrypted filename>` which contains `foo.txt`'s contents (in
@@ -273,7 +273,7 @@ that is returned to the VFS.
 
 While stacking filesystems implemented as FUSE user-space modules have to do
 this inode mapping and caching themselves, the projfs kernel module can
-leverage the VFS's cache, just like the `ecryptfs` module and other in-kernel
+leverage the VFS's cache, just like the `eCryptfs` module and other in-kernel
 stacking filesystems.
 
 ### Relative Paths
@@ -319,7 +319,7 @@ The [libfuse][libfuse] user-space library implements a
 as well as an optional Least-Recently Used list.  Microsoft's VFSForGit
 engineering team is also looking at a potentially similar
 [vnode cache design][vfs4git-vnode] for its macOS kext, and has
-encountered [vfs4git-pr271][some] [vfs4git-pr328][issues] which are
+encountered [some][vfs4git-pr271] [issues][vfs4git-pr328] which are
 indicative of the kinds of edge cases we may face implementing similar
 inode-to-path mappings in the projfs kernel module.
 
@@ -444,8 +444,8 @@ time.
 
 ### Extended Attributes
 
-Following the model of overlayfs, we would use trusted extended attributes with
-named `trusted.projection.*`, such as `trusted.projection.contentid` and
+Following the model of OverlayFS, we would use trusted extended attributes
+with named `trusted.projection.*`, such as `trusted.projection.contentid` and
 `trusted.projection.version.`  Only processes with the `CAP_SYS_ADMIN`
 capability would be able to access these extended attributes.
 
@@ -474,7 +474,7 @@ VFS, in order to speed up the majority of accesses for files and directories
 with projfs extended attributes.
 
 The data structure which projfs defines as its private in-memory inode type
-(akin to `ovl_inode` in overlayfs) may contain arbitrary bit flags and data
+(akin to `ovl_inode` in OverlayFS) may contain arbitrary bit flags and data
 fields.  By defining these such that the values from the lower-level inode's
 extended attributes may be copied into them when the inode structures are
 initialized, we can retain them in the in-memory kernel VFS inode cache for
@@ -554,8 +554,8 @@ implementation.
 
 In keeping with standard Linux/Unix practice, most component names will be
 lowercase only.  The kernel module will be named projfs, to conform to the
-naming scheme for Linux kernel filesystem modules (e.g., overlayfs).  The name
-"projfs" does not appear to reference any existing projects or Web sites.
+naming scheme for Linux kernel filesystem modules (e.g., `overlay`).  The
+name "projfs" does not appear to reference any existing projects or Web sites.
 
 Again, to conform to Unix practice, the user-space library which communicates
 with the kernel module will be installed as `libprojfs.so`, and most of its
@@ -583,7 +583,7 @@ client.
 [linuxprototype-microsoft]: https://github.com/Microsoft/VFSForGit/tree/features/linuxprototype
 [overlayfs]: https://www.kernel.org/doc/Documentation/filesystems/overlayfs.txt
 [projfs-linux]: https://github.com/github/VFSForGit/tree/features/linuxprototype/ProjFS.Linux
-[projfs-mac]: https://github.com/Microsoft/VFSForGit/tree/master/ProjFS.Mac
+[projfs-mac-lib]: https://github.com/Microsoft/VFSForGit/tree/master/ProjFS.Mac/PrjFSLib
 [projfs-mac-kauth]: https://github.com/Microsoft/VFSForGit/blob/master/ProjFS.Mac/PrjFSKext/KauthHandler.cpp
 [projfs-mac-kext]: https://github.com/Microsoft/VFSForGit/tree/master/ProjFS.Mac/PrjFSKext
 [vfs4git]: https://github.com/Microsoft/VFSForGit
