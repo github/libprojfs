@@ -114,6 +114,12 @@ test_expect_success 'xattrs' '
 	test $(getfattr target/xyz | wc -l) -eq 0
 '
 
+test_expect_success 'xattrs on symlinks' '
+	test $(getfattr -h target/symlink | wc -l) -eq 0 &&
+	test_must_fail setfattr -h -n user.testing -v hello target/symlink &&
+	test $(getfattr -h target/symlink | wc -l) -eq 0
+'
+
 projfs_stop || exit 1
 
 test_done
