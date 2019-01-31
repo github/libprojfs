@@ -3,7 +3,7 @@
 * [Scope](#scope)
 * [Overview](#overview)
   * [VFSForGit on Windows](#vfsforgit-on-windows)
-  * [VFSForGit on MacOS](#vfsforgit-on-macos)
+  * [VFSForGit on macOS](#vfsforgit-on-macos)
   * [VFSForGit on Linux](#vfsforgit-on-linux)
 * [projfs Kernel Module](#projfs-kernel-module)
   * [Stackable File Systems](#stackable-file-systems)
@@ -24,41 +24,40 @@
 
 This document describes the architecture of the Linux port of the VFSForGit
 client and projected filesystem, and some of the expected development roadmap
-for these components.  While we intend to keep this document reasonably
-up-to-date, it is always advisable to check the current state of the code in
-the
-[`features/linuxprototype`](https://github.com/Microsoft/VFSForGit/tree/features/linuxprototype)
-branch of the VFSForGit repository, and in the
-[libprojfs](https://github.com/github/libprojfs) repository.
+for these components.
+
+While we intend to keep this document reasonably up-to-date, it is always
+advisable to check the current state of the code in the
+[`features/linuxprototype`][linuxprototype-microsoft] branch of the
+Microsoft's upstream [VFSForGit][vfs4git] repository, in GitHub's
+copy of the [`features/linuxprototype`][linuxprototype-github] branch,
+and in this libprojfs repository.
 
 ## Overview
 
 ### VFSForGit on Windows
 
-The client-side Windows architecture of a virtualized git working tree includes three components:
+The client-side Windows architecture of a virtualized Git working tree includes three components:
 
-* [Windows Projected File
-  System](https://docs.microsoft.com/en-us/windows/desktop/api/_projfs/),
+* [Windows Projected File System][winprojfs],
   including the PrjFlt kernel-mode NTFS filter driver, and the ProjectedFSLib
   user-space library to interact with the driver.
-* [VFSForGit](https://github.com/Microsoft/VFSForGit), including the GVFS
+* [VFSForGit][vfs4git], including the GVFS
   provider which provides callbacks via the ProjFS library to the PrjFlt filter
-  driver, as well as scripts which are installed as git hooks.
-* [Git for Windows](https://gitforwindows.org/) with
-  [GVFS](https://github.com/Microsoft/git/tree/gvfs) patches, which functions
-  as a normal git client but with adjustments for a virtualized working tree.
+  driver, as well as scripts which are installed as Git hooks.
+* [Git for Windows][git4win] with [GVFS][vfs4git-git] patches, which functions
+  as a normal Git client but with adjustments for a virtualized working tree.
 
 ![VFSForGit on Windows architecture diagram](images/vfsforgit-windows.png)
 
-The Windows design projects the external git repository into the virtualized
-working tree by moving files through [five
-states](https://docs.microsoft.com/en-us/azure/devops/learn/git/gvfs-architecture#virtual-file-system-objects):
+The Windows design projects the external Git repository into the virtualized
+working tree by moving files through [five states][vfs4git-virt]:
 
 * Virtual: file exists as metadata only in the GVFS provider, not on disk at
   all.
 * Placeholder: file exists on disk but has no contents.
 * Hydrated: file exists on disk with actual contents, but is still tracked by
-  provider so it can be excluded from certain git actions which only require
+  provider so it can be excluded from certain Git actions which only require
   modified files.
 * Full: file exists on disk with modified contents, and is no longer tracked by
   provider.
@@ -66,42 +65,38 @@ states](https://docs.microsoft.com/en-us/azure/devops/learn/git/gvfs-architectur
   needed because it is still in the provider's metadata and would otherwise be
   treated as virtual.
 
-Directories move through a smaller set of three states: virtual, placeholder (empty), and full.
+Directories move through a smaller set of three states: virtual, placeholder
+(empty), and full.
 
+### VFSForGit on macOS
 
-### VFSForGit on MacOS
+The client-side macOS architecture of a virtualized Git working tree includes three components:
 
-The client-side MacOS architecture of a virtualized git working tree includes three components:
-
-* [PrjFSKext](https://github.com/Microsoft/VFSForGit/tree/master/ProjFS.Mac/PrjFSKext),
-  a kernel extension (kext) providing "kauth" authorization hooks which run
-  prior to key filesystem operations, and a
-  [PrjFSLib](https://github.com/Microsoft/VFSForGit/tree/master/ProjFS.Mac/PrjFSLib)
-  user-space library to
-  interact with it.
-* [VFSForGit](https://github.com/Microsoft/VFSForGit/), including the GVFS
+* [PrjFSKext][projfs-mac-kext], a kernel extension (kext) providing "kauth"
+  authorization hooks which run prior to key filesystem operations, and a
+  [PrjFSLib][projfs-mac] user-space library to interact with it.
+* [VFSForGit][vfs4git], including the GVFS
   provider which provides callbacks via the PrjFSLib library to the PrjFSKext
-  kext, as well as scripts which are installed as git hooks.
-* [Git for Windows](https://gitforwindows.org/) with
-  [GVFS](https://github.com/Microsoft/git/tree/gvfs) patches, compiled for
-  MacOS, which functions as a normal git client but with adjustments for a
+  kext, as well as scripts which are installed as Git hooks.
+* [Git for Windows][git4win] with [GVFS][vfs4git-git] patches, compiled for
+  macOS, which functions as a normal Git client but with adjustments for a
   virtualized working tree.
 
-![VFSForGit on MacOS architecture diagram](images/vfsforgit-macos.png)
+![VFSForGit on macOS architecture diagram](images/vfsforgit-macos.png)
 
-The MacOS design projects the external git repository into the virtualized
-working tree by moving files through [three
-states](https://docs.google.com/document/d/1BqDhvhSXrMTt94pjIP5lqEiL84DSBY3PE6MVTCRm7_0/edit#heading=h.4d34og8):
+The macOS design projects the external Git repository into the virtualized
+working tree by moving files through three states:
 
 * Placeholder: file exists on disk but has no contents (actual size but filled
   with zeros).
 * Hydrated: file exists on disk with actual contents, but is still tracked by
-  provider so it can be excluded from certain git actions which only require
+  provider so it can be excluded from certain Git actions which only require
   modified files.
 * Full: file exists on disk with modified contents, and is no longer tracked by
   provider.
 
-Directories move through a smaller set of two states: placeholder (empty) and full. 
+Directories move through a smaller set of two states: placeholder (empty) and
+full. 
 
 The smaller set of states for files and directories in the virtualized working
 tree is due in part to the limitations of the kauth hook approach.  Directory
@@ -113,29 +108,27 @@ APFS directory listing code.  This approach has proven more efficient than the
 original Windows one, and is anticipated to the used by the VFSForGit Windows
 implementation in the future.
 
-
 ### VFSForGit on Linux
 
-The client-side Linux architecture of a virtualized git working tree will
-include three components:
+The current long-term plan for the client-side Linux architecture of a
+virtualized Git working tree will ultimately include three components:
 
 * projfs, a stackable kernel filesystem module providing a passthrough set of
   operations to a lower-level "real" filesystem, but with additional logic on
   key operations, and a libprojfs user-space library to interact with the
   projfs kernel module by means of a socket channel.
-* [VFSForGit](https://github.com/Microsoft/VFSForGit/), including the GVFS
-  provider which provides callbacks via the libprojfs library (access through a
-  Linux [PrjFSLib C#
-  wrapper](https://github.com/Microsoft/VFSForGit/tree/features/linuxprototype/ProjFS.Linux/PrjFSLib.Linux.Managed))
-  to the projfs kernel module, as well as scripts
-  which are installed as git hooks.
-* Git for Windows with GVFS patches, compiled for Linux, which functions as a
-  normal git client but with adjustments for a virtualized working tree.
+* [VFSForGit][vfs4git], including the GVFS
+  provider which provides callbacks via the libprojfs library (accessed
+  through a Linux [PrjFSLib C# wrapper][projfs-linux] to the projfs kernel
+  module, as well as scripts which are installed as Git hooks.
+* The upstream [Git client][git-src], modified with Linux-specific
+  variants of the Git for Windows [GVFS][vfs4git-git] patches,
+  which will function as a normal Git client but with adjustments for a
+  virtualized working tree.
 
-The Linux design projects the external git repository into the virtualized
-working tree by moving files through the same [three
-states](https://docs.google.com/document/d/1BqDhvhSXrMTt94pjIP5lqEiL84DSBY3PE6MVTCRm7_0/edit#heading=h.4d34og8)
-used for the MacOS implementation:
+The Linux design projects the external Git repository into the virtualized
+working tree by moving files through the same three
+states used for the macOS implementation:
 
 * Placeholder: file exists on disk but has no contents (actual size but filled
   with zeros).
@@ -145,16 +138,16 @@ used for the MacOS implementation:
 * Full: file exists on disk with modified contents, and is no longer tracked by
   provider.
 
-Directories also move through the same set of two states as for MacOS: placeholder (empty) and full.
+Directories also move through the same set of two states as for macOS:
+placeholder (empty) and full.
 
-While the set of file and directory states will be the same as for the MacOS
+While the set of file and directory states will be the same as for the macOS
 implementation, the architecture will more closely resemble the Windows one,
 because Linux fully supports the concept of a "filesystem filter" through the
 use of a stackable filesystem which implements a passthrough to a lower-level
 filesystem on most or all operations.
 
 ![VFSForGit on Linux architecture diagram](images/vfsforgit-linux.png)
-
 
 ## projfs Kernel Module
 
@@ -165,14 +158,14 @@ Unlike a true filter such as the Windows PrjFlt NTFS filter driver, a Linux
 operations, even if it defers them to a second lower filesystem for completion.
 
 Production-quality passthrough stackable Linux filesystems include
-[ecryptfs](http://ecryptfs.org/), which is in the mainline Linux kernel.  The
-ecryptfs filesystem does not, itself, perform any storage.  It merely
+[eCryptfs][ecryptfs], which is in the mainline Linux kernel.  The
+eCryptfs filesystem does not, itself, perform any storage.  It merely
 intercepts all file operations, encrypts or decrypts file names and content as
 necessary, and relies on a second "true" filesystem to perform the actual
 storage.  Another stackable filesystem in the Linux mainline kernel is
-[overlayfs](https://wiki.archlinux.org/index.php/Overlay_filesystem), which
-provides union-mount functionality, including making a read-write overlay on a
-read-only filesystem, or a read-only snapshot of a read-write filesystem.
+[overlayfs][overlayfs], which provides union-mount functionality,
+including making a read-write overlay on a read-only filesystem,
+or a read-only snapshot of a read-write filesystem.
 
 ![Diagram illustrating how stackable filesystems work](images/stackable.png)
 
@@ -195,8 +188,8 @@ as its underlying storage, then when a file named `foo.txt` is written to
 `/mnt/ext4/<encrypted filename>` which contains `foo.txt`'s contents (in
 encrypted form).
 
-While the Linux stackable filesystem approach differs from the MacOS and
-Windows ones in that the non-virtualized git working tree will be visible
+While the Linux stackable filesystem approach differs from the macOS and
+Windows ones in that the non-virtualized Git working tree will be visible
 through a different directory than the virtualized one, that is not expected to
 cause surprise or issues to Linux users, as the stackable filesystem paradigm
 is common and well-understood.  Users simply avoid writing to the underlying
@@ -205,23 +198,22 @@ filesystem at its mount point.
 
 ### Mount Points
 
-Unlike the global application of the kauth hooks in the MacOS implementation, a
+Unlike the global application of the kauth hooks in the macOS implementation, a
 Linux filesystem can be mounted at any point in the directory hierarchy, so our
 kernel module will only be active for the specific directories used in each
-virtualized git working tree.
+virtualized Git working tree.
 
 This eliminates the need for some of the per-file flags (such as
-`IsInAnyVirtualizationRoot`) used in the MacOS kext, which allow it to [quickly
-decide](https://docs.google.com/document/d/1BqDhvhSXrMTt94pjIP5lqEiL84DSBY3PE6MVTCRm7_0/edit#heading=h.17dp8vu)
-whether a given kauth request is applicable to a virtualized directory or not.
+`FileFlags_IsInVirtualizationRoot`) used in the macOS kext, which allow the
+[`KauthHandler.cpp` code][projfs-mac-kauth] to quickly decide whether a given
+authorization request is applicable to a virtualized directory or not.
 
 The Linux implementation can instead function much like the
-[fuse](https://www.kernel.org/doc/Documentation/filesystems/fuse.txt) kernel
-module in the Linux mainline kernel, which supports multiple directory mounts,
-each communicating with a different user-space FUSE daemon process over a
-different file socket.
+[`fuse`][fuse-mod] kernel module in the Linux mainline kernel, which supports
+multiple directory mounts, each communicating with a different user-space
+FUSE daemon process over a different file socket.
 
-Each git working tree for which virtualization is enabled will be a distinct
+Each Git working tree for which virtualization is enabled will be a distinct
 projfs mount point.  The VFSForGit command-line program should create these as
 follows, given an initial path of `/path/to/vfs4git`:
 
@@ -235,11 +227,10 @@ follows, given an initial path of `/path/to/vfs4git`:
   * mount parameter: `lower=/path/to/vfs4git/.gvfs/lower`
 
 This implies that when a placeholder, hydrated, or modified file is written to
-disk (either by the .NET provider process via libprojfs, or directly by the git
-client or other user process), it will be actually stored at
-`/path/to/vfs4git/.gvfs/lower/path/to/file.txt` but would be visible through the
-projected filesystem at `/path/to/vfs4git/src/path/to/file.txt`.
-
+disk (either by the .NET provider process via libprojfs, or directly by the
+Git client or other user process), it will be actually stored at
+`/path/to/vfs4git/.gvfs/lower/path/to/file.txt` but would be visible through
+the projected filesystem at `/path/to/vfs4git/src/path/to/file.txt`.
 
 ### Inode Mapping
 
@@ -258,8 +249,8 @@ starting from the root.
 
 Crucially, there is no way to look an inode's path given only an inode.  In
 fact, there may be many paths to an inode, such as when multiple hardlinks are
-created for a single file, or no paths at all for a file which is being removed
-from the filesystem but for which some file descriptors are still open.
+created for a single file, or even no paths at all, when a file which is being
+removed from the filesystem but for which some file descriptors are still open.
 
 In order to speed up path lookups and file accesses, the Linux VFS (Virtual
 File System) maintains both an inode cache and a dentry (directory entry)
@@ -282,16 +273,15 @@ that is returned to the VFS.
 
 While stacking filesystems implemented as FUSE user-space modules have to do
 this inode mapping and caching themselves, the projfs kernel module can
-leverage the VFS's cache, just like the ecryptfs module and other in-kernel
+leverage the VFS's cache, just like the `ecryptfs` module and other in-kernel
 stacking filesystems.
-
 
 ### Relative Paths
 
 One challenge posed by the Linux kernel's VFS framework will be how to return
 relative paths (i.e., relative to the projfs mount point) in the callbacks from
 projfs to user-space.  Relative paths are required for the proper functioning
-of the GVFS provider and its interactions with git's own indexes.  As noted
+of the GVFS provider and its interactions with Git's own indexes.  As noted
 above, inodes do not correspond to a single specific path; they may have more
 than one (via hardlinks) or none (for a deleted file which still has open file
 handles).
@@ -302,7 +292,7 @@ by the VFS, which resolves each path to a specific mount point (and therefore
 specific filesystem module) and inode, using internal structures known as
 dentries (directory entries).
 
-The `dentry_path_raw()` function should provide a reasonable path name in the
+The `dentry_path_raw()` function may provide a reasonable path name in the
 normal case but experimentation will be required to determine its behaviour
 with deleted files, files being actively renamed by another kernel thread, and
 especially with inodes having multiple hard links.  Ideally, the dentry
@@ -324,28 +314,43 @@ file operations which need to trigger callbacks to userspace have sufficient
 data passed to them to provide the relative path of the given file or
 directory.
 
+The [libfuse][libfuse] user-space library implements a
+[high-level API][libfuse-api] which maintains an inode-to-path mapping
+as well as an optional Least-Recently Used list.  Microsoft's VFSForGit
+engineering team is also looking at a potentially similar
+[vnode cache design][vfs4git-vnode] for its macOS kext, and has
+encountered [vfs4git-pr271][some] [vfs4git-pr328][issues] which are
+indicative of the kinds of edge cases we may face implementing similar
+inode-to-path mappings in the projfs kernel module.
+
+For these reasons, we may find it adventageous to continue development
+of our FUSE-based user-space libprojfs library as far as possible,
+relying on libfuse's path mapping logic, and then try to resolve
+any performance issues which arise by improving the FUSE/libfuse
+implementations rather than attempting to develop a separate projfs
+Linux kernel module.
 
 ### Communication Channel
 
 The communication between the projfs kernel module and the user-space libprojfs
-library will replicate that implemented for the FUSE kernel module and its
-user-space library (libfuse/libfuse3),  Like FUSE/libfuse, projfs and libprojfs
+library may replicate that implemented for the FUSE kernel module and its
+user-space library [libfuse][libfuse],  Like FUSE/libfuse, projfs and libprojfs
 will utilize a device file, `/dev/projfs`, for which each instance of libprojfs
 will create a unique file descriptor corresponding to a specific mount point of
 projfs.
 
 The initial handshake between the kernel module and the user library
 establishes the file descriptor associated with the mount point after the user
-daemon process starts and opens the /dev/projfs device file, then passes the
+daemon process starts and opens the `/dev/projfs` device file, then passes the
 file descriptor number to the kernel in its first write to the channel.  The
-kernel module records that fd in its per-mount superblock and can then route
+kernel module records that `fd` in its per-mount superblock and can then route
 file operation requests (i.e., VFSForGit callbacks and notifications) for any
-inode within that mount point to the appropriate fd.  In this way, the projfs
-filesystem can be mounted at multiple points in the overall file hierarchy, and
-each mount point has its requests to user-space handled by a different daemon
-process.
+inode within that mount point to the appropriate descriptor.  In this way,
+the projfs filesystem can be mounted at multiple points in the overall file
+hierarchy, and each mount point has its requests to user-space handled by a
+different daemon process.
 
-As with the Windows and MacOS implementations, timeouts should largely be
+As with the Windows and macOS implementations, timeouts should largely be
 handled by the provider, so as to ensure that network issues do not cause
 long-running local tasks such as build processes to fail unnecessarily.
 However, the kernel module must recognize when the provider has become entirely
@@ -356,24 +361,23 @@ extended attributes, and will therefore be passed by the projfs module directly
 to the underlying filesystem for all operations, so this requirement should be
 easily attainable.
 
-
 ### Callbacks and Notifications
 
-When an `opendir()` system call is made to the projfs filesystem, the kernel
-module checks if the directory is an empty placeholder, and if so makes a
-callback to the .NET provider.  The provider can then use the PrjFSLib API to
-create the necessary child placeholder files and directories.  Upon return from
-the callback, projfs then proceeds to invoke `opendir()` on the lower-level
-filesystem, using the inode cached by the lookup file operation which preceded
-the call to `opendir()`.
+When an `opendir()` or similar system call is made to the projfs filesystem,
+the kernel module checks if the directory is an empty placeholder, and if so
+makes a callback to the .NET provider.  The provider can then use the
+VFSForGit API to create the necessary child placeholder files and directories.
+Upon return from the callback, projfs then proceeds to invoke `opendir()` on
+the lower-level filesystem, using the inode cached by the lookup file
+operation which preceded the call to `opendir()`.
 
-When an `open()` system call is made to the projfs filesystem, the kernel
-module checks if the file is an empty placeholder by examining its metadata
-(specifically the extended attributes created by the provider during directory
-enumeration), and if so makes a callback to the .NET provider.  The provider
-uses the PrjFSLib API to hydrate the file with its actual file content, but
-leaves the extended attributes so that the modified git client can skip over
-the file if it is not further modified.
+When an `open()` or similar system call is made to the projfs filesystem,
+the kernel module checks if the file is an empty placeholder by examining its
+metadata (specifically the extended attributes created by the provider during
+directory enumeration), and if so makes a callback to the .NET provider.
+The provider uses the VFSForGit API to hydrate the file with its actual file
+content, but leaves the extended attributes so that the modified Git client
+can skip over the file if it is not further modified.
 
 Empty files will be created as sparse files, which implies the lower-level
 filesystem must support sparse files; if not, an error will be reported when an
@@ -399,28 +403,26 @@ To this end we will implement several strategies for ensuring changes to files
 are made atomically.  First, empty placeholder files and hydrated files can be
 written into an "offline" temporary location and then moved into place,
 following the process outlined in the [Atomic placeholder operations in
-VFSForGit on MacOS](https://github.com/Microsoft/VFSForGit/issues/234) design.
+VFSForGit on macOS][vfs4git-atomic] design.
 File operations in the kernel module, which start by looking for projfs "flags"
 (extended attributes or in-memory inode flags) on the given file, should
 therefore only encounter either placeholder files (with a flag) or hydrated
 files (without one).  Because we populate a directory on first access,
 encountering non-extant "virtual" files—as is possible with the current Windows
-PrjFlt filter—should not occur.  (It is worth noting, though, that `rename()`
-operations may [not be fully atomic](https://lwn.net/Articles/351422/) across
-filesystem crashes.)
+PrjFlt filter—should not occur.
 
 All filesystem operations which depend on file or directory contents, including
 read and write operations as well as deletions and renames, should, when
 executed against an empty placeholder, trigger a blocking file or directory
 hydration callback from the kernel module to the provider.  We can follow the
-design of the `HandleVnodeOperation()` function in the MacOS kext in this
+design of the `HandleVnodeOperation()` function in the macOS kext in this
 regard, but will need to adapt it for the many discrete inode and file
 operations of the Linux VFS as compared to the common authorization hooks of
-the MacOS kauth framework.
+the macOS kauth framework.
 
 It is then the responsibility of the provider (or more accurately, the
 user-space software stack) to ensure that per-file and per-directory callbacks
-are handled in a safely concurrent or sequential manner.  In the MacOS
+are handled in a safely concurrent or sequential manner.  In the macOS
 implementation, the C++ callback handlers in PrjFSLib do this by first
 acquiring a global mutex lock on a map of per-vnode mutexes, then retrieving or
 creating the per-vnode mutex, incrementing its reference count, releasing the
@@ -440,7 +442,6 @@ the `BackgroundFileSystemTaskRunner` and `FileSystemCallbacks` C# classes, and
 therefore the kernel module should not be blocked for any significant length of
 time.
 
-
 ### Extended Attributes
 
 Following the model of overlayfs, we would use trusted extended attributes with
@@ -448,8 +449,11 @@ named `trusted.projection.*`, such as `trusted.projection.contentid` and
 `trusted.projection.version.`  Only processes with the `CAP_SYS_ADMIN`
 capability would be able to access these extended attributes.
 
+So long as we are developing a user-space library only, we will use
+extended attributes named `user.projection.*` instead.
+
 We would avoid the `io.gvfs.*` naming scheme to prevent confusion with the
-GNOME GVfs open-source project.
+[GNOME GVfs][gvfs] open-source project.
 
 The primary two extended attributes used by the projfs module would be as
 follows:
@@ -479,7 +483,6 @@ within the mounted directory tree.  In many cases this should allow projfs to
 check whether an inode represents an empty placeholder file or directory
 without even referencing the lower-level filesystem or its extended attributes.
 
-
 ## Development Process
 
 We anticipate following a staged, iterative development process, with the
@@ -497,9 +500,9 @@ In particular, we will develop the Linux VFSForGit client in three phases.
 
 ### Phase 1 – FUSE User Mode
 
-First, using the in-kernel FUSE module and accompanying libfuse3 library, we
+First, using the in-kernel FUSE module and accompanying libfuse library, we
 build the libprojfs library which invokes the .NET provider's callbacks for key
-filesystem operations, specifically `open()` and `opendir()`, and provides
+filesystem operations, including `open()` and `opendir()`, and provides
 other filesystem event notifications and a suite of library functions to the
 PrjFSLib interoperability layer in the .NET provider.
 
@@ -509,7 +512,6 @@ instead of in kernel mode.
 
 ![Diagram of phase 1 of the Linux implementation](images/phase1.png)
 
-
 ### Phase 2 – Hybrid
 
 The second development phase adds an in-kernel projfs module which, at first,
@@ -517,7 +519,7 @@ only handles a single filesystem operation, such a single event notification to
 user-space.
 
 All other filesystem operations are passed through the kernel module (using
-pre-existing code from [wrapfs](http://wrapfs.filesystems.org/) or ecryptfs) to
+pre-existing code from [wrapfs][wrapfs] or eCryptfs) to
 the FUSE kernel module, which then invokes libprojfs as in phase 1.  This
 allows us to incrementally add functionality to the kernel module, one
 filesystem operation at a time.
@@ -529,7 +531,6 @@ this phase of development.
 
 ![Diagram of phase 2 of the Linux implementation](images/phase2.png)
 
-
 ### Phase 3 – Kernel Module
 
 The final phase of development sees the removal of any dependency on FUSE and
@@ -540,6 +541,12 @@ to the projfs communication channel.
 
 ![Diagram of phase 3 of the Linux implementation](images/phase3.png)
 
+However, note that if we encounter significant issues in converting
+VFS inodes to relative paths (as required by the VFSForGit interface
+and Git client), or if we approach our performance goals using only
+our Phase 1 user-space library, we may choose to focus on continued
+user-space development in preference to re-developing for an in-kernel
+implementation.
 
 ## Distribution
 
@@ -556,11 +563,35 @@ global symbol names will start with `projfs_` unless they are required to align
 with the `PrjFS_` naming of the VFSForGit API.
 
 The command-line process used to create the virtualized git working tree should
-almost certainly not be called `gvfs`, as it is now in the Windows and MacOS
+almost certainly not be called `gvfs`, as it is now in the Windows and macOS
 clients.  This is because many Linux distributions, by default, install and
-configure the GNOME GVfs filesystem (`gvfs`).
+configure the [GNOME GVfs][gvfs] filesystem (`gvfs`).
 
-Further, the hidden `.gvfs` file used by the Windows and MacOS implementations
+Further, the hidden `.gvfs` file used by the Windows and macOS implementations
 will conflict with the GNOME GVfs filesystem's use of a `.gvfs` file on Linux
 systems, and so will need to be given a different name in the Linux VFSForGit
 client.
+
+[ecryptfs]: https://ecryptfs.org/
+[fuse-mod]: https://www.kernel.org/doc/Documentation/filesystems/fuse.txt
+[git-src]: https://www.kernel.org/pub/software/scm/git/
+[git4win]: https://gitforwindows.org/
+[gvfs]: https://wiki.gnome.org/Projects/gvfs
+[libfuse]: https://github.com/libfuse/libfuse
+[libfuse-api]: https://libfuse.github.io/doxygen/index.html
+[linuxprototype-github]: https://github.com/github/VFSForGit
+[linuxprototype-microsoft]: https://github.com/Microsoft/VFSForGit/tree/features/linuxprototype
+[overlayfs]: https://www.kernel.org/doc/Documentation/filesystems/overlayfs.txt
+[projfs-linux]: https://github.com/github/VFSForGit/tree/features/linuxprototype/ProjFS.Linux
+[projfs-mac]: https://github.com/Microsoft/VFSForGit/tree/master/ProjFS.Mac
+[projfs-mac-kauth]: https://github.com/Microsoft/VFSForGit/blob/master/ProjFS.Mac/PrjFSKext/KauthHandler.cpp
+[projfs-mac-kext]: https://github.com/Microsoft/VFSForGit/tree/master/ProjFS.Mac/PrjFSKext
+[vfs4git]: https://github.com/Microsoft/VFSForGit
+[vfs4git-atomic]: https://github.com/Microsoft/VFSForGit/issues/234
+[vfs4git-git]: https://github.com/Microsoft/git/tree/gvfs
+[vfs4git-pr271]: https://github.com/Microsoft/VFSForGit/issues/271
+[vfs4git-pr328]: https://github.com/Microsoft/VFSForGit/issues/328
+[vfs4git-virt]: https://docs.microsoft.com/en-us/azure/devops/learn/git/gvfs-architecture#virtual-file-system-objects
+[vfs4git-vnode]: https://github.com/Microsoft/VFSForGit/issues/611
+[winprojfs]: https://docs.microsoft.com/en-us/windows/desktop/api/_projfs/
+[wrapfs]: http://wrapfs.filesystems.org/
