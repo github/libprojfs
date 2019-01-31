@@ -52,8 +52,7 @@ file or directory.  The provider's response is then written to
 the lower filesystem so future accesses may be satisfied without
 querying the provider again.
 
-See our [design document](docs/design.md#vfsforgit-on-linux) for
-more details.
+See our [design document][design-linux] for more details.
 
 We anticipate that whether libprojfs remains a [FUSE][fuse-man]-based
 library, or becomes a [libfuse][libfuse]-like interface to a Linux kernel
@@ -259,15 +258,100 @@ FROM microsoft/dotnet:latest
 We are maintaining a [GitHub fork][vfs4git-github] of the upstream Microsoft
 [VFSForGit][vfs4git] repository, where any changes to the
 `features/linuxprototype` branch will be committed first.  While
-you are welcome to watch our repository, we recommend only forking
-the primary upstream Microsoft repository.
+you are encouraged to watch our repository, we recommend only forking
+the primary upstream Microsoft repository if you plan to submit your
+own pull requests.
 
+To build the VFSForGit `MirrorProvider`, first check out (or download
+as a Zip archive) the repository:
+```
+git clone https://github.com/Microsoft/VFSForGit.git
+```
 
+Next, run the `MirrorProvider/Scripts/Linux/Build.sh` script:
+```
+cd MirrorProvider/Scripts/Linux
+./Build.sh
+```
 
-*TBD* running VFSForGit (plus dependencies including apt-get dotnet):\
-`Build.sh`\
-`[LD_LIBRARY_PATH=...] ./MirrorProvider_Clone.sh`\
-`[LD_LIBRARY_PATH=...] ./MirrorProvider_Mount.sh`\
+During your first build, the [`dotnet build`][dotnet-build] command
+will automatically download the set of [NuGet][dotnet-nuget] packages
+needed to build the VFSForGit source.  These will be cached for later
+reuse by subsequent builds, and only updates should be downloaded in
+the future.
+
+If the build succeeded, you are ready to try running the
+`MirrorProvider` together with libprojfs!  Congratulations on making
+it this far!
+
+If you installed libprojfs into a system location like `/usr`, then
+you should be able to run the two other scripts in the
+`MirrorProvider/Scripts/Linux` directory as follows:
+```
+./MirrorProvider_Clone.sh && \
+./MirrorProvider_Mount.sh
+```
+
+If the `libprojfs.so` dynamic library you built in the preceding
+[Building libprojfs](#building-libprojfs) section is not installed,
+or if its installed in a custom location, you will need to provide
+that path in the `LD_LIBRARY_PATH` environment variable, e.g., to
+use the `libprojfs.so` within your `libprojfs` build directory:
+```
+export LD_LIBRARY_PATH=/path/to/libprojfs/lib/.libs
+./MirrorProvider_Clone.sh` && \
+./MirrorProvider_Mount.sh
+```
+
+The `MirrorProvider_Clone.sh` script will set up an "enlistment"
+configuration file between a source directory and a target directory;
+by default, these are `~/PathToMirror` and `~/TestRoot`, but
+you can override these defaults:
+```
+./MirrorProvider_Clone.sh /path/to/source /path/to/target && \
+./MirrorProvider_Mount.sh /path/to/target
+```
+
+The `MirrorProvider_Clone.sh` script simply creates the file
+`<target-dir>/.mirror/config` which contains the path to the source
+directory.  After this has been done once, you no longer need to
+run this script for the same pair of source and target directories.
+
+The `MirrorProvider_Mount.sh` script actually runs the mirroring
+test framework.  As filesystem requests are made within the target
+directory, they are intercepted by FUSE and libprojfs and callbacks
+to the [`MirrorProvider/FileSystemVirtualizer.cs`][vfs4git-mirror-virt]
+are made, which simply checks the contents of the source directory
+and replies to libprojfs with those contents.
+
+Therefore the expected result is that any directories found within
+the source directory should be reflected (mirrored) into the
+`<target-dir>/src` directory.  In the longer term, replacing
+`MirrorProvider` with the real VFSForGit provider should reflect the
+contents of a VFSForGit-hosted Git repository into the target (i.e.,
+working) directory under `<target-dir>/src`.
+
+But, more than simple mirrorings, as directories are queried (or created)
+within the target directory they will be "locally" created on demand
+within the `<target-dir>/.mirror/lower` "storage" directory.
+That is, while the provider happens to be mirroring the contents of
+`<source-dir>`, libprojfs doesn't have any knowledge of this fact;
+the provider could be reporting data from any source.  As a user
+traverses the directory tree within the projected target directory
+(`<target-dir>/src`), the data supplied by the provider are written
+to the user's local disk in the lower storage directory.  See the
+[VFSForGit on Linux][design-linux] section of our design document
+for more details on how directory contents transition between
+projected (placeholder) and full states.
+
+At this time, libprojfs only supports directory projection, but
+support for files, symlinks, pipes, and other esoterica will be added
+soon!  :-)
+
+Also note that you may want to delete the contents of the
+`<target-dir>/.mirror/lower` storage directory between invocations
+of `MirrorProvider_Mount.sh`, just to reset your test environment
+to a clean state.
 
 ### Using Docker Containers
 
@@ -312,7 +396,7 @@ module (assuming that proves to be necessary to meet our performance
 criteria).
 
 For more details on the planned development phases, see our
-[design document](docs/design.md#development-process).
+[design document][design-process].
 
 The VFSForGit API, which is currently supported through the use of
 the `--enable-vfs-api` configuration option to libprojfs, may at some
@@ -335,14 +419,18 @@ You can also contact the GitHub project team at
 [opensource+libprojfs@github.com](mailto:opensource+libprojfs@github.com).
 
 [autoconf]: https://www.gnu.org/software/autoconf/
+[design-linux]: docs/design.md#vfsforgit-on-linux
+[design-process]: docs/design.md#development-process
 [docker-machine]: https://docs.docker.com/machine/
 [docker4mac]: https://docs.docker.com/docker-for-mac/
+[dotnet-build]: https://docs.microsoft.com/en-us/dotnet/core/tools/dotnet-build
 [dotnet-core]: https://dotnet.microsoft.com/download
 [dotnet-docker]: https://hub.docker.com/r/microsoft/dotnet/
 [dotnet-fedora]: https://packages.microsoft.com/fedora/27/prod/
 [dotnet-github]: https://github.com/dotnet/core/blob/master/release-notes/download-archive.md#net-core-runtime-and-sdk-download-archive
 [dotnet-hello]: https://docs.microsoft.com/en-us/dotnet/core/tutorials/using-with-xplat-cli
 [dotnet-linux]: https://github.com/dotnet/core/blob/master/Documentation/linux-setup.md#preparing-your-linux-system-for-net-core
+[dotnet-nuget]: https://www.nuget.org/
 [dotnet-pkgs]: https://packages.microsoft.com/
 [dotnet-telemetry]: https://docs.microsoft.com/en-us/dotnet/core/tools/telemetry
 [dotnet-ubuntu]: https://dotnet.microsoft.com/download/linux-package-manager/ubuntu18-04/sdk-current
@@ -367,3 +455,4 @@ You can also contact the GitHub project team at
 [vfs4git-github]: https://github.com/github/VFSForGit
 [vfs4git-linux]: https://github.com/Microsoft/VFSForGit/tree/features/linuxprototype
 [vfs4git-mirror]: https://github.com/Microsoft/VFSForGit/tree/features/linuxprototype/MirrorProvider
+[vfs4git-mirror-virt]: https://github.com/Microsoft/VFSForGit/blob/features/linuxprototype/MirrorProvider/MirrorProvider/FileSystemVirtualizer.cs
