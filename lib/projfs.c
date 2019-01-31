@@ -178,7 +178,20 @@ static struct node_userdata *get_path_userdata_locked(int parent)
 		return NULL;
 
 	// fill cache from xattrs
-	ssize_t sz = lgetxattr(mapped_path, USER_PROJECTION_EMPTY, NULL, 0);
+	int fd = openat(lowerdir_fd(), mapped_path, O_RDONLY);
+	if (fd == -1) {
+		free(user);
+		return NULL;
+	}
+
+	ssize_t sz = fgetxattr(fd, USER_PROJECTION_EMPTY, NULL, 0);
+	int err = errno;
+	close(fd);
+	if (sz == -1 && err != ENOATTR) {
+		free(user);
+		errno = err;
+		return NULL;
+	}
 	user->proj_flag = sz > 0;
 
 	fuse_set_context_node_userdata(parent, user, free);
@@ -242,11 +255,17 @@ static int projfs_fuse_proj_dir_locked(struct node_userdata *user,
 	if (err < 0)
 		return -err;
 
-	int res = lremovexattr(mapped_path, USER_PROJECTION_EMPTY);
-	if (res == 0 || (res == -1 && errno == ENOATTR))
+	int fd = openat(lowerdir_fd(), mapped_path, O_RDWR);
+	if (fd == -1)
+		return errno;
+
+	int res = fremovexattr(fd, USER_PROJECTION_EMPTY);
+	err = errno;
+	close(fd);
+	if (res == 0 || (res == -1 && err == ENOATTR))
 		user->proj_flag = 0;
 	else
-		return errno;
+		return err;
 
 	return 0;
 }
