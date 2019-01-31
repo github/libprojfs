@@ -33,7 +33,7 @@
 #include <string.h>
 #include <sys/file.h>
 #include <sys/syscall.h>
-#include <sys/xattr.h>
+#include <attr/xattr.h>
 #include <unistd.h>
 
 #include "projfs.h"
@@ -216,8 +216,11 @@ static int projfs_fuse_proj_dir_locked(struct node_userdata *user,
 	if (err < 0)
 		return -err;
 
-	user->proj_flag = 0;
-	lremovexattr(mapped_path, USER_PROJECTION_EMPTY);
+	int res = lremovexattr(mapped_path, USER_PROJECTION_EMPTY);
+	if (res == 0 || (res == -1 && errno == ENOATTR))
+		user->proj_flag = 0;
+	else
+		return errno;
 
 	return 0;
 }
