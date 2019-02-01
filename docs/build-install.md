@@ -112,12 +112,14 @@ git clone https://github.com/github/libprojfs.git
 source code using the "Clone or download" button on this page.)
 
 Next, run the `autogen.sh` script to generate an [Autoconf][autoconf]
-`configure` script:
+`configure` script.  (If you don't have your modified libfuse in a
+system location, you may need to supply `CPPFLAGS` and `LDFLAGS`
+to `autogen.sh` too; see the next paragraph for an example.)
 ```
 ./autogen.sh
 ```
-(This step will not be necessary in the future for those downloading
-a versioned release package of libprojfs.)
+(This `autogen.sh` step will not be necessary in the future for those
+who have downloaded a versioned release package of libprojfs.)
 
 The basic build process at this point is the typical Autoconf and
 [Make][make] one, except that you will need to ensure that the
@@ -138,7 +140,7 @@ Running `./configure --help` will output the full set of configuration
 options available, including the usual `--prefix` option.
 
 To build libprojfs with the VFSForGit API option (which is
-required if you plan to run a VFSForGit "provider" such as `MirrorProvider`,
+required if you plan to run a VFSForGit "provider" such as MirrorProvider
 the test provider we are developing against for now), add the
 `--enable-vfs-api` flag to the arguments for `configure`:
 
@@ -172,7 +174,7 @@ sudo ldconfig
 If you do not install the library into a system location where your
 linker will automatically find it, you will need to supply a path to
 its build location in the `LD_LIBRARY_PATH` environment variable when
-running the `MirrorProvider` scripts, as shown in the section below.
+running the MirrorProvider scripts, as shown in the section below.
 
 ## Installing Microsoft .NET Core SDK
 
@@ -181,7 +183,7 @@ VFSForGit sources (specifically the
 [`features/linuxprototype` branch][vfs4git-linux]) is required.
 
 You will need to install the Microsoft [.NET Core][dotnet-core]
-packages before you can build or run the VFSForGit `MirrorProvider`
+packages before you can build or run the VFSForGit MirrorProvider
 source code.
 
 Your best resource here is Microsoft's [own documentation][dotnet-ubuntu].
@@ -255,7 +257,7 @@ you are encouraged to watch our repository, we recommend only forking
 the primary upstream Microsoft repository if you plan to submit your
 own pull requests.
 
-To build the VFSForGit `MirrorProvider`, first check out (or download
+To build the VFSForGit MirrorProvider, first check out (or download
 as a Zip archive) the repository:
 ```
 git clone https://github.com/Microsoft/VFSForGit.git -b features/linuxprototype
@@ -274,7 +276,7 @@ reuse by subsequent builds, and only updates should be downloaded in
 the future.
 
 If the build succeeded, you are ready to try running the
-`MirrorProvider` together with libprojfs!  Congratulations on making
+MirrorProvider together with libprojfs!  Congratulations on making
 it this far!
 
 If you installed libprojfs into a system location like `/usr`, then
@@ -320,7 +322,7 @@ and replies to libprojfs with those contents.
 Therefore the expected result is that any directories found within
 the source directory should be reflected (mirrored) into the
 `<target-dir>/src` directory.  In the longer term, replacing
-`MirrorProvider` with the real VFSForGit provider should reflect the
+MirrorProvider with the real VFSForGit provider should reflect the
 contents of a VFSForGit-hosted Git repository into the target (i.e.,
 working) directory under `<target-dir>/src`.
 
@@ -341,10 +343,86 @@ At this time, libprojfs only supports directory projection, but
 support for files, symlinks, pipes, and other esoterica will be added
 soon!  :-)
 
-Also note that you may want to delete the contents of the
+Here is an example test run of `MirrorProvider_Mount.sh` and the
+currently expected output.  First, create some "content" in the
+form of directories in `~/PathToMirror`:
+```
+mkdir ~/PathToMirror/foo
+mkdir -p ~/PathToMirror/bar/123/abc
+```
+
+Now start MirrorProvider; it should start successfully and
+wait for a keypress to exit.  The example below assumes that you have
+compiled libprojfs but not installed it, and that you supplied an
+`-Wl,-R/path/to/libfuse` option in `LDFLAGS` when building libprojfs,
+so that the location of your modified libfuse is in the runtime library
+search path of `libprojfs.so`.
+```
+LD_LIBRARY_PATH=/path/to/libprojfs/lib/.libs \
+  ./MirrorProvider_Mount.sh 
+Mounting /home/user/TestRoot
+Virtualization instance started successfully
+Press Enter to end the instance
+```
+
+You may already see some additional output right away, as various
+system daemons begin to probe the new filesystem mount.  Confusingly,
+on many distributions, these may include the [GNOME GVfs][gvfs]
+[gvfs-udisks2-volume-monitor][gvfs-volmon].  Do not be fooled!  :-)
+This process is not part of either libprojfs or VFSForGit; it is just
+looking for new filesystem mounts using the [GNOME I/O library][gvfs-gio]'s
+[GUnixMount API][gvfs-gunix].  You can safely ignore these messages,
+which may look like the following:
+```
+OnEnumerateDirectory(0, '.xdg-volume-info', 11410, /usr/libexec/gvfs-udisks2-volume-monitor)
+projfs: event handler failed: No such file or directory; event mask 0x0001-40000000, pid 11410
+OnEnumerateDirectory(0, '.', 1621, /usr/libexec/gvfs-udisks2-volume-monitor)
+```
+
+The good news is, this means that queries by these system processes are
+already being handled by libprojfs and the MirrorProvider process.
+
+Now, in another shell, visit the projected filesystem and explore the
+directory tree:
+```
+cd ~/TestRoot/src
+ls
+ls bar
+ls bar/123
+ls bar/123/abc
+```
+
+In the first shell session where MirrorProvider is running, you should see
+something like:
+```
+OnEnumerateDirectory(0, 'bar', 14401, /usr/bin/ls)
+OnEnumerateDirectory(0, 'bar/123', 14402, /usr/bin/ls)
+OnEnumerateDirectory(0, 'bar/123/abc', 14403, /usr/bin/ls)
+```
+
+If you then create and delete a few directories inside `~/TestRoot/src`,
+like this, in the second shell session:
+```
+mkdir -p xxx/yyy
+```
+
+then in the MirrorProvider shell session, you should see:
+```
+OnNewFileCreated (isDirectory: True): xxx
+OnNewFileCreated (isDirectory: True): xxx/yyy
+OnPreDelete (isDirectory: True): xxx/yyy
+OnPreDelete (isDirectory: True): xxx
+```
+
+And that's about it for now, with more functionality expected soon
+as we work on persistence, file projection, and more.
+
+Also note that, for the present, you should delete the contents of the
 `<target-dir>/.mirror/lower` storage directory between invocations
 of `MirrorProvider_Mount.sh`, just to reset your test environment
-to a clean state.
+to a clean state.  We expect to be able to persist the state of the
+projected filesystem between mounts, but this is work-in-progress
+at the moment.
 
 ## Using Docker Containers
 
@@ -388,6 +466,10 @@ specify the user ID which should run the libprojfs process.
 [dotnet-telemetry]: https://docs.microsoft.com/en-us/dotnet/core/tools/telemetry
 [dotnet-ubuntu]: https://dotnet.microsoft.com/download/linux-package-manager/ubuntu18-04/sdk-current
 [gnu-build]: https://www.gnu.org/savannah-checkouts/gnu/autoconf/manual/autoconf-2.69/html_node/The-GNU-Build-System.html#The-GNU-Build-System
+[gvfs]: https://wiki.gnome.org/Projects/gvfs
+[gvfs-gio]: https://developer.gnome.org/gio/stable/
+[gvfs-gunix]: https://developer.gnome.org/gio/stable/gio-Unix-Mounts.html
+[gvfs-volmon]: https://wiki.gnome.org/Projects/gvfs/doc#udisks2_volume_monitor
 [icu]: http://site.icu-project.org/home
 [inotify]: https://github.com/torvalds/linux/blob/master/include/uapi/linux/inotify.h
 [kerberos]: https://web.mit.edu/kerberos/
