@@ -1,6 +1,6 @@
 FROM microsoft/dotnet:2.2-sdk-stretch
 
-ARG FUSE_VERSION=3.3.0
+ARG FUSE_VERSION=3.4.1
 
 WORKDIR /data/integrate
 ENV HOME /data/integrate

@@ -33,7 +33,7 @@
 #include <string.h>
 #include <sys/file.h>
 #include <sys/syscall.h>
-#include <sys/xattr.h>
+#include <attr/xattr.h>
 #include <unistd.h>
 
 #include "projfs.h"
@@ -46,6 +46,11 @@
 #endif
 
 #define lowerdir_fd() (projfs_context_fs()->lowerdir_fd)
+#define PROJ_DIR_MODE 0777
+
+// TODO: make this value configurable
+#define PROJ_WAIT_SEC 5
+#define PROJ_WAIT_NSEC 0
 
 struct projfs_dir {
 	DIR *dir;
@@ -58,21 +63,26 @@ static struct projfs *projfs_context_fs(void)
 	return (struct projfs *)fuse_get_context()->private_data;
 }
 
+/**
+ * @return 0 or a negative errno
+ */
 static int projfs_fuse_send_event(projfs_handler_t handler,
                                   uint64_t mask,
                                   const char *path,
                                   const char *target_path,
+                                  int fd,
                                   int perm)
 {
 	if (handler == NULL)
 		return 0;
 
 	struct projfs_event event;
+	event.fs = projfs_context_fs();
 	event.mask = mask;
 	event.pid = fuse_get_context()->pid;
-	event.user_data = projfs_context_fs()->user_data;
-	event.path = path + 1;
+	event.path = path;
 	event.target_path = target_path ? (target_path + 1) : NULL;
+	event.fd = fd;
 
 	int err = handler(&event);
 	if (err < 0) {
@@ -82,12 +92,29 @@ static int projfs_fuse_send_event(projfs_handler_t handler,
 		        strerror(-err), mask >> 32, mask & 0xFFFFFFFF,
 		        event.pid);
 	}
-	else if (perm)
+	else if (!fd && perm)
 		err = (err == PROJFS_ALLOW) ? 0 : -EPERM;
 
 	return err;
 }
 
+/**
+ * @return 0 or a negative errno
+ */
+static int projfs_fuse_proj_event(uint64_t mask,
+                                  const char *path,
+                                  int fd)
+{
+	projfs_handler_t handler =
+		projfs_context_fs()->handlers.handle_proj_event;
+
+	return projfs_fuse_send_event(
+		handler, mask, path, NULL, fd, 0);
+}
+
+/**
+ * @return 0 or a negative errno
+ */
 static int projfs_fuse_notify_event(uint64_t mask,
                                     const char *path,
                                     const char *target_path)
@@ -96,9 +123,12 @@ static int projfs_fuse_notify_event(uint64_t mask,
 		projfs_context_fs()->handlers.handle_notify_event;
 
 	return projfs_fuse_send_event(
-		handler, mask, path, target_path, 0);
+		handler, mask, path + 1, target_path, 0, 0);
 }
 
+/**
+ * @return 0 or a negative errno
+ */
 static int projfs_fuse_perm_event(uint64_t mask,
                                   const char *path,
                                   const char *target_path)
@@ -107,10 +137,150 @@ static int projfs_fuse_perm_event(uint64_t mask,
 		projfs_context_fs()->handlers.handle_perm_event;
 
 	return projfs_fuse_send_event(
-		handler, mask, path, target_path, 1);
+		handler, mask, path + 1, target_path, 0, 1);
 }
 
-// filesystem ops
+struct node_userdata
+{
+	uint8_t proj_flag; // USER_PROJECTION_EMPTY
+};
+
+#define USER_PROJECTION_EMPTY "user.projection.empty"
+
+static __thread char *mapped_path;
+
+static void set_mapped_path(char const *path, int parent)
+{
+	free(mapped_path);
+	if (!parent) {
+		mapped_path = strdup(path);
+		return;
+	}
+	const char *last = strrchr(path, '/');
+	if (!last)
+		mapped_path = strdup(".");
+	else
+		mapped_path = strndup(path, last - path);
+}
+
+/**
+ * @return the userdata struct pointer, or NULL and sets errno.  If non-NULL is
+ *         returned, the FUSE userdata is acquired and must be released with
+ *         fuse_context_node_userdata_release.
+ */
+static struct node_userdata *get_path_userdata(int parent)
+{
+	struct timespec abs_timeout;
+
+	clock_gettime(CLOCK_REALTIME, &abs_timeout);
+	abs_timeout.tv_sec += PROJ_WAIT_SEC;
+	abs_timeout.tv_nsec += PROJ_WAIT_NSEC;
+
+	struct fuse_node_userdata *fuserdata =
+		fuse_context_node_userdata_timedacquire(parent, &abs_timeout);
+
+	if (!fuserdata) {
+		errno = 0;
+		return NULL;
+	}
+
+	if (fuserdata->data)
+		return (struct node_userdata *)fuserdata->data;
+
+	struct node_userdata *user = calloc(1, sizeof(*user));
+	if (!user) {
+		fuse_context_node_userdata_release(parent);
+		return NULL;
+	}
+
+	// fill cache from xattrs
+	int fd = openat(lowerdir_fd(), mapped_path, O_RDONLY);
+	int err = errno;
+	if (fd == -1) {
+		free(user);
+		fuse_context_node_userdata_release(parent);
+		errno = err;
+		return NULL;
+	}
+
+	ssize_t sz = fgetxattr(fd, USER_PROJECTION_EMPTY, NULL, 0);
+	err = errno;
+	close(fd);
+	if (sz == -1 && err != ENOATTR) {
+		free(user);
+		fuse_context_node_userdata_release(parent);
+		errno = err;
+		return NULL;
+	}
+	user->proj_flag = sz > 0;
+
+	fuserdata->data = user;
+	fuserdata->finalize = free;
+
+	return user;
+}
+
+/**
+ * @return 0 or an errno
+ */
+static int projfs_fuse_proj_dir_locked(struct node_userdata *user,
+                                       const char *path)
+{
+	if (!user->proj_flag)
+		return 0;
+
+	int err = projfs_fuse_proj_event(
+		PROJFS_CREATE_SELF | PROJFS_ONDIR,
+		path,
+		0);
+
+	if (err < 0)
+		return -err;
+
+	int fd = openat(lowerdir_fd(), mapped_path, O_RDONLY);
+	if (fd == -1)
+		return errno;
+
+	int res = fremovexattr(fd, USER_PROJECTION_EMPTY);
+	err = errno;
+	close(fd);
+	if (res == 0 || (res == -1 && err == ENOATTR))
+		user->proj_flag = 0;
+	else
+		return err;
+
+	return 0;
+}
+
+/**
+ * Project a directory. Takes the lower path, and a flag indicating whether the
+ * directory is the parent of the path, or the path itself.
+ *
+ * @param path the lower path (from lower_path)
+ * @param parent 1 if we should look at the parent directory containing path, 0
+ *               if we look at path itself
+ * @return 0 or an errno
+ */
+static int projfs_fuse_proj_dir(const char *op, const char *path, int parent)
+{
+	(void)op;
+	set_mapped_path(path, parent);
+
+	struct node_userdata *user = get_path_userdata(parent);
+	if (!user)
+		return errno;
+
+	if (!user->proj_flag) {
+		fuse_context_node_userdata_release(parent);
+		return 0;
+	}
+
+	int res = projfs_fuse_proj_dir_locked(user, path);
+
+	fuse_context_node_userdata_release(parent);
+
+	return res;
+}
 
 static const char *dotpath = ".";
 
@@ -123,6 +293,8 @@ static inline const char *lowerpath(const char *path)
 	return path;
 }
 
+// filesystem ops
+
 static int projfs_op_getattr(char const *path, struct stat *attr,
                              struct fuse_file_info *fi)
 {
@@ -130,15 +302,22 @@ static int projfs_op_getattr(char const *path, struct stat *attr,
 	int res;
 	if (fi)
 		res = fstat(fi->fh, attr);
-	else
+	else {
+		res = projfs_fuse_proj_dir("getattr", lowerpath(path), 1);
+		if (res)
+			return -res;
 		res = fstatat(lowerdir_fd(), lowerpath(path), attr,
 			      AT_SYMLINK_NOFOLLOW);
+	}
 	return res == -1 ? -errno : 0;
 }
 
 static int projfs_op_readlink(char const *path, char *buf, size_t size)
 {
-	int res = readlinkat(lowerdir_fd(), lowerpath(path), buf, size - 1);
+	int res = projfs_fuse_proj_dir("readlink", lowerpath(path), 1);
+	if (res)
+		return -res;
+	res = readlinkat(lowerdir_fd(), lowerpath(path), buf, size - 1);
 	if (res == -1)
 		return -errno;
 	buf[res] = 0;
@@ -152,8 +331,14 @@ static int projfs_op_link(char const *src, char const *dst)
 	/* NOTE: We require lowerdir to be a directory, so this should
 	 *       fail when src is an empty path, as we expect.
 	 */
-	int res = linkat(lowerdir_fd, lowerpath(src),
-			 lowerdir_fd, lowerpath(dst), 0);
+	int res = projfs_fuse_proj_dir("link", lowerpath(src), 1);
+	if (res)
+		return -res;
+	res = projfs_fuse_proj_dir("link2", lowerpath(dst), 1);
+	if (res)
+		return -res;
+	res = linkat(lowerdir_fd, lowerpath(src),
+	             lowerdir_fd, lowerpath(dst), 0);
 	return res == -1 ? -errno : 0;
 }
 
@@ -190,7 +375,9 @@ static int projfs_op_fsync(char const *path, int datasync,
 
 static int projfs_op_mknod(char const *path, mode_t mode, dev_t rdev)
 {
-	int res;
+	int res = projfs_fuse_proj_dir("mknod", lowerpath(path), 1);
+	if (res)
+		return -res;
 	if (S_ISFIFO(mode))
 		res = mkfifoat(lowerdir_fd(), lowerpath(path), mode);
 	else
@@ -200,13 +387,19 @@ static int projfs_op_mknod(char const *path, mode_t mode, dev_t rdev)
 
 static int projfs_op_symlink(char const *link, char const *path)
 {
-	int res = symlinkat(link, lowerdir_fd(), lowerpath(path));
+	int res =  projfs_fuse_proj_dir("symlink", lowerpath(path), 1);
+	if (res)
+		return -res;
+	res = symlinkat(link, lowerdir_fd(), lowerpath(path));
 	return res == -1 ? -errno : 0;
 }
 
 static int projfs_op_create(char const *path, mode_t mode,
                             struct fuse_file_info *fi)
 {
+	int res = projfs_fuse_proj_dir("create", lowerpath(path), 1);
+	if (res)
+		return -res;
 	int flags = fi->flags & ~O_NOFOLLOW;
 	int fd = openat(lowerdir_fd(), lowerpath(path), flags, mode);
 
@@ -214,7 +407,7 @@ static int projfs_op_create(char const *path, mode_t mode,
 		return -errno;
 	fi->fh = fd;
 
-	int res = projfs_fuse_notify_event(
+	res = projfs_fuse_notify_event(
 		PROJFS_CREATE_SELF,
 		path,
 		NULL);
@@ -223,6 +416,9 @@ static int projfs_op_create(char const *path, mode_t mode,
 
 static int projfs_op_open(char const *path, struct fuse_file_info *fi)
 {
+	int res = projfs_fuse_proj_dir("open", lowerpath(path), 1);
+	if (res)
+		return -res;
 	int flags = fi->flags & ~O_NOFOLLOW;
 	int fd = openat(lowerdir_fd(), lowerpath(path), flags);
 
@@ -288,6 +484,9 @@ static int projfs_op_unlink(char const *path)
 		NULL);
 	if (res < 0)
 		return res;
+	res = projfs_fuse_proj_dir("unlink", lowerpath(path), 1);
+	if (res)
+		return -res;
 
 	res = unlinkat(lowerdir_fd(), lowerpath(path), 0);
 	return res == -1 ? -errno : 0;
@@ -295,7 +494,10 @@ static int projfs_op_unlink(char const *path)
 
 static int projfs_op_mkdir(char const *path, mode_t mode)
 {
-	int res = mkdirat(lowerdir_fd(), lowerpath(path), mode);
+	int res = projfs_fuse_proj_dir("mkdir", lowerpath(path), 1);
+	if (res)
+		return -res;
+	res = mkdirat(lowerdir_fd(), lowerpath(path), mode);
 	if (res == -1)
 		return -errno;
 
@@ -314,6 +516,9 @@ static int projfs_op_rmdir(char const *path)
 		NULL);
 	if (res < 0)
 		return res;
+	res = projfs_fuse_proj_dir("rmdir", lowerpath(path), 1);
+	if (res)
+		return -res;
 
 	res = unlinkat(lowerdir_fd(), lowerpath(path), AT_REMOVEDIR);
 	return res == -1 ? -errno : 0;
@@ -322,8 +527,14 @@ static int projfs_op_rmdir(char const *path)
 static int projfs_op_rename(char const *src, char const *dst,
                             unsigned int flags)
 {
+	int res = projfs_fuse_proj_dir("rename", lowerpath(src), 1);
+	if (res)
+		return -res;
+	res = projfs_fuse_proj_dir("rename2", lowerpath(dst), 1);
+	if (res)
+		return -res;
 	// TODO: may prevent us compiling on BSD; would renameat() suffice?
-	int res = syscall(
+	res = syscall(
 		SYS_renameat2,
 		lowerdir_fd(),
 		lowerpath(src),
@@ -337,6 +548,13 @@ static int projfs_op_opendir(char const *path, struct fuse_file_info *fi)
 {
 	int res = 0;
 	int err = 0;
+
+	res = projfs_fuse_proj_dir("opendir", lowerpath(path), 1);
+	if (res)
+		return -res;
+	res = projfs_fuse_proj_dir("opendir2", lowerpath(path), 0);
+	if (res)
+		return -res;
 
 	struct projfs_dir *d = calloc(1, sizeof(*d));
 	if (!d) {
@@ -438,8 +656,12 @@ static int projfs_op_chmod(char const *path, mode_t mode,
 	int res;
 	if (fi)
 		res = fchmod(fi->fh, mode);
-	else
+	else {
+		res = projfs_fuse_proj_dir("chmod", lowerpath(path), 1);
+		if (res)
+			return -res;
 		res = fchmodat(lowerdir_fd(), lowerpath(path), mode, 0);
+	}
 	return res == -1 ? -errno : 0;
 }
 
@@ -449,10 +671,14 @@ static int projfs_op_chown(char const *path, uid_t uid, gid_t gid,
 	int res;
 	if (fi)
 		res = fchown(fi->fh, uid, gid);
-	else
+	else {
+		res = projfs_fuse_proj_dir("chown", lowerpath(path), 1);
+		if (res)
+			return -res;
 		// disallow chown() on lowerdir itself, so no AT_EMPTY_PATH
 		res = fchownat(lowerdir_fd(), lowerpath(path), uid, gid,
 			       AT_SYMLINK_NOFOLLOW);
+	}
 	return res == -1 ? -errno : 0;
 }
 
@@ -463,6 +689,10 @@ static int projfs_op_truncate(char const *path, off_t off,
 	if (fi)
 		res = ftruncate(fi->fh, off);
 	else {
+		res = projfs_fuse_proj_dir("truncate", lowerpath(path), 1);
+		if (res)
+			return -res;
+
 		int fd = openat(lowerdir_fd(), lowerpath(path),
 				O_WRONLY);
 		if (fd == -1) {
@@ -486,9 +716,13 @@ static int projfs_op_utimens(char const *path, const struct timespec tv[2],
 	int res;
 	if (fi)
 		res = futimens(fi->fh, tv);
-	else
+	else {
+		res = projfs_fuse_proj_dir("utimens", lowerpath(path), 1);
+		if (res)
+			return -res;
 		res = utimensat(lowerdir_fd(), lowerpath(path), tv,
 				AT_SYMLINK_NOFOLLOW);
+	}
 	return res == -1 ? -errno : 0;
 }
 
@@ -500,6 +734,11 @@ static int projfs_op_setxattr(char const *path, char const *name,
 	int err = 0;
 
 	path = lowerpath(path);
+
+	res = projfs_fuse_proj_dir("setxattr", path, 1);
+	if (res)
+		return -res;
+
 	int fd = openat(lowerdir_fd(), path, O_WRONLY | O_NONBLOCK);
 	if (fd == -1)
 		goto out;
@@ -520,6 +759,11 @@ static int projfs_op_getxattr(char const *path, char const *name,
 	int err = 0;
 
 	path = lowerpath(path);
+
+	res = projfs_fuse_proj_dir("getxattr", path, 1);
+	if (res)
+		return -res;
+
 	int fd = openat(lowerdir_fd(), path, O_RDONLY | O_NONBLOCK);
 	if (fd == -1)
 		goto out;
@@ -539,6 +783,11 @@ static int projfs_op_listxattr(char const *path, char *list, size_t size)
 	int err = 0;
 
 	path = lowerpath(path);
+
+	res = projfs_fuse_proj_dir("listxattr", path, 1);
+	if (res)
+		return -res;
+
 	int fd = openat(lowerdir_fd(), path, O_RDONLY | O_NONBLOCK);
 	if (fd == -1)
 		goto out;
@@ -558,6 +807,11 @@ static int projfs_op_removexattr(char const *path, char const *name)
 	int err = 0;
 
 	path = lowerpath(path);
+
+	res = projfs_fuse_proj_dir("removexattr", path, 1);
+	if (res)
+		return -res;
+
 	int fd = openat(lowerdir_fd(), path, O_WRONLY | O_NONBLOCK);
 	if (fd == -1)
 		goto out;
@@ -573,8 +827,11 @@ out:
 
 static int projfs_op_access(char const *path, int mode)
 {
-	int res = faccessat(lowerdir_fd(), lowerpath(path), mode,
-			    AT_SYMLINK_NOFOLLOW);
+	int res = projfs_fuse_proj_dir("access", lowerpath(path), 1);
+	if (res)
+		return -res;
+	res = faccessat(lowerdir_fd(), lowerpath(path), mode,
+			AT_SYMLINK_NOFOLLOW);
 	return res == -1 ? -errno : 0;
 }
 
@@ -701,10 +958,13 @@ struct projfs *projfs_new(const char *lowerdir, const char *mountdir,
 
 	fs->user_data = user_data;
 
-	pthread_mutex_init(&fs->mutex, NULL);
+	if (pthread_mutex_init(&fs->mutex, NULL) > 0)
+		goto out_mount;
 
 	return fs;
 
+out_mount:
+	free(fs->mountdir);
 out_lower:
 	free(fs->lowerdir);
 out_handle:
@@ -859,4 +1119,69 @@ void *projfs_stop(struct projfs *fs)
 	user_data = fs->user_data;
 	free(fs);
 	return user_data;
+}
+
+static int check_safe_rel_path(const char *path)
+{
+	const char *s = path;
+	const char *t;
+
+	if (path == NULL || *path == '/')
+		return 0;
+
+	while ((s = strstr(s, "..")) != NULL) {
+		t = s + 2;
+		if ((*t == '\0' || *t == '/') &&
+		    (s == path || *(s - 1) == '/'))
+			return 0;
+		s += 2;
+	}
+
+	return 1;
+}
+
+int projfs_create_proj_dir(struct projfs *fs, const char *path)
+{
+	if (!check_safe_rel_path(path))
+		return EINVAL;
+
+	return _projfs_make_dir(fs, path, PROJ_DIR_MODE, 1);
+}
+
+int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
+                            mode_t mode)
+{
+	if (!check_safe_rel_path(path))
+		return EINVAL;
+
+	// TODO: return _projfs_create_file(fs, path, size, mode, ...)
+	//	 until then, prevent compiler warnings
+	(void)fs;
+	(void)size;
+	(void)mode;
+
+	return 0;
+}
+
+int _projfs_make_dir(struct projfs *fs, const char *path, mode_t mode,
+                     uint8_t proj_flag)
+{
+	(void)fs;
+
+	int res = mkdirat(lowerdir_fd(), path, mode);
+	if (res == -1)
+		return errno;
+	if (proj_flag) {
+		int fd = openat(lowerdir_fd(), path, O_RDONLY);
+		if (fd == -1)
+			return errno;
+
+		char v = 1;
+		res = fsetxattr(fd, USER_PROJECTION_EMPTY, &v, 1, 0);
+		int err = errno;
+		close(fd);
+		if (res == -1)
+			return err;
+	}
+	return 0;
 }

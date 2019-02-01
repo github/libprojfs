@@ -13,6 +13,7 @@ RUN set -ex && \
             automake \
             build-essential \
             libtool \
+            libattr1-dev \
     ' && \
     apt-get install -y -qq --no-install-recommends $BUILD_DEPS && \
     rm -rf /var/lib/apt/lists/*

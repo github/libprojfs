@@ -33,6 +33,11 @@
 #include "projfs_i.h"
 #include "projfs_vfsapi.h"
 
+struct _PrjFS_FileHandle
+{
+	int fd;
+};
+
 static char *get_proc_cmdline(pid_t pid)
 {
 	char proc_cmdline_path[14 + 3*sizeof(pid_t) + 1];  // /proc/%d/cmdline
@@ -72,6 +77,62 @@ out_fd:
 	close(fd);
 out:
 	return cmdline;
+}
+
+static PrjFS_Result convert_errno_to_result(int err)
+{
+	PrjFS_Result result = PrjFS_Result_Invalid;
+
+	switch(err) {
+	case 0:
+		result = PrjFS_Result_Success;
+		break;
+
+	case EACCES:
+	case EEXIST:
+	case EPERM:
+	case EROFS:
+		result = PrjFS_Result_EAccessDenied;
+		break;
+	case EBADF:
+		result = PrjFS_Result_EInvalidHandle;
+		break;
+	case EDQUOT:
+	case EIO:
+	case ENODATA:	// also ENOATTR; see getxattr(2)
+	case ENOSPC:
+		result = PrjFS_Result_EIOError;
+		break;
+	case EFAULT:
+	case EINVAL:
+	case EOVERFLOW:
+		result = PrjFS_Result_EInvalidArgs;
+		break;
+	case ELOOP:
+	case EMLINK:
+	case ENAMETOOLONG:
+	case ENOENT:
+	case ENOTDIR:
+		result = PrjFS_Result_EPathNotFound;
+		break;
+	case ENOMEM:
+		result = PrjFS_Result_EOutOfMemory;
+		break;
+	case ENOSYS:
+		result = PrjFS_Result_ENotYetImplemented;
+		break;
+	case ENOTEMPTY:
+		result = PrjFS_Result_EDirectoryNotEmpty;
+		break;
+	case ENOTSUP:
+		result = PrjFS_Result_ENotSupported;
+		break;
+
+	default:
+		result = PrjFS_Result_Invalid;
+	}
+
+	return result;
 }
 
 static int convert_result_to_errno(PrjFS_Result result)
@@ -114,6 +175,10 @@ static int convert_result_to_errno(PrjFS_Result result)
 	case PrjFS_Result_EIOError:
 		ret = EIO;
 		break;
+	case PrjFS_Result_EDirectoryNotEmpty:
+		ret = ENOTEMPTY;
+		break;
+
 	case PrjFS_Result_ENotYetImplemented:
 		ret = ENOSYS;
 		break;
@@ -126,10 +191,58 @@ static int convert_result_to_errno(PrjFS_Result result)
 	return -ret;		// return negated value for convenience
 }
 
+static int handle_proj_event(struct projfs_event *event)
+{
+	PrjFS_Callbacks *callbacks = (PrjFS_Callbacks *) event->fs->user_data;
+	PrjFS_Result result;
+	char *cmdline = NULL;
+	const char *triggeringProcessName = "";
+	int ret = 0;
+
+	if (callbacks == NULL)
+		goto out;
+
+	cmdline = get_proc_cmdline(event->pid);
+	if (cmdline != NULL)
+		triggeringProcessName = (const char *) cmdline;
+
+	if (event->mask | PROJFS_ONDIR) {
+		PrjFS_EnumerateDirectoryCallback *callback =
+			callbacks->EnumerateDirectory;
+
+		if (callback == NULL)
+			goto out;
+
+		result = callback(0, event->path,
+				  event->pid, triggeringProcessName);
+	}
+	else {
+		PrjFS_GetFileStreamCallback *callback =
+			callbacks->GetFileStream;
+		unsigned char providerId[PrjFS_PlaceholderIdLength];
+		unsigned char contentId[PrjFS_PlaceholderIdLength];
+		PrjFS_FileHandle fh = { event->fd };
+
+		if (callback == NULL)
+			goto out;
+
+		result = callback(0, event->path, providerId, contentId,
+				  event->pid, triggeringProcessName, &fh);
+	}
+
+	ret = convert_result_to_errno(result);
+
+out:
+	if (cmdline != NULL)
+		free(cmdline);
+
+	return ret;
+}
+
 static int handle_nonproj_event(struct projfs_event *event, int perm)
 {
-	PrjFS_NotifyOperationCallback *callback =
-		((PrjFS_Callbacks *) (event->user_data))->NotifyOperation;
+	PrjFS_Callbacks *callbacks = (PrjFS_Callbacks *) event->fs->user_data;
+	PrjFS_NotifyOperationCallback *callback;
 	PrjFS_NotificationType notificationType = PrjFS_NotificationType_None;
 	unsigned char providerId[PrjFS_PlaceholderIdLength];
 	unsigned char contentId[PrjFS_PlaceholderIdLength];
@@ -139,6 +252,10 @@ static int handle_nonproj_event(struct projfs_event *event, int perm)
 	const char *triggeringProcessName = "";
 	int ret = 0;
 
+	if (callbacks == NULL)
+		goto out;
+
+	callback = callbacks->NotifyOperation;
 	if (callback == NULL)
 		goto out;
 
@@ -206,6 +323,7 @@ PrjFS_Result PrjFS_StartVirtualizationInstance(
 	}
 	memcpy(user_data, &callbacks, sizeof(callbacks));
 
+	handlers.handle_proj_event = handle_proj_event;
 	handlers.handle_notify_event = handle_notify_event;
 	handlers.handle_perm_event = handle_perm_event;
 
@@ -260,3 +378,36 @@ PrjFS_Result PrjFS_ConvertDirectoryToVirtualizationRoot(
 	return PrjFS_Result_Success;
 }
 
+PrjFS_Result PrjFS_WritePlaceholderDirectory(
+    _In_    const PrjFS_MountHandle*                mountHandle,
+    _In_    const char*                             relativePath
+)
+{
+	struct projfs *fs = (struct projfs *) mountHandle;
+	int ret;
+
+	ret = projfs_create_proj_dir(fs, relativePath);
+
+	return convert_errno_to_result(ret);
+}
+
+PrjFS_Result PrjFS_WritePlaceholderFile(
+    _In_    const PrjFS_MountHandle*                mountHandle,
+    _In_    const char*                             relativePath,
+    _In_    unsigned char                           providerId[PrjFS_PlaceholderIdLength],
+    _In_    unsigned char                           contentId[PrjFS_PlaceholderIdLength],
+    _In_    unsigned long                           fileSize,
+    _In_    uint16_t                                fileMode
+)
+{
+	struct projfs *fs = (struct projfs *) mountHandle;
+	int ret;
+
+	// TODO: need to wrap the content+provider IDs into a private struct
+	//	 until then, prevent compiler warnings
+	ret = projfs_create_proj_file(fs, relativePath, fileSize, fileMode);
+	(void)providerId;
+	(void)contentId;
+
+	return convert_errno_to_result(ret);
+}

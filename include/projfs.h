@@ -44,11 +44,12 @@ struct projfs;
 
 /** Filesystem event */
 struct projfs_event {
-	uint64_t mask;
+	struct projfs *fs;
+	uint64_t mask;			/* type flags; see projfs_notify.h */
 	pid_t pid;
-	void *user_data;
 	const char *path;
 	const char *target_path;	/* move destination or link target */
+	int fd;				/* file descriptor for projection */
 };
 
 /**
@@ -60,27 +61,32 @@ struct projfs_handlers {
 	/**
 	 * Handle projection request for a file or directory.
 	 *
-	 * TODO: doxygen
-	 * @param path ...
-	 * @return ...
+	 * @param event Filesystem projection event.
+	 * @return Zero on success or a negated errno(3) code on failure.
+	 * @note When event->mask contains PROJFS_ONDIR, the file
+	 *       descriptor in event->fd will be NULL.
 	 */
-	int (*handle_proj_event) (struct projfs_event *event, int fd);
+	int (*handle_proj_event) (struct projfs_event *event);
 
 	/**
 	 * Handle notification of a file or directory event.
 	 *
-	 * TODO: doxygen
-	 * @param path ...
-	 * @return ...
+	 * @param event Filesystem notification event.
+	 * @return Zero on success or a negated errno(3) code on failure.
+	 * @note If event->target_path is non-NULL, the event was a
+	 *       rename(2) or link(2) filesystem operation.
 	 */
 	int (*handle_notify_event) (struct projfs_event *event);
 
 	/**
 	 * Handle permission request for file or directory event.
 	 *
-	 * TODO: doxygen
-	 * @param path ...
-	 * @return ...
+	 * @param event Filesystem permission request event.
+	 * @return PROJFS_ALLOW if the event is permitted,
+	 *         PROJFS_DENY if the event is denied, or a
+	 *         a negated errno(3) code on failure.
+	 * @note If event->target_path is non-NULL, the event is a
+	 *       rename(2) or link(2) filesystem operation.
 	 */
 	int (*handle_perm_event) (struct projfs_event *event);
 };
@@ -104,6 +110,28 @@ int projfs_start(struct projfs *fs);
  * TODO: doxygen
  */
 void *projfs_stop(struct projfs *fs);
+
+/**
+ * Create a directory whose contents will be projected until written.
+ *
+ * @param[in] fs Projected filesystem handle.
+ * @param[in] path Relative path of new directory under projfs mount point.
+ * @return Zero on success or an \p errno(3) code on failure.
+ */
+int projfs_create_proj_dir(struct projfs *fs, const char *path);
+
+/**
+ * Create a file whose contents will be projected until written.
+ *
+ * @param[in] fs Projected filesystem handle.
+ * @param[in] path Relative path of new file under projfs mount point.
+ * @param[in] size File size to be projected until file is written.
+ * @param[in] mode File mode with which to create the new projected file.
+ *	TODO: add extra arg for private user data
+ * @return Zero on success or an \p errno(3) code on failure.
+ */
+int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
+			    mode_t mode);
 
 #ifdef __cplusplus
 }
