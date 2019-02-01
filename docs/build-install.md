@@ -122,8 +122,13 @@ a versioned release package of libprojfs.)
 The basic build process at this point is the typical Autoconf and
 [Make][make] one, except that you will need to ensure that the
 `configure` script finds your installation or build of the modified
-`libfuse.so` from the previous step.
+`libfuse.so` from the previous step.  If your custom libfuse library
+is not installed in a system location, you may want to use the
+`CPPFLAGS` and `LDFLAGS` environment variables to ensure it is found
+by `configure`, for instance:
 ```
+CPPFLAGS=-I/path/to/libfuse \
+LDFLAGS='-L/path/to/libfuse -Wl,-R/path/to/libfuse' \
 ./configure && \
 make && \
 make test
