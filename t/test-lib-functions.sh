@@ -545,10 +545,10 @@ test_cmp_bin() {
 	cmp "$@"
 }
 
-# remove_stat_minutiae - filters out filesystem-specific bits of stat(1)
+# projfs_remove_stat_minutiae - filters out filesystem-specific bits of stat(1)
 # responses, to facilitate easy diffs.
 
-remove_stat_minutiae() {
+projfs_remove_stat_minutiae() {
 	sed -E \
 		-e "s_File: (source|target)/_File: _" \
 		-e "s_Device: [0-9a-f]+h/[0-9]+d\\s+_Device: xh/xd _" \
