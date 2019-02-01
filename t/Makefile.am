@@ -74,7 +74,7 @@ EXTRA_DIST = README.md chainlint.sed \
 LOG_DRIVER = env AM_TAP_AWK='$(AWK)' HARNESS_ACTIVE=true \
 	$(SHELL) ../tap-driver.sh
 
-TEST_MOUNTS_DIR = /tmp/test-mounts
+TEST_MOUNTS_DIR = test-mounts
 TEST_OUTPUT_DIR = test-output
 PROVE_FILE = .prove
 
@@ -94,13 +94,13 @@ prove: clean-mounts clean-output $(check_PROGRAMS)
 			prove_dir=""; \
 		fi && \
 		$(PROVE) --exec $(SHELL) $(PROJFS_PROVE_OPTS) $$prove_dir; \
-		$(RM) -r "$(TEST_MOUNTS_DIR)"; \
+		$(RM) -r "$(TEST_MOUNTS_DIR)" "/tmp/$(TEST_MOUNTS_DIR)"; \
 	else \
 		echo "No 'prove' TAP harness available." && exit 1; \
 	fi
 
 clean-mounts:
-	@$(RM) -r "$(TEST_MOUNTS_DIR)"
+	@$(RM) -r "$(TEST_MOUNTS_DIR)" "/tmp/$(TEST_MOUNTS_DIR)"
 
 clean-output:
 	@$(RM) -r "$(TEST_OUTPUT_DIR)"
