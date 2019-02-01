@@ -1,0 +1,8 @@
+docker/Dockerfile-*	linguist-language=Dockerfile
+m4/*			linguist-vendored
+t/t???/*		linguist-detectable=false
+t/chainlint.sed		linguist-vendored
+t/test-lib.sh		linguist-vendored
+t/test-lib-functions.sh	linguist-vendored
+tap-driver.sh		linguist-vendored
+test-driver		linguist-vendored
