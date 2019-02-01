@@ -550,7 +550,7 @@ test_cmp_bin() {
 
 projfs_remove_stat_minutiae() {
 	sed -E \
-		-e "s_File: (source|target)/_File: _" \
+		-e "s_File: '?(source|target)/_File: _" \
 		-e "s_Device: [0-9a-f]+h/[0-9]+d\\s+_Device: xh/xd _" \
 		-e "s_Inode: [0-9]+\s+_Inode: x _"
 }

@@ -32,7 +32,6 @@ test_expect_success 'create links' '
 	ls -li target &&
 	ln -s file target/symlink
 '
-
 test_expect_success 'check link stat' '
 	stat target/file >link.file.stat &&
 	stat target/link >link.stat &&
@@ -42,7 +41,8 @@ test_expect_success 'check link stat' '
 
 test_expect_success 'check symlink stat' '
 	stat target/symlink >symlink.stat &&
-	grep "File: target/symlink -> file" symlink.stat &&
+	readlink target/symlink > symlink.read &&
+	grep "^file$" symlink.read &&
 	grep "symbolic link" symlink.stat &&
 	grep "Access: (0777/lrwxrwxrwx)" symlink.stat
 '
