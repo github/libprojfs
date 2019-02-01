@@ -49,6 +49,10 @@ TESTS = t000-mirror-read.t \
 	t001-mirror-mkdir.t \
 	t002-mirror-write.t \
 	t003-mirror-remove.t \
+	t004-mirror-stat.t \
+	t005-mirror-links.t \
+	t006-mirror-statfs.t \
+	t007-mirror-attrs.t \
 	t200-event-ok.t \
 	t201-event-err.t \
 	t202-event-deny.t \
