@@ -120,7 +120,9 @@ Next, run the `autogen.sh` script to generate an [Autoconf][autoconf]
 a versioned release package of libprojfs.)
 
 The basic build process at this point is the typical Autoconf and
-[Make][make] one:
+[Make][make] one, except that you will need to ensure that the
+`configure` script finds your installation or build of the modified
+`libfuse.so` from the previous step.
 ```
 ./configure && \
 make && \
@@ -196,9 +198,9 @@ sudo dpkg -i packages-microsoft-prod.deb
 sudo apt-get install apt-transport-https
 ```
 
-Instructions for other distributions are given on Microsoft's Linux
-installation page, for example, for [Ubuntu 18.04][dotnet-ubuntu],
-or one may choose another distribution from that page's menu.
+Instructions for other distributions and versions are given on Microsoft's
+Linux installation page, for example, for [Ubuntu 18.04][dotnet-ubuntu].
+One may also choose another distribution from that page's menu.
 
 If you need to download packages directly (e.g., to unpack a `.rpm`
 package and install its contents manually), Microsoft maintains a
@@ -280,7 +282,7 @@ you should be able to run the two other scripts in the
 
 If the `libprojfs.so` dynamic library you built in the preceding
 [Building libprojfs](#building-libprojfs) section is not installed,
-or if its installed in a custom location, you will need to provide
+or if it's installed in a custom location, you will need to provide
 that path in the `LD_LIBRARY_PATH` environment variable, e.g., to
 use the `libprojfs.so` within your `libprojfs` build directory:
 ```
