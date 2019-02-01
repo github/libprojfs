@@ -65,7 +65,7 @@ AC_ARG_ENABLE([vfs_api],
 
 AS_IF([test ":$enable_vfs_api" = ":yes"],
   [AC_DEFINE(PROJFS_VFSAPI, 1, [Enable .NET VFSForGit API])
-    libprojfs_export_regex='(projfs|PrjFS)'
+   libprojfs_export_regex='(projfs|PrjFS)'
   ]dnl
 )dnl
 
@@ -82,7 +82,7 @@ AC_ARG_WITH([pkgconfigdir],
 AS_IF([test ":$with_pkgconfigdir" != ":no" &&
        test ":$with_pkgconfigdir" != ":yes" &&
        test ":$with_pkgconfigdir" != ":"],
-  [pkgconfigdir=$with_pkgconfigdir]
+  [pkgconfigdir="$with_pkgconfigdir"]
 )dnl
 
 AC_SUBST([pkgconfigdir])
@@ -91,7 +91,8 @@ AC_TYPE_PID_T
 AC_TYPE_SIZE_T
 AC_TYPE_UINT64_T
 
-# TODO: for VFS API but can't be conditional; remove if no longer needed
+# TODO: for VFS API but can't be conditional; remove if VFS API migrated
+#       to VFSForGit project
 AC_HEADER_STDBOOL
 AC_TYPE_UINT16_T
 
@@ -105,7 +106,7 @@ AC_CHECK_HEADERS([sys/inotify.h])
 LIBS=''
 # TODO: remove when FUSE no longer used (also Libs.private in projfs.pc)
 AC_SEARCH_LIBS([fuse_new_30], [fuse3], [],
-  [AC_MSG_ERROR([FUSE version 3 library not found])]dnl
+  [AC_MSG_ERROR([FUSE version 3.x library not found])]dnl
 )dnl
 AC_SEARCH_LIBS([pthread_create], [pthread], [],
   [AC_MSG_ERROR([POSIX threads library not found])]dnl
