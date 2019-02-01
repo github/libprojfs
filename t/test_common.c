@@ -168,6 +168,7 @@ static void exit_usage(int err, const char *argv0, struct option *long_opts,
 	exit(err ? EXIT_FAILURE : EXIT_SUCCESS);
 }
 
+__attribute__((noreturn))
 void test_exit_error(const char *argv0, const char *fmt, ...)
 {
 	va_list ap;
@@ -198,7 +199,7 @@ long int test_parse_long(const char *arg, int base)
 	return val;
 }
 
-int test_parse_retsym(int vfsapi, const char *retsym, int *retval)
+int test_parse_retsym(int vfsapi, const char *retsym, int *retvalp)
 {
 	const struct retval *retvals = get_retvals(vfsapi);
 	int ret = -1;
@@ -212,7 +213,7 @@ int test_parse_retsym(int vfsapi, const char *retsym, int *retval)
 		     !strncmp(name, VFSAPI_PREFIX, VFSAPI_PREFIX_LEN) &&
 		     !strcasecmp(name + VFSAPI_PREFIX_LEN, retsym))) {
 			ret = 0;
-			*retval = retvals[i].val;
+			*retvalp = retvals[i].val;
 			break;
 		}
 

@@ -15,8 +15,9 @@
 
 AUTOMAKE_OPTIONS = 1.13  # for default parallel test harness
 
-AM_CFLAGS = $(libprojfs_cflags)
+AM_CFLAGS = $(WARN_CFLAGS)
 AM_CPPFLAGS = -I@top_srcdir@/include
+AM_LDFLAGS = $(WARN_LDFLAGS)
 
 LDADD = ../lib/libprojfs.la
 

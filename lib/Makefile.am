@@ -18,8 +18,9 @@
 # License along with this library, in the file COPYING; if not,
 # see <http://www.gnu.org/licenses/>.
 
-AM_CFLAGS = $(libprojfs_cflags)
+AM_CFLAGS = $(WARN_CFLAGS)
 AM_CPPFLAGS = -I@top_srcdir@/include
+AM_LDFLAGS = $(WARN_LDFLAGS)
 
 lib_LTLIBRARIES = libprojfs.la
 

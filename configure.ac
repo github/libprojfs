@@ -36,17 +36,12 @@ AC_PROG_SED
 
 AC_SYS_LARGEFILE
 
-libprojfs_cflags='-fno-strict-aliasing'
-libprojfs_cflags+=" -Wall -Wextra"
-libprojfs_cflags+=" -Wmissing-declarations"
-libprojfs_cflags+=" -Wno-sign-compare"
-libprojfs_cflags+=" -Wstrict-prototypes"
-libprojfs_cflags+=" -Wwrite-strings"dnl
+AX_COMPILER_FLAGS()
 
 AC_ARG_ENABLE([debug],
   [AS_HELP_STRING([--enable-debug],
-    [Enable debug output])],
-  [AC_DEFINE(PROJFS_DEBUG, 1, [Enable debugging output])]dnl
+    [Enable libprojfs debugging output])],
+  [AC_DEFINE(PROJFS_DEBUG, 1, [Enable libprojfs debugging output])]
 )dnl
 
 AC_ARG_ENABLE([fuse_debug],
