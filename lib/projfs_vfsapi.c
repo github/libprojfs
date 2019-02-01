@@ -184,6 +184,9 @@ static int convert_result_to_errno(PrjFS_Result result)
 		break;
 
 	case PrjFS_Result_Invalid:
+	case PrjFS_Result_ENotAVirtualizationRoot:
+	case PrjFS_Result_EVirtualizationInvalidOperation:
+	case PrjFS_Result_EVirtualizationRootAlreadyExists:
 	default:
 		ret = EINVAL;	// should imply an internal error, not client's
 	}

@@ -36,41 +36,53 @@ AC_PROG_SED
 
 AC_SYS_LARGEFILE
 
-libprojfs_cflags='-fno-strict-aliasing'
-libprojfs_cflags+=" -Wall -Wextra"
-libprojfs_cflags+=" -Wmissing-declarations"
-libprojfs_cflags+=" -Wno-sign-compare"
-libprojfs_cflags+=" -Wstrict-prototypes"
-libprojfs_cflags+=" -Wwrite-strings"dnl
+AX_COMPILER_FLAGS()
 
 AC_ARG_ENABLE([debug],
   [AS_HELP_STRING([--enable-debug],
-    [Enable debug output])],
-  [AC_DEFINE(PROJFS_DEBUG, 1, [Enable debugging output])]dnl
+    [Enable libprojfs debugging output])]
 )dnl
 
-AC_SUBST([libprojfs_cflags])
+AS_IF([test ":$enable_debug" = ":yes"],
+  [AC_DEFINE(PROJFS_DEBUG, 1, [Enable libprojfs debugging output])]
+)dnl
 
-enable_vfsapi=false
+AC_ARG_ENABLE([fuse_debug],
+  [AS_HELP_STRING([--enable-fuse-debug],
+    [Enable FUSE library debugging output])]
+)dnl
+
+AS_IF([test ":$enable_fuse_debug" = ":yes"],
+  [AC_DEFINE(PROJFS_FUSE_DEBUG, 1, [Enable FUSE library debugging output])]
+)dnl
+
 libprojfs_export_regex='projfs'
 
 AC_ARG_ENABLE([vfs_api],
   [AS_HELP_STRING([--enable-vfs-api],
-    [Enable .NET VFSForGit API])],
+    [Enable .NET VFSForGit API])]
+)dnl
+
+AS_IF([test ":$enable_vfs_api" = ":yes"],
   [AC_DEFINE(PROJFS_VFSAPI, 1, [Enable .NET VFSForGit API])
-    enable_vfsapi=true
-    libprojfs_export_regex='(projfs|PrjFS)'
+   libprojfs_export_regex='(projfs|PrjFS)'
   ]dnl
 )dnl
 
-AM_CONDITIONAL([ENABLE_VFSAPI], [test :$enable_vfsapi = :true])
+AM_CONDITIONAL([ENABLE_VFSAPI], [test ":$enable_vfs_api" = ":yes"])
 AC_SUBST([libprojfs_export_regex])
+
+pkgconfigdir='${libdir}/pkgconfig'
 
 AC_ARG_WITH([pkgconfigdir],
   [AS_HELP_STRING([--with-pkgconfigdir=DIR],
-    [Install pkgconfig file in DIR @<:@LIBDIR/pkgconfig@:>@])],
-  [pkgconfigdir=$withval],
-  [pkgconfigdir='${libdir}/pkgconfig']dnl
+    [Install pkgconfig file in DIR @<:@LIBDIR/pkgconfig@:>@])]
+)dnl
+
+AS_IF([test ":$with_pkgconfigdir" != ":no" &&
+       test ":$with_pkgconfigdir" != ":yes" &&
+       test ":$with_pkgconfigdir" != ":"],
+  [pkgconfigdir="$with_pkgconfigdir"]
 )dnl
 
 AC_SUBST([pkgconfigdir])
@@ -79,24 +91,29 @@ AC_TYPE_PID_T
 AC_TYPE_SIZE_T
 AC_TYPE_UINT64_T
 
-# TODO: for VFS API but can't be conditional; remove if no longer needed
+# TODO: for VFS API but can't be conditional; remove if VFS API migrated
+#       to VFSForGit project
 AC_HEADER_STDBOOL
 AC_TYPE_UINT16_T
 
 AC_CHECK_HEADER([pthread.h], [],
-  [AC_MSG_ERROR(POSIX threads header file not found)]dnl
+  [AC_MSG_ERROR([POSIX threads header file not found])]dnl
 )dnl
 
-AC_CHECK_HEADERS([sys/fanotify.h])
-AC_CHECK_HEADERS([sys/inotify.h])
+AC_CHECK_HEADER([sys/fanotify.h], [],
+  [AC_MSG_ERROR([Linux fanotify header file not found])]dnl
+)dnl
+AC_CHECK_HEADER([sys/inotify.h], [],
+  [AC_MSG_ERROR([Linux inotify header file not found])]dnl
+)dnl
 
-LIBS=''
 # TODO: remove when FUSE no longer used (also Libs.private in projfs.pc)
-AC_SEARCH_LIBS([fuse_new_30], [fuse3])
-AC_SEARCH_LIBS([pthread_create], [pthread])
-
-libprojfs_libs="$LIBS"
-AC_SUBST([libprojfs_libs])
+AC_SEARCH_LIBS([fuse_new_30], [fuse3], [],
+  [AC_MSG_ERROR([FUSE version 3.x library not found])]dnl
+)dnl
+AC_SEARCH_LIBS([pthread_create], [pthread], [],
+  [AC_MSG_ERROR([POSIX threads library not found])]dnl
+)dnl
 
 AC_CHECK_PROGS([DIFF], [diff])
 AC_ARG_VAR([DIFF], [File comparison tool])
