@@ -990,8 +990,7 @@ static void *projfs_loop(void *data)
 	/* open lower directory file descriptor to resolve relative paths
 	 * in file ops
 	 */
-	fs->lowerdir_fd = open(fs->lowerdir, O_DIRECTORY | O_NOFOLLOW
-							 | O_PATH);
+	fs->lowerdir_fd = open(fs->lowerdir, O_DIRECTORY | O_NOFOLLOW);
 	if (fs->lowerdir_fd == -1) {
 		fprintf(stderr, "projfs: failed to open lowerdir: %s: %s\n",
 			fs->lowerdir, strerror(errno));
@@ -999,10 +998,17 @@ static void *projfs_loop(void *data)
 		goto out;
 	}
 
+	char v = 1;
+	res = fsetxattr(fs->lowerdir_fd, USER_PROJECTION_EMPTY, &v, 1, 0);
+	if (res == -1) {
+		res = 2;
+		goto out_close;
+	}
+
 	struct fuse *fuse =
 		fuse_new(&args, &projfs_ops, sizeof(projfs_ops), fs);
 	if (fuse == NULL) {
-		res = 2;
+		res = 3;
 		goto out_close;
 	}
 
@@ -1011,13 +1017,13 @@ static void *projfs_loop(void *data)
 
 	// TODO: defer all signal handling to user, once we remove FUSE
 	if (fuse_set_signal_handlers(se) != 0) {
-		res = 3;
+		res = 4;
 		goto out_session;
 	}
 
 	// TODO: mount with x-gvfs-hide option and maybe others for KDE, etc.
 	if (fuse_mount(fuse, fs->mountdir) != 0) {
-		res = 4;
+		res = 5;
 		goto out_signal;
 	}
 
@@ -1030,7 +1036,7 @@ static void *projfs_loop(void *data)
 	if ((err = fuse_loop_mt(fuse, &loop)) != 0) {
 		if (err > 0)
 			fprintf(stderr, "projfs: %s signal\n", strsignal(err));
-		res = 5;
+		res = 6;
 	}
 
 	fuse_session_unmount(se);
