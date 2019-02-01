@@ -33,29 +33,33 @@ test_expect_success 'create source tree' '
 	ln -s file source/link
 '
 
+projfs_stat() {
+	stat -c '%a %F %g %h %s %u %W %X %Y %Z' $1
+}
+
 test_expect_success 'check directory stat' '
-	stat source/dir | projfs_remove_stat_minutiae >stat.dir.source &&
-	stat target/dir | projfs_remove_stat_minutiae >stat.dir &&
+	projfs_stat source/dir >stat.dir.source &&
+	projfs_stat target/dir >stat.dir &&
 	test_cmp stat.dir stat.dir.source
 '
 
 test_expect_success 'check file stat' '
-	stat source/file | projfs_remove_stat_minutiae >stat.file.source &&
-	stat target/file | projfs_remove_stat_minutiae >stat.file &&
+	projfs_stat source/file >stat.file.source &&
+	projfs_stat target/file >stat.file &&
 	test_cmp stat.file stat.file.source
 '
 
 test_expect_success 'check fifo stat' '
-	stat source/fifo | projfs_remove_stat_minutiae >stat.fifo.source &&
-	stat target/fifo | projfs_remove_stat_minutiae >stat.fifo &&
+	projfs_stat source/fifo >stat.fifo.source &&
+	projfs_stat target/fifo >stat.fifo &&
 	test_cmp stat.fifo stat.fifo.source
 '
 
 # stat source/link once to update atime
 test_expect_success 'check link stat' '
-	stat source/link &&
-	stat source/link | projfs_remove_stat_minutiae >stat.link.source &&
-	stat target/link | projfs_remove_stat_minutiae >stat.link &&
+	projfs_stat source/link &&
+	projfs_stat source/link >stat.link.source &&
+	projfs_stat target/link >stat.link &&
 	test_cmp stat.link stat.link.source
 '
 

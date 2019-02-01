@@ -545,16 +545,6 @@ test_cmp_bin() {
 	cmp "$@"
 }
 
-# projfs_remove_stat_minutiae - filters out filesystem-specific bits of stat(1)
-# responses, to facilitate easy diffs.
-
-projfs_remove_stat_minutiae() {
-	$SED -E \
-		-e "s_File: '?(source|target)/_File: _" \
-		-e 's_Device: [0-9a-f]+h/[0-9]+d\s+_Device: xh/xd _' \
-		-e 's_Inode: [0-9]+\s+_Inode: x _'
-}
-
 # Call any command "$@" but be more verbose about its
 # failure. This is handy for commands like "test" which do
 # not output anything when they fail.
