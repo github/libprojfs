@@ -28,8 +28,6 @@ libprojfs_la_SOURCES = projfs.c projfs_i.h \
 		       $(top_srcdir)/include/projfs.h \
 		       $(top_srcdir)/include/projfs_notify.h
 
-libprojfs_la_LIBADD = @libprojfs_libs@
-
 if ENABLE_VFSAPI
 libprojfs_la_SOURCES += projfs_vfsapi.c \
 			$(top_srcdir)/include/projfs_vfsapi.h
