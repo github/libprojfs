@@ -350,6 +350,7 @@ static void *projfs_op_init(struct fuse_conn_info *conn,
 	cfg->entry_timeout = 0;
 	cfg->attr_timeout = 0;
 	cfg->negative_timeout = 0;
+	cfg->use_ino = 1;
 
 	return projfs_context_fs();
 }
@@ -375,13 +376,14 @@ static int projfs_op_fsync(char const *path, int datasync,
 
 static int projfs_op_mknod(char const *path, mode_t mode, dev_t rdev)
 {
+	(void)rdev;
 	int res = projfs_fuse_proj_dir("mknod", lowerpath(path), 1);
 	if (res)
 		return -res;
 	if (S_ISFIFO(mode))
 		res = mkfifoat(lowerdir_fd(), lowerpath(path), mode);
 	else
-		res = mknodat(lowerdir_fd(), lowerpath(path), mode, rdev);
+		return -ENOSYS;
 	return res == -1 ? -errno : 0;
 }
 
@@ -625,8 +627,8 @@ static int projfs_op_readdir(char const *path, void *buf,
 		}
 		if (filled == 0) {
 			memset(&attr, 0, sizeof(attr));
-			attr.st_ino = d->ent->d_ino,
-				attr.st_mode = d->ent->d_type << 12;
+			attr.st_ino = d->ent->d_ino;
+			attr.st_mode = d->ent->d_type << 12;
 		}
 
 		if (filler(buf, d->ent->d_name, &attr, d->ent->d_off, filled))
