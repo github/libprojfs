@@ -825,11 +825,7 @@ library for your script to use.
   Normalize the value of the environment variable `<var>` to one
   of `auto`, `true`, or `false`.  This allows a test script to
   decide whether to perform a specific test based on a user-supplied
-  environment variable, for example, to skip any large-file tests
-  in the test suite:
-  ```
-  $ PROJFS_TEST_BIGFILES= make test
-  ```
+  environment variable.
 
   If the user sets the variable `<var>` to an empty string or the
   value `false`, then `test_tristate <var>` will normalize the value
@@ -840,6 +836,24 @@ library for your script to use.
   whether to execute or skip a test based on the tri-state value in
   `<var>`, with `true` meaning "test", `false` meaning "do not test",
   and `auto` meaning "automatically decide".
+
+  For example, to skip any large-file tests in the test suite, tests might
+  check first as follows, and then execute any tests involving large files:
+  ``` shell
+  test_tristate PROJFS_TEST_BIGFILES
+  if test "$PROJFS_TEST_BIGFILES" = "false"
+  then
+          skip_all='skipping large-file tests'
+          test_done
+  fi
+
+  ...
+  ```
+  If the user then supplies an empty `PROJFS_TEST_BIGFILES` variable, it
+  would be normalized to `false`, and so large-file tests would be skipped:
+  ```
+  $ PROJFS_TEST_BIGFILES= make test
+  ```
 
 * `test_write_lines <lines>`
 
