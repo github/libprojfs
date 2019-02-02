@@ -338,19 +338,20 @@ $ PROJFS_SKIP_TESTS='t[1-4]?? t000.[1-3]' make test
 Each test script is written as a shell script, and should start
 with the standard `#!/bin/sh`, and an
 assignment to variable `test_description`, like this:
-```
+``` shell
 #!/bin/sh
 
 test_description='xxx test (option --frotz)
 
 This test tries the --frotz option on a projfs mount.
+'
 ```
 
 ### Starting Tests
 
 After assigning `test_description`, the test script should source
 [`test-lib.sh`](test-lib.sh) like this:
-```
+``` shell
 . ./test-lib.sh
 ```
 
@@ -383,7 +384,7 @@ mount point created would be
 
 The `projfs_start` function should be called after the test library is
 loaded:
-```
+``` shell
 . ./test-lib.sh
 
 projfs_start test_projfs_handlers source target || exit 1
@@ -402,7 +403,7 @@ test output.
 
 Assuming your test script called the `projfs_start` function, it must
 also call `projfs_stop` just prior to calling `test_done`, like this:
-```
+``` shell
 projfs_stop || exit 1
  
 test_done
@@ -426,13 +427,13 @@ Here are the "do's":
 * Chain your test assertions.
 
   Write test code like this:
-  ```
+  ``` shell
   echo foo > source/bar &&
   test_cmp target/bar ... &&
   test ...
   ```
   Instead of:
-  ```
+  ``` shell
   echo foo > source/bar
   test_cmp target/bar ...
   test ...
@@ -478,7 +479,7 @@ And here are the "don'ts":
   of verifying that the world given to us works sanely.
 
 * Don't feed the output of a command to a pipe, as in:
-  ```
+  ``` shell
   cmd ... |
   xargs -n 1 basename |
   grep foo
@@ -494,13 +495,13 @@ And here are the "don'ts":
 * Don't use command substitution in a way that discards a command's exit
   code.  When assigning to a variable, the exit code is not discarded,
   e.g.:
-  ```
+  ``` shell
   x=$(cmd ...) &&
   ...
   ```
   is OK because a crash in `cmd ...` will cause the `&&` chain
   to fail, but:
-  ```
+  ``` shell
   test "foo" = "$(cmd ...)"
   ```
   is not OK and a crash could go undetected.
@@ -514,7 +515,7 @@ And here are the "don'ts":
   the test, as any intermediate step can fail and abort the test,
   causing the next test to start in an unexpected directory.  Do so
   inside a subshell if necessary, e.g.:
-  ```
+  ``` shell
   mkdir foo &&
   (
           cd foo &&
@@ -527,7 +528,7 @@ And here are the "don'ts":
 * Don't save and verify the standard error of compound commands, i.e.,
   group commands, subshells, and shell functions (except test helper
   functions like `test_must_fail`) like this:
-  ```
+  ``` shell
   ( cd dir && cmd ... ) 2>error &&
   test_cmp expect error
   ```
@@ -536,7 +537,7 @@ And here are the "don'ts":
   as well, quite possibly throwing off the subsequent checks examining
   the output.  Instead, save only the relevant command's standard
   error:
-  ```
+  ``` shell
   ( cd dir && cmd ... 2>../error ) &&
   test_cmp expect error
   ```
@@ -566,7 +567,7 @@ If you need to skip tests programmatically based on some condition
 detected at test run time, you should do so by using the three-arg form
 of the `test_*` functions (see the
 [Test Harness Library](#test-harness-library) section below), e.g.:
-```
+``` shell
 test_expect_success PIPE 'I need pipes' '
         echo foo | cmd ... &&
         ...
@@ -580,7 +581,7 @@ many tests they're missing.
 If the test code is too hairy for that (i.e., does a lot of setup work
 outside test assertions) you can also skip all remaining tests by
 setting `skip_all` and immediately call `test_done`:
-```
+``` shell
 if ! test_have_prereq PIPE
 then
         skip_all='skipping pipe tests, I/O pipes not available'
@@ -608,7 +609,7 @@ library for your script to use.
   successful.  The `<message>` should state what it is testing.
 
   Example:
-  ```
+  ``` shell
   test_expect_success 'check command output' '
           cmd ... >output &&
           test_cmp expect output
@@ -618,7 +619,7 @@ library for your script to use.
   If you supply three parameters the first will be taken to be a
   prerequisite; see the `test_set_prereq` and `test_have_prereq`
   documentation below:
-  ```
+  ``` shell
   test_expect_success SYMLINKS 'check symlinks' '
           ln -s foo bar &&
           test_cmp foo bar
@@ -627,7 +628,7 @@ library for your script to use.
 
   You can also supply a comma-separated list of prerequisites, in the
   rare case where your test depends on more than one:
-  ```
+  ``` shell
   test_expect_success PIPE,SYMLINKS 'check output to symlink' '
           cmd ... >output &&
           ln -s output sym &&
@@ -684,7 +685,7 @@ library for your script to use.
   implicit use when an third argument is passed to `test_expect_*`) is to
   skip all the tests at the start of the test script if we don't have some
   essential prerequisite:
-  ```
+  ``` shell
   if ! test_have_prereq PIPE
   then
           skip_all='skipping pipe tests, I/O pipes not available'
@@ -699,7 +700,7 @@ library for your script to use.
   If the test outputs its own TAP-formatted results then you should set
   the `test_external_has_tap` variable to a non-zero value before calling
   the first `test_external*` function, e.g.:
-  ```
+  ``` shell
   # The external test will output its own plan
   test_external_has_tap=1
   test_external 'check python output' python "$TEST_DIRECTORY"/t000/test.py
@@ -714,7 +715,7 @@ library for your script to use.
 
   Run a command and ensure that it exits with the given exit code.
   For example:
-  ```
+  ``` shell
   test_expect_success 'check command exit code' '
           echo foo > foo &&
           echo bar > bar &&
@@ -758,7 +759,7 @@ library for your script to use.
 
   Run `<command>` in a subshell after setting any environment
   variables defined by the `<var>=<value>` parameters, e.g.:
-  ```
+  ``` shell
   test_env PATH=/tmp TRACE=true cmd ...
   ```
 
@@ -779,7 +780,7 @@ library for your script to use.
   Check whether a file has the length it is expected to, using an
   `<op>` test operator available to the [`test(1)`][test-man] command.
   For example:
-  ```
+  ``` shell
   test_write_lines 1 2 3 4 5 >foo &&
   test_line_count -gt 4 foo &&
   test_line_count -lt 6 foo &&
@@ -804,7 +805,7 @@ library for your script to use.
   Prepend `<script>` to a list of commands to run to clean up
   at the end of the current test.  If some clean-up command
   fails, the test will not pass.  For example:
-  ```
+  ``` shell
   test_expect_success 'test with cleanup' '
           mkdir foo &&
           test_when_finished "rm -fr foo" &&
@@ -827,7 +828,7 @@ library for your script to use.
   environment variable, for example, to skip any large-file tests
   in the test suite:
   ```
-  PROJFS_TEST_BIGFILES= make test
+  $ PROJFS_TEST_BIGFILES= make test
   ```
 
   If the user sets the variable `<var>` to an empty string or the
@@ -844,11 +845,11 @@ library for your script to use.
 
   Write `<lines>` on standard output, one line per argument.
   Useful to prepare multi-line files in a compact form.  For example,
-  ```
+  ``` shell
   test_write_lines a b c d e f g >foo
   ```
   is a more compact equivalent of:
-  ```
+  ``` shell
   cat >foo <<-EOF
   a
   b
@@ -873,7 +874,7 @@ library for your script to use.
   It halts the execution of the test and spawns a shell in the trash
   directory, allowing the developer to examine the state of the test
   at this point.  Exit the shell to continue the test.  Example:
-  ```
+  ``` shell
   test_expect_success 'test under development' '
           cmd ... >actual &&
           test_pause &&

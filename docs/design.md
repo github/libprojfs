@@ -303,7 +303,7 @@ filesystem level by a call which takes the inode of the directory in which to
 create the sub-directory, and a dentry which defines the name of the new
 sub-directory:
 
-```c
+``` c
 int (*mkdir) (struct inode *,struct dentry *,umode_t);
 ```
 

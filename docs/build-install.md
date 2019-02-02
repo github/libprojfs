@@ -12,27 +12,28 @@ Meson installed by `apt-get` should be sufficient, but on some other
 distributions you may need to locate a newer version than is installed
 by default.
 
-For example, on Ubuntu 18.04:
+For example, on Ubuntu 18.04, as the superuser (use `sudo` as needed):
 ```
-apt-get install -y build-essential pkg-config udev
-apt-get install -y meson
+$ apt-get update
+$ apt-get install -y build-essential pkg-config udev
+$ apt-get install -y meson
 ```
 
 On [Debian stretch][debian-stretch], a more recent version of Meson
 is only available from [`stretch-backports`][debian-meson]:
 ```
-echo 'deb http://deb.debian.org/debian stretch-backports main' >> \
-  /etc/apt/sources.list.d/stretch-backports.list
-apt-get update
+$ echo 'deb http://deb.debian.org/debian stretch-backports main' >> \
+    /etc/apt/sources.list.d/stretch-backports.list
+$ apt-get update
 
-apt-get install -y build-essential pkg-config udev
-apt-get install -y -t=stretch-backports meson
+$ apt-get install -y build-essential pkg-config udev
+$ apt-get install -y -t=stretch-backports meson
 ```
 
 For libprojfs, use the following additional commands:
 ```
-apt-get install -y \
-  attr libattr1-dev automake build-essential dpkg-dev libtool pkg-config
+$ apt-get install -y \
+    attr automake build-essential dpkg-dev libattr1-dev libtool pkg-config
 ```
 
 While it is difficult to provide a comprehensive list of dependencies
@@ -52,24 +53,24 @@ Zip archive) the [`context-node-userdata` branch][libfuse-userdata]
 of our forked libfuse repository, and then build libfuse using Meson
 and Ninja:
 ```
-git clone https://github.com/kivikakk/libfuse.git libfuse-userdata
-cd libfuse-userdata
-git checkout context-node-userdata
+$ git clone https://github.com/kivikakk/libfuse.git libfuse-userdata
+$ cd libfuse-userdata
+$ git checkout context-node-userdata
 
-mkdir build
-cd build
+$ mkdir build
+$ cd build
 
-meson .. && \
-ninja
+$ meson .. && \
+  ninja
 ```
 
 If you wish to install the modified libfuse, you may want to specify
 the installation location when running Meson, and finally run the
 `ninja install` command:
 ```
-meson --prefix=/path/to/install .. && \
-ninja && \
-ninja install
+$ meson --prefix=/path/to/install .. && \
+  ninja && \
+  ninja install
 ```
 
 If you are installing into a system location (e.g., `--prefix=/usr` or
@@ -91,7 +92,7 @@ your system before trying this!
 After installing in a system location such as `/usr`, you may need to
 refresh the linker's cache using [`ldconfig`][ldconfig-man]:
 ```
-sudo ldconfig
+$ sudo ldconfig
 ```
 
 If you choose to leave your modified libfuse library un-installed, or
@@ -106,7 +107,7 @@ build libprojfs with a `-Wl,-R` flag and path.
 Because we have not yet made a tagged, versioned release package,
 you will need to clone our repository:
 ```
-git clone https://github.com/github/libprojfs.git
+$ git clone https://github.com/github/libprojfs.git
 ```
 (Alternatively you could download and unzip a package of the libprojfs
 source code using the "Clone or download" button on this page.)
@@ -116,7 +117,7 @@ Next, run the `autogen.sh` script to generate an [Autoconf][autoconf]
 system location, you may need to supply `CPPFLAGS` and `LDFLAGS`
 to `autogen.sh` too; see the next paragraph for an example.)
 ```
-./autogen.sh
+$ ./autogen.sh
 ```
 (This `autogen.sh` step will not be necessary in the future for those
 who have downloaded a versioned release package of libprojfs.)
@@ -129,11 +130,11 @@ is not installed in a system location, you may want to use the
 `CPPFLAGS` and `LDFLAGS` environment variables to ensure it is found
 by `configure`, for instance:
 ```
-CPPFLAGS=-I/path/to/libfuse \
-LDFLAGS='-L/path/to/libfuse -Wl,-R/path/to/libfuse' \
-./configure && \
-make && \
-make test
+$ CPPFLAGS=-I/path/to/libfuse \
+    LDFLAGS='-L/path/to/libfuse -Wl,-R/path/to/libfuse' \
+    ./configure && \
+  make && \
+  make test
 ```
 
 Running `./configure --help` will output the full set of configuration
@@ -145,7 +146,7 @@ the test provider we are developing against for now), add the
 `--enable-vfs-api` flag to the arguments for `configure`:
 
 ```
-./configure --enable-vfs-api && make && make test
+$ ./configure --enable-vfs-api && make && make test
 ```
 
 Note that as described in the [Getting Started][readme-start] section,
@@ -159,7 +160,7 @@ If you would like to install the library in a location other than
 `/usr/local`, supply the usual `--prefix=/path/to/install` argument
 to the `configure` command, for example:
 ```
-./configure --prefix=/usr && make && make test
+$ ./configure --prefix=/usr && make && make test
 ```
 
 You may then choose to install the library; note that `sudo` may be
@@ -167,8 +168,8 @@ required if you are installing into a system location such as `/usr`
 or `/usr/local`, and you may also want to run `ldconfig` to refresh
 the linker's shared library cache:
 ```
-sudo make install
-sudo ldconfig
+$ sudo make install
+$ sudo ldconfig
 ```
 
 If you do not install the library into a system location where your
@@ -197,12 +198,12 @@ first, including [ICU][icu], [OpenSSL][openssl], and optionally
 although we have only found ICU and OpenSSL to be required (but YMMV).
 
 On an Ubuntu 18.10 system, the following commands should install
-the .NET Core SDK and its dependencies:
+the .NET Core SDK and its dependencies (use `sudo` as needed):
 ```
-wget -q \
-  https://packages.microsoft.com/config/ubuntu/18.10/packages-microsoft-prod.deb
-sudo dpkg -i packages-microsoft-prod.deb
-sudo apt-get install apt-transport-https
+$ wget -q \
+    https://packages.microsoft.com/config/ubuntu/18.10/packages-microsoft-prod.deb
+$ dpkg -i packages-microsoft-prod.deb
+$ apt-get install apt-transport-https
 ```
 
 Instructions for other distributions and versions are given on Microsoft's
@@ -219,8 +220,8 @@ Once you have the .NET Core SDK and its dependencies installed, you
 should be able to run the `dotnet` command and build a
 [small example .NET application][dotnet-hello]:
 ```
-dotnet new console && \
-dotnet run
+$ dotnet new console && \
+  dotnet run
 ```
 
 If you want to avoid the default .NET Core behavior of collecting
@@ -229,22 +230,22 @@ set the `DOTNET_CLI_TELEMETRY_OPTOUT` environment variable to `1`.
 We have also found the following other environment variables useful
 in simplifying some .NET defaults:
 ```
-export DOTNET_CLI_TELEMETRY_OPTOUT="1"
-export DOTNET_SKIP_FIRST_TIME_EXPERIENCE="1"
-export NUGET_XMLDOC_MODE="skip"
+$ export DOTNET_CLI_TELEMETRY_OPTOUT="1"
+$ export DOTNET_SKIP_FIRST_TIME_EXPERIENCE="1"
+$ export NUGET_XMLDOC_MODE="skip"
 ```
 
 Finally, if you installed the .NET Core packages into a non-standard
 location, you may need to set the `DOTNET_ROOT` variable before running
 the `dotnet` command, e.g.:
 ```
-DOTNET_ROOT=/usr/local/share/dotnet dotnet new --help
+$ DOTNET_ROOT=/usr/local/share/dotnet dotnet new --help
 ```
 
 If you are using Docker containers, you may find it simplest to use
 the latest available [`microsoft/dotnet` image][dotnet-docker]
 in your `Dockerfile`:
-```
+``` dockerfile
 FROM microsoft/dotnet:latest
 ```
 
@@ -260,13 +261,14 @@ own pull requests.
 To build the VFSForGit MirrorProvider, first check out (or download
 as a Zip archive) the repository:
 ```
-git clone https://github.com/Microsoft/VFSForGit.git -b features/linuxprototype
+$ git clone https://github.com/Microsoft/VFSForGit.git \
+    -b features/linuxprototype
 ```
 
 Next, run the `MirrorProvider/Scripts/Linux/Build.sh` script:
 ```
-cd MirrorProvider/Scripts/Linux
-./Build.sh
+$ cd MirrorProvider/Scripts/Linux
+$ ./Build.sh
 ```
 
 During your first build, the [`dotnet build`][dotnet-build] command
@@ -283,8 +285,8 @@ If you installed libprojfs into a system location like `/usr`, then
 you should be able to run the two other scripts in the
 `MirrorProvider/Scripts/Linux` directory as follows:
 ```
-./MirrorProvider_Clone.sh && \
-./MirrorProvider_Mount.sh
+$ ./MirrorProvider_Clone.sh && \
+  ./MirrorProvider_Mount.sh
 ```
 
 If the `libprojfs.so` dynamic library you built in the preceding
@@ -293,9 +295,9 @@ or if it's installed in a custom location, you will need to provide
 that path in the `LD_LIBRARY_PATH` environment variable, e.g., to
 use the `libprojfs.so` within your `libprojfs` build directory:
 ```
-export LD_LIBRARY_PATH=/path/to/libprojfs/lib/.libs
-./MirrorProvider_Clone.sh` && \
-./MirrorProvider_Mount.sh
+$ export LD_LIBRARY_PATH=/path/to/libprojfs/lib/.libs
+$ ./MirrorProvider_Clone.sh` && \
+  ./MirrorProvider_Mount.sh
 ```
 
 The `MirrorProvider_Clone.sh` script will set up an "enlistment"
@@ -303,8 +305,8 @@ configuration file between a source directory and a target directory;
 by default, these are `~/PathToMirror` and `~/TestRoot`, but
 you can override these defaults:
 ```
-./MirrorProvider_Clone.sh /path/to/source /path/to/target && \
-./MirrorProvider_Mount.sh /path/to/target
+$ ./MirrorProvider_Clone.sh /path/to/source /path/to/target && \
+  ./MirrorProvider_Mount.sh /path/to/target
 ```
 
 The `MirrorProvider_Clone.sh` script simply creates the file
@@ -347,8 +349,8 @@ Here is an example test run of `MirrorProvider_Mount.sh` and the
 currently expected output.  First, create some "content" in the
 form of directories in `~/PathToMirror`:
 ```
-mkdir ~/PathToMirror/foo
-mkdir -p ~/PathToMirror/bar/123/abc
+$ mkdir ~/PathToMirror/foo
+$ mkdir -p ~/PathToMirror/bar/123/abc
 ```
 
 Now start MirrorProvider; it should start successfully and
@@ -358,7 +360,7 @@ compiled libprojfs but not installed it, and that you supplied an
 so that the location of your modified libfuse is in the runtime library
 search path of `libprojfs.so`.
 ```
-LD_LIBRARY_PATH=/path/to/libprojfs/lib/.libs \
+$ LD_LIBRARY_PATH=/path/to/libprojfs/lib/.libs \
   ./MirrorProvider_Mount.sh 
 Mounting /home/user/TestRoot
 Virtualization instance started successfully
@@ -385,11 +387,11 @@ already being handled by libprojfs and the MirrorProvider process.
 Now, in another shell, visit the projected filesystem and explore the
 directory tree:
 ```
-cd ~/TestRoot/src
-ls
-ls bar
-ls bar/123
-ls bar/123/abc
+$ cd ~/TestRoot/src
+$ ls
+$ ls bar
+$ ls bar/123
+$ ls bar/123/abc
 ```
 
 In the first shell session where MirrorProvider is running, you should see
@@ -403,7 +405,7 @@ OnEnumerateDirectory(0, 'bar/123/abc', 14403, /usr/bin/ls)
 If you then create and delete a few directories inside `~/TestRoot/src`,
 like this, in the second shell session:
 ```
-mkdir -p xxx/yyy
+$ mkdir -p xxx/yyy
 ```
 
 then in the MirrorProvider shell session, you should see:
