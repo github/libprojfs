@@ -1016,6 +1016,37 @@ out:
 	return NULL;
 }
 
+/**
+ * @return 1 if dir is empty, 0 if not, -1 if an error occurred (errno set)
+ */
+static int check_dir_empty(const char *path)
+{
+	int err, is_empty = 1;
+	struct dirent *e;
+	DIR *d = opendir(path);
+	if (!d)
+		return -1;
+
+	while (1) {
+		errno = 0;
+		e = readdir(d);
+		if (e == NULL) {
+			err = errno;
+			closedir(d);
+			if (err == 0)
+				return is_empty;
+			errno = err;
+			return -1;
+		}
+
+		if (strcmp(e->d_name, ".") == 0 ||
+				strcmp(e->d_name, "..") == 0)
+			; /* ignore */
+		else
+			is_empty = 0;
+	}
+}
+
 static void *projfs_loop(void *data)
 {
 	struct projfs *fs = (struct projfs *)data;
@@ -1043,15 +1074,27 @@ static void *projfs_loop(void *data)
 		goto out;
 	}
 
-	res = fsetxattr(fs->lowerdir_fd, USER_PROJECTION_EMPTY, &v, 1, 0);
+	/* mark lowerdir as needing projection if it's empty (because the
+	 * provider creates it for us before we start running) -- probably want
+	 * to modify this behaviour in the future */
+	res = check_dir_empty(fs->lowerdir);
 	if (res == -1) {
 		res = 2;
 		goto out_close;
 	}
 
+	if (res == 1) {
+		res = fsetxattr(
+			fs->lowerdir_fd, USER_PROJECTION_EMPTY, &v, 1, 0);
+		if (res == -1) {
+			res = 3;
+			goto out_close;
+		}
+	}
+
 	fuse = fuse_new(&args, &projfs_ops, sizeof(projfs_ops), fs);
 	if (fuse == NULL) {
-		res = 3;
+		res = 4;
 		goto out_close;
 	}
 
@@ -1060,13 +1103,13 @@ static void *projfs_loop(void *data)
 
 	// TODO: defer all signal handling to user, once we remove FUSE
 	if (fuse_set_signal_handlers(se) != 0) {
-		res = 4;
+		res = 5;
 		goto out_session;
 	}
 
 	// TODO: mount with x-gvfs-hide option and maybe others for KDE, etc.
 	if (fuse_mount(fuse, fs->mountdir) != 0) {
-		res = 5;
+		res = 6;
 		goto out_signal;
 	}
 
@@ -1078,7 +1121,7 @@ static void *projfs_loop(void *data)
 	if ((err = fuse_loop_mt(fuse, &loop)) != 0) {
 		if (err > 0)
 			fprintf(stderr, "projfs: %s signal\n", strsignal(err));
-		res = 6;
+		res = 7;
 	}
 
 	fuse_session_unmount(se);
