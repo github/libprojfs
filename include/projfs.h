@@ -100,6 +100,14 @@ struct projfs *projfs_new(const char *lowerdir, const char *mountdir,
 			  size_t handlers_size, void *user_data);
 
 /**
+ * Retrieve the private user data from a projfs handle.
+ *
+ * @param[in] fs Projected filesystem handle.
+ * @return The user_data reference as passed to \p projfs_new().
+ */
+void *projfs_get_user_data(struct projfs *fs);
+
+/**
  * Start a projfs filesystem.
  * TODO: doxygen
  */

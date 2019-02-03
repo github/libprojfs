@@ -1016,6 +1016,11 @@ out:
 	return NULL;
 }
 
+void *projfs_get_user_data(struct projfs *fs)
+{
+	return fs->user_data;
+}
+
 /**
  * @return 1 if dir is empty, 0 if not, -1 if an error occurred (errno set)
  */
