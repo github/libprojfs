@@ -139,6 +139,7 @@ static const char *get_program_name(const char *program)
 	return program;
 }
 
+__attribute__((noreturn))
 static void exit_usage(int err, const char *argv0, struct option *long_opts,
 		       const char *args_usage)
 {
