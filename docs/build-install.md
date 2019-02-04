@@ -152,7 +152,16 @@ $ ./configure && make && make test
 Running `./configure --help` will output the full set of configuration
 options available, including the usual `--prefix` option.
 
-However, unless you installed your modified libfuse library into a system
+To build libprojfs with the VFSForGit API option (which is
+required if you plan to run a VFSForGit "provider" such as MirrorProvider,
+the test provider we are developing against for now), add the
+`--enable-vfs-api` flag to the arguments for `configure`:
+
+```
+$ ./configure --enable-vfs-api && make && make test
+```
+
+Note that unless you installed your modified libfuse library into a system
 location, you will need to ensure that the `configure` script finds your
 libfuse installation by setting the `CPPFLAGS` and `LDFLAGS` environment
 variables appropriately.  For example (but check first that the paths you
@@ -172,16 +181,7 @@ The `-Wl,-R` option is shorthand for `-Wl,-rpath`; the
 [`-R` or `-rpath` suffix][ld-rpath] is passed to the linker
 as a runtime library search path.
 
-To build libprojfs with the VFSForGit API option (which is
-required if you plan to run a VFSForGit "provider" such as MirrorProvider
-the test provider we are developing against for now), add the
-`--enable-vfs-api` flag to the arguments for `configure`:
-
-```
-$ ./configure --enable-vfs-api && make && make test
-```
-
-Note that as described in the [Getting Started][readme-start] section,
+Also note that as described in the [Getting Started][readme-start] section,
 support for `user.*` extended attributes will be required for libprojfs
 to function, including the test suite, which may fail if extended
 attributes are not available on the filesystem used to build libprojfs.
@@ -207,7 +207,9 @@ $ sudo ldconfig
 If you do not install the library into a system location where your
 linker will automatically find it, you will need to supply a path to
 its build location in the `LD_LIBRARY_PATH` environment variable when
-running the MirrorProvider scripts, as shown in the section below.
+running the MirrorProvider scripts, as shown in the
+[Building and Running MirrorProvider](#building-and-running-mirrorprovider)
+section below.
 
 ## Installing Microsoft .NET Core SDK
 
@@ -321,8 +323,12 @@ $ ./MirrorProvider_Clone.sh && \
   ./MirrorProvider_Mount.sh
 ```
 
-If the `libprojfs.so` dynamic library you built in the preceding
-[Building libprojfs](#building-libprojfs) section is not installed,
+The libprojfs library you built in the preceding
+[Building libprojfs](#building-libprojfs) section must have been
+configured with the `--enable-vfs-api` option in order for it to
+support the VFSForGit API.
+
+Further, if your libprojfs library is not installed,
 or if it's installed in a custom location, you will need to provide
 that path in the `LD_LIBRARY_PATH` environment variable.
 
