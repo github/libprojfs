@@ -30,8 +30,11 @@
 #include <unistd.h>
 
 #include "projfs.h"
-#include "projfs_i.h"
 #include "projfs_vfsapi.h"
+
+/* NOTE: projfs_i.h should not be included;
+ *       use the public projfs API only in VFS code
+ */
 
 struct _PrjFS_FileHandle
 {
