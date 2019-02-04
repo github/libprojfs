@@ -9,7 +9,10 @@ cd "$(dirname "$0")"
 ./projfs image develop
 ./projfs develop configure
 ./projfs develop make
-./projfs develop test
+./projfs develop test || (
+	cat ../t/test-suite.log;
+	exit 1
+)
 
 ./projfs image vfs
 ./projfs vfs restore

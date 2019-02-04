@@ -75,6 +75,7 @@ def tests(images, force: false)
   puts "test: checking that touching a file is recognised"
 
   id = 16.times.map { ("a".."z").to_a.sample(1) }.join
+  images["integrate"].exec("--", "ls", "-la", "TestRoot/src")
   images["integrate"].exec("--", "touch", "TestRoot/src/#{id}")
   msg = wait_for("integrate", integration, ["OnNewFileCreated (isDirectory: False): #{id}"])
   images["integrate"].exec("--", "rm", "TestRoot/src/#{id}")

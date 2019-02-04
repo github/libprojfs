@@ -487,7 +487,7 @@ the `fuse` module in its Host OS.
 The [`docker run`][docker-run] command will need at least the
 following arguments:
 ```
---device /dev/fuse --cap-add SYS_ADMIN --pid=host
+--device /dev/fuse --cap-add SYS_ADMIN --pid=host --security-opt apparmor:unconfined
 ```
 and you may also want to use the `--user <user|pid>` argument to
 specify the user ID which should run the libprojfs process.

@@ -10,6 +10,7 @@ WORKDIR /data/projfs
 RUN set -ex && \
     apt-get update -qq && \
     BUILD_DEPS=' \
+            attr \
             automake \
             build-essential \
             libtool \
