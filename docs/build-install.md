@@ -64,19 +64,22 @@ $ meson .. && \
   ninja
 ```
 
-If you wish to install the modified libfuse, you may want to specify
-the installation location when running Meson, and finally run the
-`ninja install` command:
+If you wish to install the modified libfuse somewhere other than
+the default `/usr/local` system location, you may wish to supply
+that path in the `--prefix` option when running Meson.  Note, though,
+that the `DESTDIR` environment variable can also be used; see below
+for an example.
+
+Finally, run the `ninja install` command as the superuser so it can
+set the necessary permissions on the libfuse binaries:
 ```
 $ meson --prefix=/path/to/install .. && \
   ninja && \
-  ninja install
+  sudo ninja install
 ```
 
-If you are installing into a system location (e.g., `--prefix=/usr` or
-`--prefix=/usr/local`), you will likely need to use `sudo ninja install`.
-
-**Please note** that in this case you should be *very cautious* not to
+**Please note** that if you choose to install into a system location
+such as `/usr` or `/usr/local`, you should be *very cautious* not to
 overwrite your distribution's default libfuse v3.x package, if one
 is already in place!
 
@@ -95,12 +98,30 @@ refresh the linker's cache using [`ldconfig`][ldconfig-man]:
 $ sudo ldconfig
 ```
 
-If you choose to leave your modified libfuse library un-installed, or
-install it into a custom location, you will need to supply the path
-to this location when building libprojfs (see below) and possibly
-also in your `LD_LIBRARY_PATH` environment variable when running the
+If you choose not to install your modified libfuse into a system
+location, you will still likely benefit from installing it into
+at least a working directory, for several reasons.  First, libprojfs
+will expect the version 3.x `fuse.h` to be within a `fuse3` directory,
+so having it installed for you under such a path is convenient.
+
+Second, the libfuse installation (if run as the superuser) will
+set the setuid flag on the [`fusermount3(1)`][libfuse-mount3] binary,
+which is required to allow non-privileged users to mount virtual
+filesystems (like libprojfs!)
+
+To install libfuse into such a working location, you can use the
+`--prefix` Meson option, or the `DESTDIR` environment variable when
+running `ninja install`, as shown below:
+```
+sudo DESTDIR=/path/to/libfuse-userdata-install ninja install
+```
+
+Whether you use the `--prefix` Meson option or the `DESTDIR`
+variable, you will need to supply the path to this location when
+building libprojfs (see below).  You may also need to supply this
+path in your `LD_LIBRARY_PATH` environment variable when running the
 [VFSForGit `MirrorProvider`][vfs4git-mirror] test programs, unless you
-build libprojfs with a `-Wl,-R` flag and path.
+build libprojfs with the `-Wl,-R` option (again, see below).
 
 ## Building libprojfs
 
@@ -123,25 +144,16 @@ $ ./autogen.sh
 who have downloaded a versioned release package of libprojfs.)
 
 The basic build process at this point is the typical Autoconf and
-[Make][make] one, except that you will need to ensure that the
-`configure` script finds your installation or build of the modified
-`libfuse.so` from the previous step.  If your custom libfuse library
-is not installed in a system location, you may want to use the
-`CPPFLAGS` and `LDFLAGS` environment variables to ensure it is found
-by `configure`, for instance:
+[Make][make] one, in effect:
 ```
-$ CPPFLAGS=-I/path/to/libfuse \
-    LDFLAGS='-L/path/to/libfuse -Wl,-R/path/to/libfuse' \
-    ./configure && \
-  make && \
-  make test
+$ ./configure && make && make test
 ```
 
 Running `./configure --help` will output the full set of configuration
 options available, including the usual `--prefix` option.
 
 To build libprojfs with the VFSForGit API option (which is
-required if you plan to run a VFSForGit "provider" such as MirrorProvider
+required if you plan to run a VFSForGit "provider" such as MirrorProvider,
 the test provider we are developing against for now), add the
 `--enable-vfs-api` flag to the arguments for `configure`:
 
@@ -149,7 +161,27 @@ the test provider we are developing against for now), add the
 $ ./configure --enable-vfs-api && make && make test
 ```
 
-Note that as described in the [Getting Started][readme-start] section,
+Note that unless you installed your modified libfuse library into a system
+location, you will need to ensure that the `configure` script finds your
+libfuse installation by setting the `CPPFLAGS` and `LDFLAGS` environment
+variables appropriately.  For example (but check first that the paths you
+supply actually contain `fuse3/fuse.h` for the `-I` option and `libfuse3.so`
+for the `-L` and `-Wl,-R` options; you may need to append additional path
+segments such as `x86_64-linux-gnu` or similar subdirectories):
+```
+$ CPPFLAGS=-I/path/to/libfuse/include \
+    LDFLAGS='-L/path/to/libfuse/lib -Wl,-R/path/to/libfuse/lib' \
+    ./configure && \
+  make && \
+  make test
+```
+
+The `-Wl,-R` option is shorthand for `-Wl,-rpath`; the
+[`-Wl,<args>` compiler option][gcc-wl] ensures the directory given in the
+[`-R` or `-rpath` suffix][ld-rpath] is passed to the linker
+as a runtime library search path.
+
+Also note that as described in the [Getting Started][readme-start] section,
 support for `user.*` extended attributes will be required for libprojfs
 to function, including the test suite, which may fail if extended
 attributes are not available on the filesystem used to build libprojfs.
@@ -175,7 +207,9 @@ $ sudo ldconfig
 If you do not install the library into a system location where your
 linker will automatically find it, you will need to supply a path to
 its build location in the `LD_LIBRARY_PATH` environment variable when
-running the MirrorProvider scripts, as shown in the section below.
+running the MirrorProvider scripts, as shown in the
+[Building and Running MirrorProvider](#building-and-running-mirrorprovider)
+section below.
 
 ## Installing Microsoft .NET Core SDK
 
@@ -289,11 +323,20 @@ $ ./MirrorProvider_Clone.sh && \
   ./MirrorProvider_Mount.sh
 ```
 
-If the `libprojfs.so` dynamic library you built in the preceding
-[Building libprojfs](#building-libprojfs) section is not installed,
+The libprojfs library you built in the preceding
+[Building libprojfs](#building-libprojfs) section must have been
+configured with the `--enable-vfs-api` option in order for it to
+support the VFSForGit API.
+
+Further, if your libprojfs library is not installed,
 or if it's installed in a custom location, you will need to provide
-that path in the `LD_LIBRARY_PATH` environment variable, e.g., to
-use the `libprojfs.so` within your `libprojfs` build directory:
+that path in the `LD_LIBRARY_PATH` environment variable.
+
+For instance, to use the `libprojfs.so` shared library without having
+to install it (and assuming you supplied the location of your modified
+libfuse to the linker by using the `-Wl,-R` compiler option when configuring
+your libprojfs build), you may reference the `lib/.libs` hidden directory
+that was created by the libprojfs build process:
 ```
 $ export LD_LIBRARY_PATH=/path/to/libprojfs/lib/.libs
 $ ./MirrorProvider_Clone.sh` && \
@@ -356,7 +399,7 @@ $ mkdir -p ~/PathToMirror/bar/123/abc
 Now start MirrorProvider; it should start successfully and
 wait for a keypress to exit.  The example below assumes that you have
 compiled libprojfs but not installed it, and that you supplied an
-`-Wl,-R/path/to/libfuse` option in `LDFLAGS` when building libprojfs,
+`-Wl,-R/path/to/libfuse/lib` option in `LDFLAGS` when building libprojfs,
 so that the location of your modified libfuse is in the runtime library
 search path of `libprojfs.so`.
 ```
@@ -467,6 +510,7 @@ specify the user ID which should run the libprojfs process.
 [dotnet-pkgs]: https://packages.microsoft.com/
 [dotnet-telemetry]: https://docs.microsoft.com/en-us/dotnet/core/tools/telemetry
 [dotnet-ubuntu]: https://dotnet.microsoft.com/download/linux-package-manager/ubuntu18-04/sdk-current
+[gcc-wl]: https://gcc.gnu.org/onlinedocs/gcc/Link-Options.html#index-Wl
 [gnu-build]: https://www.gnu.org/savannah-checkouts/gnu/autoconf/manual/autoconf-2.69/html_node/The-GNU-Build-System.html#The-GNU-Build-System
 [gvfs]: https://wiki.gnome.org/Projects/gvfs
 [gvfs-gio]: https://developer.gnome.org/gio/stable/
@@ -475,8 +519,10 @@ specify the user ID which should run the libprojfs process.
 [icu]: http://site.icu-project.org/home
 [inotify]: https://github.com/torvalds/linux/blob/master/include/uapi/linux/inotify.h
 [kerberos]: https://web.mit.edu/kerberos/
+[ld-rpath]: https://sourceware.org/binutils/docs-2.32/ld/Options.html#index-runtime-library-search-path
 [ldconfig-man]: http://man7.org/linux/man-pages/man8/ldconfig.8.html
 [libfuse]: https://github.com/libfuse/libfuse
+[libfuse-mount3]: http://man7.org/linux/man-pages/man1/fusermount3.1.html
 [libfuse-userdata]: https://github.com/kivikakk/libfuse/tree/context-node-userdata
 [libunwind]: https://www.nongnu.org/libunwind/
 [lttng]: https://lttng.org/
