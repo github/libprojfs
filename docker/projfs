@@ -146,8 +146,8 @@ integrate = Project.new('integrate',
     clone: [["env", "PATH_TO_MIRROR=/data/PathToMirror", "TEST_ROOT=/data/integrate/TestRoot", "/data/vfs/src/MirrorProvider/Scripts/Linux/MirrorProvider_Clone.sh"]],
     mount: [["env", "TEST_ROOT=/data/integrate/TestRoot", "/data/vfs/src/MirrorProvider/Scripts/Linux/MirrorProvider_Mount.sh"]],
   },
-  options: ['--device', '/dev/fuse', '--cap-add', 'SYS_ADMIN', '-i', '--security-opt', 'apparmor:unconfined'],
-  run_as_root: true)
+  build_options: ['--build-arg', "UID=#{Process.uid}"],
+  options: ['--device', '/dev/fuse', '--cap-add', 'SYS_ADMIN', '-i', '--security-opt', 'apparmor:unconfined'])
 
 images = {
   "fuse3" => fuse3,
