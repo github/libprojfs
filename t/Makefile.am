@@ -70,8 +70,9 @@ TESTS += t500-vfs-mirror-read.t \
 	 t702-vfs-event-deny.t \
 	 t703-vfs-event-null.t \
 	 t704-vfs-event-allow.t
-	 
-endif ENABLE_VFSAPI
+else !ENABLE_VFSAPI
+SKIP_TESTS = t[5-9]??
+endif !ENABLE_VFSAPI
 
 EXTRA_DIST = README.md chainlint.sed \
 	     test-lib.sh test-lib-event.sh test-lib-functions.sh $(TESTS)
@@ -93,12 +94,15 @@ prove: clean-mounts clean-output $(check_PROGRAMS)
 	@if test ":$(PROVE)" != ":"; \
 	then \
 		prove_dir="."; \
-		state_opt=`echo "$(PROJFS_PROVE_OPTS)" | $(GREP) -- --state=`; \
+		state_opt=`echo "$(PROJFS_PROVE_OPTS)" | \
+			$(GREP) -- --state=`; \
 		if test ":$$state_opt" != ":" && test -f "$(PROVE_FILE)"; \
 		then \
 			prove_dir=""; \
 		fi && \
-		$(PROVE) --exec $(SHELL) $(PROJFS_PROVE_OPTS) $$prove_dir; \
+		PROJFS_SKIP_TESTS="$(SKIP_TESTS) $$PROJFS_SKIP_TESTS" \
+			$(PROVE) --exec $(SHELL) \
+				$(PROJFS_PROVE_OPTS) $$prove_dir; \
 		$(RM) -r "$(TEST_MOUNTS_DIR)" "/tmp/$(TEST_MOUNTS_DIR)"; \
 	else \
 		echo "No 'prove' TAP harness available." && exit 1; \
