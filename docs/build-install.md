@@ -134,9 +134,7 @@ $ git clone https://github.com/github/libprojfs.git
 source code using the "Clone or download" button on this page.)
 
 Next, run the `autogen.sh` script to generate an [Autoconf][autoconf]
-`configure` script.  (If you don't have your modified libfuse in a
-system location, you may need to supply `CPPFLAGS` and `LDFLAGS`
-to `autogen.sh` too; see the next paragraph for an example.)
+`configure` script:
 ```
 $ ./autogen.sh
 ```
