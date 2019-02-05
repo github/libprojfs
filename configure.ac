@@ -99,6 +99,9 @@ AC_TYPE_UINT16_T
 AC_CHECK_HEADER([pthread.h], [],
   [AC_MSG_ERROR([POSIX threads header file not found])]dnl
 )dnl
+AC_SEARCH_LIBS([pthread_create], [pthread], [],
+  [AC_MSG_ERROR([POSIX threads library not found])]dnl
+)dnl
 
 AC_CHECK_HEADER([sys/fanotify.h], [],
   [AC_MSG_ERROR([Linux fanotify header file not found])]dnl
@@ -107,12 +110,21 @@ AC_CHECK_HEADER([sys/inotify.h], [],
   [AC_MSG_ERROR([Linux inotify header file not found])]dnl
 )dnl
 
-# TODO: remove when FUSE no longer used (also Libs.private in projfs.pc)
-AC_SEARCH_LIBS([fuse_new_30], [fuse3], [],
-  [AC_MSG_ERROR([FUSE version 3.x library not found])]dnl
+AC_CHECK_HEADER([attr/xattr.h], [],
+  [AC_MSG_ERROR([Extended attributes header file not found])]dnl
 )dnl
-AC_SEARCH_LIBS([pthread_create], [pthread], [],
-  [AC_MSG_ERROR([POSIX threads library not found])]dnl
+AC_SEARCH_LIBS([fsetxattr], [attr], [],
+  [AC_MSG_ERROR([Extended attributes library not found])]dnl
+)dnl
+
+# TODO: remove when FUSE no longer used (also Libs.private in projfs.pc)
+AC_CHECK_HEADER([fuse3/fuse.h], [],
+  [AC_MSG_ERROR([FUSE version 3.2+ header file not found])],
+  [@%:@define FUSE_USE_VERSION 32]dnl
+)dnl
+# NOTE: checking for fuse_loop_mt_31() ensures libfuse version 3.2 or higher
+AC_SEARCH_LIBS([fuse_loop_mt_31], [fuse3], [],
+  [AC_MSG_ERROR([FUSE version 3.2+ library not found])]dnl
 )dnl
 
 AC_CHECK_PROGS([DIFF], [diff])
