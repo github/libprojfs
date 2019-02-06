@@ -17,7 +17,7 @@
 /libprojfs-*.tar.*z
 /ltmain.sh
 /m4/*
-!/m4/ax_*.m4
+!/m4/ax*.m4
 /missing
 /projfs.pc
 /t/.prove

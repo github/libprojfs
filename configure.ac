@@ -76,8 +76,37 @@ AC_SUBST([libprojfs_export_regex])
 AC_CHECK_PROGS([DIFF], [diff])
 AC_ARG_VAR([DIFF], [File comparison tool])
 
+AC_CHECK_PROGS([PKGCONFIG], [pkg-config])
+AC_ARG_VAR([PKGCONFIG], [Package configuration tool])
+
 AC_CHECK_PROGS([PROVE], [prove])
 AC_ARG_VAR([PROVE], [TAP harness command, e.g., 'prove -v'])
+
+# TODO: remove explicit --with-libfusepkg when we no longer need a custom
+# libfuse, and/or when we no longer use FUSE at all
+AC_ARG_WITH([libfusepkg],
+  [AS_HELP_STRING([--with-libfusepkg=PCFILE],
+    [Use FUSE library with pkg-config .pc file PCFILE])]
+)dnl
+
+# NOTE: altering user-supplied CPPFLAGS and LDFLAGS is normally frowned upon,
+#       but we want to make using a custom libfuse installation easy
+AS_IF([test ":$with_libfusepkg" != ":no" &&
+       test ":$with_libfusepkg" != ":yes" &&
+       test ":$with_libfusepkg" != ":"],
+  [AC_MSG_NOTICE([querying pkg-config using $with_libfusepkg file])
+   fuse_includedir=$("$PKGCONFIG" "$with_libfusepkg" --variable=includedir) ||
+     AC_MSG_ERROR([Failed to get libfuse include path using $with_libfusepkg])
+   fuse_libdir=$("$PKGCONFIG" "$with_libfusepkg" --variable=libdir) ||
+     AC_MSG_ERROR([Failed to get libfuse library path using $with_libfusepkg])
+   fuse_cppflags="-I$fuse_includedir"
+   AXLOCAL_PREPEND_FLAG([$fuse_cppflags], [CPPFLAGS])dnl
+   fuse_ldflags="-Wl,-R$fuse_libdir"
+   AXLOCAL_PREPEND_FLAG([$fuse_ldflags], [LDFLAGS])dnl
+   fuse_ldflags="-L$fuse_libdir"
+   AXLOCAL_PREPEND_FLAG([$fuse_ldflags], [LDFLAGS])dnl
+  ]dnl
+)dnl
 
 pkgconfigdir='${libdir}/pkgconfig'
 
