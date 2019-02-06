@@ -31,18 +31,13 @@ test_expect_success 'create links' '
 	ln -s file target/symlink
 '
 test_expect_success 'check link stat' '
-	stat target/file >link.file.stat &&
-	stat target/link >link.stat &&
-	grep "Inode: " link.file.stat | awk "{print \$4}" >inode &&
-	grep "Inode: $(cat inode)" link.stat
+	test "$(stat -c %i target/file)" -eq "$(stat -c %i target/link)"
 '
 
 test_expect_success 'check symlink stat' '
-	stat target/symlink >symlink.stat &&
-	readlink target/symlink > symlink.read &&
-	grep "^file$" symlink.read &&
-	grep "symbolic link" symlink.stat &&
-	grep "Access: (0777/lrwxrwxrwx)" symlink.stat
+	test "$(readlink target/symlink)" = file &&
+	test "$(stat -c %F target/symlink)" = "symbolic link" &&
+	test $(stat -c %04a target/symlink) -eq 0777
 '
 
 projfs_stop || exit 1

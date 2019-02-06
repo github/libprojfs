@@ -24,13 +24,14 @@ Check that the filesystem stat function works as expected.
 
 projfs_start test_projfs_simple source target || exit 1
 
-test_expect_success 'check statfs' '
-	stat -f target > stat &&
-	grep "Type: fuseblk" stat &&
-	grep "Blocks: Total: " stat | awk "{print \$3}" > stat.blocks.total &&
-	grep "Inodes: Total: " stat | awk "{print \$3}" > stat.inodes.total &&
-	stat -f . | grep "Blocks: Total: "`cat stat.blocks.total` &&
-	stat -f . | grep "Inodes: Total: "`cat stat.inodes.total`
+test_expect_success 'check statfs type' '
+	test "$(stat -f -c %T target)" = fuseblk
+'
+
+test_expect_success 'check statfs data' '
+	stat -f -c "%b %c" source > stat.source &&
+	stat -f -c "%b %c" target > stat.target &&
+	test_cmp stat.source stat.target
 '
 
 projfs_stop || exit 1

@@ -38,38 +38,38 @@ test_expect_success 'create source tree' '
 '
 
 test_expect_success 'chmod' '
-	stat source/xyz | grep "Access: (0600/-rw-------)" &&
+	test $(stat -c %04a source/xyz) -eq 0600 &&
 	chmod 0777 target/xyz &&
-	stat source/xyz | grep "Access: (0777/-rwxrwxrwx)" &&
-	stat source/symlink | grep "Access: (0777/lrwxrwxrwx)" &&
+	test $(stat -c %04a source/xyz) -eq 0777 &&
+	test $(stat -c %04a source/symlink) -eq 0777 &&
 	chmod 0513 target/symlink &&
-	stat source/symlink | grep "Access: (0777/lrwxrwxrwx)" &&
-	stat source/xyz | grep "Access: (0513/-r-x--x-wx)"
+	test $(stat -c %04a source/xyz) -eq 0513 &&
+	test $(stat -c %04a source/symlink) -eq 0777
 '
 
 test_expect_success MULTIPLE_GROUPS 'chown/chgrp' '
-	ids=$(id -nG | tr " " "\\n") &&
+	ids=$(id -G | tr " " "\\n") &&
 	first=$(echo $ids | cut -d" " -f1) &&
 	second=$(echo $ids | cut -d" " -f2) &&
 
-	chgrp $first source/xyz &&
-	stat target/xyz | grep -E "Gid: \\(\s*[0-9]+/\s*$first" &&
-	chgrp $second target/xyz &&
-	stat source/xyz | grep -E "Gid: \\(\s*[0-9]+/\s*$second"
+	chgrp +$first source/xyz &&
+	test $(stat -c %g target/xyz) -eq "$first" &&
+	chgrp +$second target/xyz &&
+	test $(stat -c %g source/xyz) -eq "$second"
 '
 
 test_expect_success MULTIPLE_GROUPS 'chown/chgrp on symlinks' '
-	id=$(id -ng) &&
-	ids=$(id -nG | tr " " "\\n") &&
+	id=$(id -g) &&
+	ids=$(id -G | tr " " "\\n") &&
 	first=$(echo $ids | cut -d" " -f1) &&
 	second=$(echo $ids | cut -d" " -f2) &&
 
 	chgrp $first source/xyz &&
-	stat -L target/symlink | grep -E "Gid: \\(\s*[0-9]+/\s*$first" &&
-	stat target/symlink | grep -E "Gid: \\(\s*[0-9]+/\s*$id" &&
+	test $(stat -c %g -L target/symlink) -eq "$first" &&
+	test $(stat -c %g target/symlink) -eq "$id" &&
 	chgrp $second target/symlink &&
-	stat -L target/symlink | grep -E "Gid: \\(\s*[0-9]+/\s*$second" &&
-	stat target/symlink | grep -E "Gid: \\(\s*[0-9]+/\s*$id"
+	test $(stat -c %g -L target/symlink) -eq "$second" &&
+	test $(stat -c %g target/symlink) -eq "$id"
 '
 
 test_expect_success 'utimensat' '
@@ -109,7 +109,7 @@ test_expect_success 'xattrs' '
 
 	setfattr -n user.testing -v hello target/xyz &&
 	test $(getfattr target/xyz | grep ^[^#] | wc -l) -eq 1 &&
-	test $(getfattr -n user.testing --only-values target/xyz) = hello &&
+	test "$(getfattr -n user.testing --only-values target/xyz)" = hello &&
 
 	setfattr -x user.testing target/xyz &&
 	test $(getfattr target/xyz | wc -l) -eq 0
