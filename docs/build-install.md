@@ -161,15 +161,31 @@ $ ./configure --enable-vfs-api && make && make test
 
 Note that unless you installed your modified libfuse library into a system
 location, you will need to ensure that the `configure` script finds your
-libfuse installation by setting the `CPPFLAGS` and `LDFLAGS` environment
-variables appropriately.  For example (but check first that the paths you
-supply actually contain `fuse3/fuse.h` for the `-I` option and `libfuse3.so`
-for the `-L` and `-Wl,-R` options; you may need to append additional path
-segments such as `x86_64-linux-gnu` or similar subdirectories):
+libfuse installation by either setting the `CPPFLAGS` and `LDFLAGS`
+environment variables, or by providing the path to the `fuse3.pc` package
+configuration metadata file with the `--with-libfusepkg` option.
+
+For example, if you installed your modified libfuse library into
+`/path/to/libfuse` and you have a `fuse3.pc` metadata file under
+`lib64/pkgconfig/fuse3.pc`, you can use the `--with-libfusepkg` option
+as follows (and note that this example also enables the VFSForGit API):
+```
+  ./configure --with-libfusepkg=/path/to/libfuse/lib64/pkgconfig/fuse3.pc \
+              --enable-vfs-api && \
+  make && \
+  make test
+```
+
+If you are unable to use the `--with-libfusepkg` option for some
+reason, you can instead supply the `CPPFLAGS` and `LDFLAGS` environment
+variables to `configure`, but first ensure that the paths you use
+actually contain `fuse3/fuse.h` for the `-I` option and `libfuse3.so`
+for the `-L` and `-Wl,-R` options.  (You may need to append additional
+path segments such as `x86_64-linux-gnu` or similar subdirectories.)
 ```
 $ CPPFLAGS=-I/path/to/libfuse/include \
     LDFLAGS='-L/path/to/libfuse/lib -Wl,-R/path/to/libfuse/lib' \
-    ./configure && \
+    ./configure --enable-vfs-api && \
   make && \
   make test
 ```
