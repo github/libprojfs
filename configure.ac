@@ -107,12 +107,16 @@ AC_CHECK_HEADER([sys/inotify.h], [],
   [AC_MSG_ERROR([Linux inotify header file not found])]dnl
 )dnl
 
-# TODO: remove when FUSE no longer used (also Libs.private in projfs.pc)
-AC_SEARCH_LIBS([fuse_new_30], [fuse3], [],
-  [AC_MSG_ERROR([FUSE version 3.x library not found])]dnl
-)dnl
 AC_SEARCH_LIBS([pthread_create], [pthread], [],
   [AC_MSG_ERROR([POSIX threads library not found])]dnl
+)dnl
+AC_SEARCH_LIBS([dlopen], [dl], [],
+  [AC_MSG_ERROR([libdl not found])]dnl
+)dnl
+# TODO: remove when FUSE no longer used (also Libs.private in projfs.pc)
+AC_SEARCH_LIBS([fuse_new_31], [fuse3], [],
+  [AC_MSG_ERROR([FUSE version 3.x library not found])],
+  [-lpthread -ldl]dnl
 )dnl
 
 AC_CHECK_PROGS([DIFF], [diff])

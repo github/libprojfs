@@ -1052,6 +1052,9 @@ static int check_dir_empty(const char *path)
 	}
 }
 
+int fuse_loop_mt_32(struct fuse *f, struct fuse_loop_config *config);
+struct fuse *fuse_new_31(struct fuse_args *args, const struct fuse_operations *op, size_t op_size, void *user_data);
+
 static void *projfs_loop(void *data)
 {
 	struct projfs *fs = (struct projfs *)data;
@@ -1097,7 +1100,7 @@ static void *projfs_loop(void *data)
 		}
 	}
 
-	fuse = fuse_new(&args, &projfs_ops, sizeof(projfs_ops), fs);
+	fuse = fuse_new_31(&args, &projfs_ops, sizeof(projfs_ops), fs);
 	if (fuse == NULL) {
 		res = 4;
 		goto out_close;
@@ -1123,7 +1126,7 @@ static void *projfs_loop(void *data)
 	loop.max_idle_threads = 10;
 
 	// TODO: output strsignal() only for dev purposes
-	if ((err = fuse_loop_mt(fuse, &loop)) != 0) {
+	if ((err = fuse_loop_mt_32(fuse, &loop)) != 0) {
 		if (err > 0)
 			fprintf(stderr, "projfs: %s signal\n", strsignal(err));
 		res = 7;

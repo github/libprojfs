@@ -6,6 +6,6 @@ includedir=@includedir@
 Name: projfs
 Description: Projected Filesystem
 Version: @VERSION@
-Libs: -L${libdir} -lprojfs -pthread
+Libs: -L${libdir} -lprojfs -pthread -ldl
 Libs.private: @libprojfs_libs@
 Cflags: -I${includedir}/projfs
