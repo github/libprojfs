@@ -73,6 +73,12 @@ AS_IF([test ":$enable_vfs_api" = ":yes"],
 AM_CONDITIONAL([ENABLE_VFSAPI], [test ":$enable_vfs_api" = ":yes"])
 AC_SUBST([libprojfs_export_regex])
 
+AC_CHECK_PROGS([DIFF], [diff])
+AC_ARG_VAR([DIFF], [File comparison tool])
+
+AC_CHECK_PROGS([PROVE], [prove])
+AC_ARG_VAR([PROVE], [TAP harness command, e.g., 'prove -v'])
+
 pkgconfigdir='${libdir}/pkgconfig'
 
 AC_ARG_WITH([pkgconfigdir],
@@ -131,12 +137,6 @@ AC_SEARCH_LIBS([fuse_loop_mt_31], [fuse3], [],
 AC_SEARCH_LIBS([fuse_context_node_userdata_release], [fuse3], [],
   [AC_MSG_ERROR([FUSE library with per-node userdata support not found])]dnl
 )dnl
-
-AC_CHECK_PROGS([DIFF], [diff])
-AC_ARG_VAR([DIFF], [File comparison tool])
-
-AC_CHECK_PROGS([PROVE], [prove])
-AC_ARG_VAR([PROVE], [TAP harness command, e.g., 'prove -v'])
 
 AC_CONFIG_FILES([Makefile include/Makefile lib/Makefile t/Makefile
                  config.sh projfs.pc])
