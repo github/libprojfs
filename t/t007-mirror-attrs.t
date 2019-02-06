@@ -17,7 +17,7 @@
 
 test_description='projfs filesystem mirroring attribute tests
 
-Check that chmod, chown and utimens functionas expected.
+Check that chmod, chown and utimens function as expected.
 '
 
 . ./test-lib.sh
@@ -59,14 +59,17 @@ test_expect_success MULTIPLE_GROUPS 'chown/chgrp' '
 '
 
 test_expect_success MULTIPLE_GROUPS 'chown/chgrp on symlinks' '
+	id=$(id -ng) &&
 	ids=$(id -nG | tr " " "\\n") &&
 	first=$(echo $ids | cut -d" " -f1) &&
 	second=$(echo $ids | cut -d" " -f2) &&
 
-	chgrp $first target/symlink &&
-	stat target/symlink | grep -E "Gid: \\(\s*[0-9]+/\s*$first" &&
+	chgrp $first source/xyz &&
+	stat -L target/symlink | grep -E "Gid: \\(\s*[0-9]+/\s*$first" &&
+	stat target/symlink | grep -E "Gid: \\(\s*[0-9]+/\s*$id" &&
 	chgrp $second target/symlink &&
-	stat source/symlink | grep -Ev "Gid: \\(\s*[0-9]+/\s*$second"
+	stat -L target/symlink | grep -E "Gid: \\(\s*[0-9]+/\s*$second" &&
+	stat target/symlink | grep -E "Gid: \\(\s*[0-9]+/\s*$id"
 '
 
 test_expect_success 'utimensat' '
