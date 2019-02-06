@@ -24,8 +24,6 @@ Check that links function as expected.
 
 projfs_start test_projfs_simple source target || exit 1
 
-EXPECT_DIR="$TEST_DIRECTORY/$(basename "$0" .t | sed 's/-.*//')"
-
 test_expect_success 'create links' '
 	echo text > target/file &&
 	ln target/file target/link &&

@@ -24,8 +24,6 @@ Check that chmod, chown and utimens functionas expected.
 
 projfs_start test_projfs_simple source target || exit 1
 
-EXPECT_DIR="$TEST_DIRECTORY/$(basename "$0" .t | sed 's/-.*//')"
-
 test_expect_success 'check for multiple groups owned by the user' '
 	ids=$(id -nG | tr " " "\\n") &&
 	if test $(echo "$ids" | wc -l) -ge 2; then
