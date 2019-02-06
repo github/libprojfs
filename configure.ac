@@ -20,7 +20,8 @@
 
 AC_INIT([libprojfs], [0.1])
 
-AC_PREREQ([2.59])
+# highest version required by local m4 macros
+AC_PREREQ([2.64])
 AM_INIT_AUTOMAKE([foreign no-dist-gzip dist-xz subdir-objects])
 LT_INIT
 
