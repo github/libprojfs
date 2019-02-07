@@ -23,8 +23,8 @@ COPY . /tmp/$LIBPROJFS_REPO
 
 WORKDIR /tmp/$LIBPROJFS_REPO
 RUN ./autogen.sh
-RUN make -j "$(nproc)" distclean || true
 RUN ./configure --enable-vfs-api
+RUN make -j "$(nproc)" distclean || true
 RUN make -j "$(nproc)" dist
 
 WORKDIR /tmp
