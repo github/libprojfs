@@ -61,10 +61,7 @@ TESTS = t000-mirror-read.t \
 	t204-event-allow.t
 
 if ENABLE_VFSAPI
-TESTS += t500-vfs-mirror-read.t \
-	 t501-vfs-mirror-mkdir.t \
-	 t502-vfs-mirror-write.t \
-	 t503-vfs-mirror-remove.t \
+TESTS += t500-vfs-mirror-basic.t \
 	 t700-vfs-event-ok.t \
 	 t701-vfs-event-err.t \
 	 t702-vfs-event-deny.t \
