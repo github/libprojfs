@@ -7,6 +7,7 @@ cd "$(dirname "$0")"
 ./projfs image fuse3
 
 ./projfs image develop
+./projfs develop autogen
 ./projfs develop configure
 ./projfs develop make
 ./projfs develop test || (

@@ -38,10 +38,11 @@ def usage
       image fuse3|develop|distpkg|vfs|integrate
         Build the Docker build environment for the specified component.
 
-      develop configure|make|test|dist|clean
+      develop autogen|configure|make|test|dist|clean
         Builds libprojfs for local development and testing.
 
-        configure: runs autogen with appropriate switches
+        autogen:   runs autogen
+        configure: runs configure with appropriate switches
         make:      runs make
         test:      runs make test
         dist:      runs make dist
@@ -97,7 +98,8 @@ develop = Project.new('develop',
   image: 'github/projfs-dev-linux',
   mounts: ["#{Dir.pwd}/..:/data/projfs"],
   commands: {
-    configure: ['./autogen.sh', '--enable-vfs-api'],
+    autogen: ['./autogen.sh'],
+    configure: ['./configure', '--enable-vfs-api'],
     make: ['make'],
     test: ['make', 'test'],
     dist: ['make', 'dist'],
@@ -163,6 +165,7 @@ when "setup"
   fuse3.build(quiet:false)
 
   develop.build(quiet: false)
+  develop.command "autogen"
   develop.command "configure"
   develop.command "make"
   develop.command "test"
