@@ -17,10 +17,11 @@ command:
   image fuse3|develop|distpkg|vfs|integrate
     Build the Docker build environment for the specified component.
 
-  develop configure|make|test|dist|clean
+  develop autogen|configure|make|test|dist|clean
     Builds libprojfs for local development and testing.
 
-    configure: runs autogen with appropriate switches
+    autogen:   runs autogen
+    configure: runs configure with appropriate switches
     make:      runs make
     test:      runs make test
     dist:      runs make dist
@@ -107,8 +108,9 @@ directories on the Docker host (your local filesystem) into the running containe
 and build artifacts are preserved.
 
 The `projfs` component will mount the root of this repository at `/data/projfs` in the container. `./projfs develop
-configure` will run `/data/projfs/autogen.sh` in the container, with the output files being placed on the Docker host.
-`./projfs develop make` will then run `make`, with all build artifacts again placed on the Docker host. (You'll have a
+autogen` will run `/data/projfs/autogen.sh` in the container, with the output files being placed on the Docker host.
+`./projfs develop configure` will then run `configure --enable-vfs-api`, and
+`./projfs develop make` will run `make`, with all build artifacts again placed on the Docker host. (You'll have a
 bunch of ELF objects which you won't be able to do anything with on macOS.)
 
 The `vfs` component mounts the source at `/data/vfs/src`, and additional directories in `build` so that NuGet restored
