@@ -228,6 +228,10 @@ The full set of available options is described below.
   a successful test run, an empty `<directory>/test-mounts/` subdirectory
   may be left behind.
 
+  However, note that tmpfs does not support "user.\*" extended attributes,
+  and so tests which depend on that functionality will fail if the test
+  suite is run on the tmpfs filesystem.
+
 * `--chain-lint` (and `--no-chain-lint`):
 
   If `--chain-lint` is enabled, check each test script to make sure that
