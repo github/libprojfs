@@ -71,14 +71,12 @@ else !ENABLE_VFSAPI
 SKIP_TESTS = t[5-9]??
 endif !ENABLE_VFSAPI
 
-EXTRA_DIST = README.md chainlint.sed \
+EXTRA_DIST = README.md chainlint.sed clean_test_dirs.sh \
 	     test-lib.sh test-lib-event.sh test-lib-functions.sh $(TESTS)
 
 LOG_DRIVER = env AM_TAP_AWK='$(AWK)' HARNESS_ACTIVE=true \
 	$(SHELL) ../tap-driver.sh
 
-TEST_MOUNTS_DIR = test-mounts
-TEST_OUTPUT_DIR = test-output
 PROVE_FILE = .prove
 
 check-local: clean-mounts
@@ -87,7 +85,7 @@ check-local: clean-mounts
 test: check
 
 .PHONY: prove
-prove: clean-mounts clean-output $(check_PROGRAMS)
+prove: clean-mounts $(check_PROGRAMS)
 	@if test ":$(PROVE)" != ":"; \
 	then \
 		prove_dir="."; \
@@ -100,19 +98,19 @@ prove: clean-mounts clean-output $(check_PROGRAMS)
 		PROJFS_SKIP_TESTS="$(SKIP_TESTS) $$PROJFS_SKIP_TESTS" \
 			$(PROVE) --exec $(SHELL) \
 				$(PROJFS_PROVE_OPTS) $$prove_dir; \
-		$(RM) -r "$(TEST_MOUNTS_DIR)" "/tmp/$(TEST_MOUNTS_DIR)"; \
+		./clean_test_dirs.sh; \
 	else \
 		echo "No 'prove' TAP harness available." && exit 1; \
 	fi
 
 clean-mounts:
-	@$(RM) -r "$(TEST_MOUNTS_DIR)" "/tmp/$(TEST_MOUNTS_DIR)"
+	@./clean_test_dirs.sh
 
-clean-output:
-	@$(RM) -r "$(TEST_OUTPUT_DIR)"
+clean-mounts-output:
+	@./clean_test_dirs.sh --all
 
 clean-prove:
 	@$(RM) $(PROVE_FILE)
 
-clean-local: clean-mounts clean-output clean-prove
+clean-local: clean-mounts-output clean-prove
 

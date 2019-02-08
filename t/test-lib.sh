@@ -86,14 +86,21 @@ export SHELL_PATH
 # It appears that people try to run tests without building...
 if ! test -x "$TEST_DIRECTORY"/test_projfs_simple
 then
-	echo >&2 'error: test programs missing (has "make" been run yet?)'
-	exit 1
+	case " $* " in
+	*' --clean '*|*' --clean-all '*)
+		# proceed as we will exit after removing test directories
+		;;
+	*)
+		echo >&2 'error: test programs missing (has "make" been run?)'
+		exit 1
+		;;
+	esac
 fi
 
 # if --tee was passed, write the output not only to the terminal, but
 # additionally to the file test-output/$BASENAME.out, too.
 case "$PROJFS_TEST_TEE_STARTED, $* " in
-done,*)
+done,*|*' --clean '*|*' --clean-all '*)
 	# do not redirect again
 	;;
 *' --tee '*|*' --va'*|*' -V '*|*' --verbose-log '*)
@@ -233,6 +240,13 @@ do
 	-V|--verbose-log)
 		verbose_log=t
 		shift ;;
+	--clean)
+		clean=t
+		shift ;;
+	--clean-all)
+		clean=t
+		cleanall=t
+		shift ;;
 	*)
 		echo "error: unknown test option '$1'" >&2; exit 1 ;;
 	esac
@@ -326,7 +340,7 @@ fi
 exec 5>&1
 exec 6<&0
 exec 7>&2
-if test "$verbose_log" = "t"
+if test "$verbose_log" = "t" && test "$clean" != "t"
 then
 	exec 3>>"$PROJFS_TEST_TEE_OUTPUT_FILE" 4>&3
 elif test "$verbose" = "t"
@@ -840,7 +854,6 @@ if test -f /.dockerenv
 then
 	TRASH_DIRECTORY="/tmp/$TRASH_DIRECTORY"
 fi
-
 test -n "$root" && TRASH_DIRECTORY="$root/$TRASH_DIRECTORY"
 case "$TRASH_DIRECTORY" in
 /*) ;; # absolute path is good
@@ -852,10 +865,22 @@ rm -fr "$TRASH_DIRECTORY" || {
 	exit 1
 }
 
-HOME="$TRASH_DIRECTORY"
-export HOME
+# Clean and exit if requested
+if test -n "$clean"
+then
+	rm -fr $(dirname "$TRASH_DIRECTORY")
+	if test -n "$cleanall"
+	then
+		rm -fr "$TEST_OUTPUT_DIRECTORY/test-output"
+	fi
+	PROJFS_EXIT_OK=t
+	exit 0
+fi
 
 $MKDIR_P "$TRASH_DIRECTORY"
+
+HOME="$TRASH_DIRECTORY"
+export HOME
 
 # Use -P to resolve symlinks in our working directory so that the cwd
 # in subprocesses like projfs equals our $PWD (for pathname comparisons).
