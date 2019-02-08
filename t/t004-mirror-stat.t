@@ -24,8 +24,6 @@ Check that stat returns correct results.
 
 projfs_start test_projfs_simple source target || exit 1
 
-EXPECT_DIR="$TEST_DIRECTORY/$(basename "$0" .t | sed 's/-.*//')"
-
 test_expect_success 'create source tree' '
 	mkdir source/dir &&
 	echo file > source/file &&
