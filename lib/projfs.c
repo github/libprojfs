@@ -151,37 +151,46 @@ struct node_userdata
 
 #define USER_PROJECTION_EMPTY "user.projection.empty"
 
-static __thread char *mapped_path;
-
-static void set_mapped_path(char const *path, int parent)
+/**
+ * If parent is 0, returns a copy of path.
+ *
+ * If parent is non-zero, return a copy of path with the last component removed
+ * (e.g. "x/y/z" will yield "x/y").  If path has only one component,
+ * returns ".".
+ *
+ * The caller is responsible for freeing the returned string.
+ */
+static char *get_mapped_path(char const *path, int parent)
 {
 	const char *last;
 
-	free(mapped_path);
-	if (!parent) {
-		mapped_path = strdup(path);
-		return;
-	}
+	if (!parent)
+		return strdup(path);
+
 	last = strrchr(path, '/');
 	if (!last)
-		mapped_path = strdup(".");
+		return strdup(".");
 	else
-		mapped_path = strndup(path, last - path);
+		return strndup(path, last - path);
 }
 
 /**
- * @return the userdata struct pointer, or NULL and sets errno.  If non-NULL is
- *         returned, the FUSE userdata is acquired and must be released with
- *         fuse_context_node_userdata_release.
+ * Acquires a lock on mapped_path and populates the supplied node_userdata
+ * argument with the open and locked fd, and proj_flag based on the
+ * USER_PROJECTION_EMPTY xattr.
+ *
+ * @return 0 or an errno
  */
-static int get_path_userdata(struct node_userdata *user)
+static int get_path_userdata(struct node_userdata *user, const char *mapped_path)
 {
 	ssize_t sz;
 	int err;
 
+	bzero(user, sizeof(*user));
+
 	user->fd = openat(lowerdir_fd(), mapped_path, O_RDONLY);
 	if (user->fd == -1)
-		return -1;
+		return errno;
 
 	err = flock(user->fd, LOCK_EX | LOCK_NB);
 	if (err == -1 && errno == EWOULDBLOCK) {
@@ -192,8 +201,7 @@ static int get_path_userdata(struct node_userdata *user)
 	if (err == -1) {
 		err = errno;
 		close(user->fd);
-		errno = err;
-		return -1;
+		return err;
 	}
 
 	// fill cache from xattrs
@@ -201,14 +209,17 @@ static int get_path_userdata(struct node_userdata *user)
 	err = errno;
 	if (sz == -1 && err != ENOATTR) {
 		close(user->fd);
-		errno = err;
-		return -1;
+		return err;
 	}
 	user->proj_flag = sz > 0;
 
 	return 0;
 }
 
+/**
+ * Closes the open fd associated with user, which in turn releases any locks
+ * associated with the fd.
+ */
 static void finalize_userdata(struct node_userdata *user)
 {
 	if (user->fd == -1)
@@ -251,6 +262,7 @@ static int projfs_fuse_proj_dir_locked(struct node_userdata *user,
  * Project a directory. Takes the lower path, and a flag indicating whether the
  * directory is the parent of the path, or the path itself.
  *
+ * @param op op name (for debugging)
  * @param path the lower path (from lower_path)
  * @param parent 1 if we should look at the parent directory containing path, 0
  *               if we look at path itself
@@ -260,23 +272,29 @@ static int projfs_fuse_proj_dir(const char *op, const char *path, int parent)
 {
 	struct node_userdata user;
 	int res;
+	char *mapped_path;
 
 	(void)op;
 
-	set_mapped_path(path, parent);
-
-	res = get_path_userdata(&user);
-	if (res == -1)
+	mapped_path = get_mapped_path(path, parent);
+	if (!mapped_path)
 		return errno;
 
-	if (!user.proj_flag) {
-		finalize_userdata(&user);
-		return 0;
-	}
+	res = get_path_userdata(&user, mapped_path);
+	if (res != 0)
+		goto out;
 
+	if (!user.proj_flag)
+		goto out_finalize;
+
+	/* pass path up to the provider, NOT mapped_path */
 	res = projfs_fuse_proj_dir_locked(&user, path);
 
+out_finalize:
 	finalize_userdata(&user);
+
+out:
+	free(mapped_path);
 
 	return res;
 }
