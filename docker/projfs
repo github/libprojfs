@@ -98,6 +98,21 @@ def system(*args)
   end
 end
 
+# We assume /tmp is a regular directory in the container's root filesystem,
+# and that the writable upper layer of that union filesystem is stored
+# on a host filesytem which supports "user.*" extended attributes, like ext4.
+#
+# Note that a Docker option like "--tmpfs /tmp" may break this assumption,
+# as tmpfs does not support user extended attributes.
+#
+# We avoid using our /data/* build directories for testing because they
+# may be bind-mounted on an external filesystem which lacks xattr support.
+
+def test_options
+  opts = ['--root=/tmp']
+  ["PROJFS_TEST_OPTS=#{opts.join ' '}"]
+end
+
 usage if ARGV.length == 0
 
 fuse3 = Project.new('fuse3',
@@ -113,9 +128,9 @@ develop = Project.new('develop',
     autogen: ['./autogen.sh'],
     configure: ['./configure', '--enable-vfs-api'],
     make: ['make'],
-    test: ['make', 'test'],
+    test: [['env', *test_options, 'make', 'test']],
     dist: ['make', 'dist'],
-    clean: ['make', 'clean'],
+    clean: [['env', *test_options, 'make', 'clean']],
   },
   build_options: ['--build-arg', "UID=#{Process.uid}"],
   options: ['--device', '/dev/fuse', '--cap-add', 'SYS_ADMIN', '--security-opt', 'apparmor:unconfined'])
