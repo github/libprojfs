@@ -144,6 +144,8 @@ static int projfs_fuse_perm_event(uint64_t mask,
 
 struct node_userdata
 {
+	int fd;
+
 	uint8_t proj_flag; // USER_PROJECTION_EMPTY
 };
 
@@ -172,60 +174,48 @@ static void set_mapped_path(char const *path, int parent)
  *         returned, the FUSE userdata is acquired and must be released with
  *         fuse_context_node_userdata_release.
  */
-static struct node_userdata *get_path_userdata(int parent)
+static int get_path_userdata(struct node_userdata *user)
 {
-	struct timespec abs_timeout;
-	struct fuse_node_userdata *fuserdata;
-	struct node_userdata *user;
 	ssize_t sz;
-	int fd, err;
+	int err;
 
-	clock_gettime(CLOCK_REALTIME, &abs_timeout);
-	abs_timeout.tv_sec += PROJ_WAIT_SEC;
-	abs_timeout.tv_nsec += PROJ_WAIT_NSEC;
+	user->fd = openat(lowerdir_fd(), mapped_path, O_RDONLY);
+	if (user->fd == -1)
+		return -1;
 
-	fuserdata = fuse_context_node_userdata_timedacquire(parent,
-							    &abs_timeout);
-
-	if (!fuserdata) {
-		errno = 0;
-		return NULL;
+	err = flock(user->fd, LOCK_EX | LOCK_NB);
+	if (err == -1 && errno == EWOULDBLOCK) {
+		// TODO proper retry based on PROJ_WAIT_SEC/PROJ_WAIT_NSEC
+		sleep(1);
+		err = flock(user->fd, LOCK_EX | LOCK_NB);
 	}
-
-	if (fuserdata->data)
-		return (struct node_userdata *)fuserdata->data;
-
-	user = calloc(1, sizeof(*user));
-	if (!user) {
-		fuse_context_node_userdata_release(parent);
-		return NULL;
+	if (err == -1) {
+		err = errno;
+		close(user->fd);
+		errno = err;
+		return -1;
 	}
 
 	// fill cache from xattrs
-	fd = openat(lowerdir_fd(), mapped_path, O_RDONLY);
+	sz = fgetxattr(user->fd, USER_PROJECTION_EMPTY, NULL, 0);
 	err = errno;
-	if (fd == -1) {
-		free(user);
-		fuse_context_node_userdata_release(parent);
-		errno = err;
-		return NULL;
-	}
-
-	sz = fgetxattr(fd, USER_PROJECTION_EMPTY, NULL, 0);
-	err = errno;
-	close(fd);
 	if (sz == -1 && err != ENOATTR) {
-		free(user);
-		fuse_context_node_userdata_release(parent);
+		close(user->fd);
 		errno = err;
-		return NULL;
+		return -1;
 	}
 	user->proj_flag = sz > 0;
 
-	fuserdata->data = user;
-	fuserdata->finalize = free;
+	return 0;
+}
 
-	return user;
+static void finalize_userdata(struct node_userdata *user)
+{
+	if (user->fd == -1)
+		return;
+
+	close(user->fd);
+	user->fd = -1;
 }
 
 /**
@@ -234,7 +224,6 @@ static struct node_userdata *get_path_userdata(int parent)
 static int projfs_fuse_proj_dir_locked(struct node_userdata *user,
                                        const char *path)
 {
-	int fd;
 	int res, err;
 
 	if (!user->proj_flag)
@@ -248,13 +237,8 @@ static int projfs_fuse_proj_dir_locked(struct node_userdata *user,
 	if (err < 0)
 		return -err;
 
-	fd = openat(lowerdir_fd(), mapped_path, O_RDONLY);
-	if (fd == -1)
-		return errno;
-
-	res = fremovexattr(fd, USER_PROJECTION_EMPTY);
+	res = fremovexattr(user->fd, USER_PROJECTION_EMPTY);
 	err = errno;
-	close(fd);
 	if (res == 0 || (res == -1 && err == ENOATTR))
 		user->proj_flag = 0;
 	else
@@ -274,25 +258,25 @@ static int projfs_fuse_proj_dir_locked(struct node_userdata *user,
  */
 static int projfs_fuse_proj_dir(const char *op, const char *path, int parent)
 {
-	struct node_userdata *user;
+	struct node_userdata user;
 	int res;
 
 	(void)op;
 
 	set_mapped_path(path, parent);
 
-	user = get_path_userdata(parent);
-	if (!user)
+	res = get_path_userdata(&user);
+	if (res == -1)
 		return errno;
 
-	if (!user->proj_flag) {
-		fuse_context_node_userdata_release(parent);
+	if (!user.proj_flag) {
+		finalize_userdata(&user);
 		return 0;
 	}
 
-	res = projfs_fuse_proj_dir_locked(user, path);
+	res = projfs_fuse_proj_dir_locked(&user, path);
 
-	fuse_context_node_userdata_release(parent);
+	finalize_userdata(&user);
 
 	return res;
 }
