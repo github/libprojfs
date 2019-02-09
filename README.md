@@ -19,6 +19,10 @@ client on Linux in the not-too-distant future!
 
 ## Current Status
 
+| Branch     | Functional Tests                                          |
+| :--------: | :-------------------------------------------------------: |
+| **master** | [![CI status: master][ci-master-status]][ci-master-redir] |
+
 The library is under active development and supports basic
 directory projection, with additional features added regularly.
 
@@ -147,6 +151,8 @@ You can also contact the GitHub project team at
 [build]: docs/build-install.md
 [build-docker]: docs/build-install.md#using-docker-containers
 [build-mirror]: docs/build-install.md#building-and-running-mirrorprovider
+[ci-master-redir]: https://dev.azure.com/asconnor/asconnor/_build/latest?definitionId=1&branchName=master
+[ci-master-status]: https://dev.azure.com/asconnor/asconnor/_apis/build/status/github.libprojfs?branchName=master
 [design-linux]: docs/design.md#vfsforgit-on-linux
 [design-process]: docs/design.md#development-process
 [ext2]: https://www.kernel.org/doc/Documentation/filesystems/ext2.txt
