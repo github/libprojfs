@@ -109,7 +109,7 @@ end
 # may be bind-mounted on an external filesystem which lacks xattr support.
 
 def test_options
-  opts = ['--root=/tmp']
+  opts = ['--root=/tmp', '--verbose-log', '-x']
   ["PROJFS_TEST_OPTS=#{opts.join ' '}"]
 end
 
