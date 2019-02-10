@@ -162,10 +162,6 @@ AC_CHECK_HEADER([fuse3/fuse.h], [],
 AC_SEARCH_LIBS([fuse_loop_mt_31], [fuse3], [],
   [AC_MSG_ERROR([FUSE version 3.2+ library not found])]dnl
 )dnl
-# TODO: remove when custom FUSE no longer used
-AC_SEARCH_LIBS([fuse_context_node_userdata_release], [fuse3], [],
-  [AC_MSG_ERROR([FUSE library with per-node userdata support not found])]dnl
-)dnl
 
 AC_CONFIG_FILES([Makefile include/Makefile lib/Makefile t/Makefile
                  config.sh projfs.pc])
