@@ -113,6 +113,13 @@ def test_options
   ["PROJFS_TEST_OPTS=#{opts.join ' '}"]
 end
 
+def dotnet_env
+  vars = ["DOTNET_CLI_TELEMETRY_OPTOUT=1",
+          "DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1",
+          "NUGET_XMLDOC_MODE=skip"]
+  ["env", *vars]
+end
+
 usage if ARGV.length == 0
 
 fuse3 = Project.new('fuse3',
@@ -151,12 +158,12 @@ vfs = Project.new('vfs',
   ],
   commands: {
     restore: [
-      ["dotnet", "restore", "MirrorProvider/MirrorProvider.sln", "/p:Configuration=Debug.Linux", "--packages", "../packages"],
-      ["dotnet", "restore", "ProjFS.Linux/PrjFSLib.Linux.Managed/PrjFSLib.Linux.Managed.csproj", "/p:Configuration=Debug", "/p:Platform=x64", "--packages", "../packages"],
+      [*dotnet_env, "dotnet", "restore", "MirrorProvider/MirrorProvider.sln", "/p:Configuration=Debug.Linux", "--packages", "../packages"],
+      [*dotnet_env, "dotnet", "restore", "ProjFS.Linux/PrjFSLib.Linux.Managed/PrjFSLib.Linux.Managed.csproj", "/p:Configuration=Debug", "/p:Platform=x64", "--packages", "../packages"],
     ],
     make: [
-      ["dotnet", "build", "ProjFS.Linux/PrjFSLib.Linux.Managed/PrjFSLib.Linux.Managed.csproj", "/p:Configuration=Debug", "/p:Platform=x64", "--no-restore"],
-      ["dotnet", "build", "MirrorProvider/MirrorProvider.sln", "/p:Configuration=Debug.Linux", "--no-restore"],
+      [*dotnet_env, "dotnet", "build", "ProjFS.Linux/PrjFSLib.Linux.Managed/PrjFSLib.Linux.Managed.csproj", "/p:Configuration=Debug", "/p:Platform=x64", "--no-restore"],
+      [*dotnet_env, "dotnet", "build", "MirrorProvider/MirrorProvider.sln", "/p:Configuration=Debug.Linux", "--no-restore"],
     ]
   })
 
