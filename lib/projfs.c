@@ -186,7 +186,7 @@ static int get_path_userdata(struct node_userdata *user, const char *mapped_path
 	ssize_t sz;
 	int err;
 
-	bzero(user, sizeof(*user));
+	memset(user, 0, sizeof(*user));
 
 	user->fd = openat(lowerdir_fd(), mapped_path, O_RDONLY);
 	if (user->fd == -1)
