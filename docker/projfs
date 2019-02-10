@@ -21,6 +21,8 @@
 # License along with this library, in the file COPYING; if not,
 # see <http://www.gnu.org/licenses/>.
 
+require 'shellwords'
+
 require_relative 'project'
 require_relative 'tests'
 
@@ -78,11 +80,21 @@ def usage
   exit 1
 end
 
+def escape_shellarg(str)
+  Shellwords.shellescape(str).gsub('\=', '=')
+end
+
+class Array
+  def to_shellstr
+    self.map { |s| escape_shellarg(s) }.join ' '
+  end
+end
+
 def system(*args)
-  puts ">> #{args.join " "}"
+  puts ">> #{args.to_shellstr}"
   result = Kernel.system(*args)
   if !result
-    raise "failed to run '#{args.join " "}"
+    raise "failed to run '#{args.to_shellstr}"
   end
 end
 
