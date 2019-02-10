@@ -84,17 +84,15 @@ def escape_shellarg(str)
   Shellwords.shellescape(str).gsub('\=', '=')
 end
 
-class Array
-  def to_shellstr
-    self.map { |s| escape_shellarg(s) }.join ' '
-  end
+def to_shellstr(a)
+  a.map { |s| escape_shellarg(s) }.join ' '
 end
 
 def system(*args)
-  puts ">> #{args.to_shellstr}"
+  puts ">> #{to_shellstr(args)}"
   result = Kernel.system(*args)
   if !result
-    raise "failed to run '#{args.to_shellstr}"
+    raise "failed to run '#{to_shellstr(args)}"
   end
 end
 
