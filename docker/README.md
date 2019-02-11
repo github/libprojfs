@@ -86,7 +86,7 @@ Here's how to get started:
 The command `./projfs image COMPONENT` will build one of five tagged Docker images.
 
   - `./projfs image fuse3` creates `github/fuse3-linux` from `Dockerfile-fuse3`. It installs development tools and build
-    prerequisites in a stock Debian stretch image, then fetches and builds our fork of FUSE.
+    prerequisites in a stock Debian stretch image, then fetches and builds FUSE 3.3.0.
 
   - `./projfs image develop` creates `github/projfs-dev-linux` from `Dockerfile-develop`. It is based on
     `github/fuse3-linux`, and installs only the build tools necessary for building libprojfs.
