@@ -287,8 +287,9 @@ static int projfs_fuse_proj_dir(const char *op, const char *path, int parent)
 	if (!user.proj_flag)
 		goto out_finalize;
 
-	/* pass path up to the provider, NOT mapped_path */
-	res = projfs_fuse_proj_dir_locked(&user, path);
+	/* pass mapped path (i.e. containing directory we want to project) to
+	 * provider */
+	res = projfs_fuse_proj_dir_locked(&user, mapped_path);
 
 out_finalize:
 	finalize_userdata(&user);
