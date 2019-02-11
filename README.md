@@ -92,13 +92,6 @@ host OS, and `user.*` extended attributes are supported on your host's
 filesystem.  See the [Using Docker containers][build-docker] section for
 more details.
 
-At present we require some custom modifications to the libfuse version 3.x
-library, and therefore building libprojfs against a default installation
-of libfuse will not work.  We hope to work with the libfuse maintainers
-to develop patches will can eventually be accepted upstream; see
-[PR #346](https://github.com/libfuse/libfuse/pull/346) in the libfuse
-project for the current status of this work.
-
 To test libprojfs with the Microsoft VFSForGit `MirrorProvider`
 (as we do not support the primary VFSForGit GVFS provider yet), .NET Core
 must be installed and parts of the VFSForGit project built.  See the

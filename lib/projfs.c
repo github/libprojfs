@@ -49,8 +49,7 @@
 #define PROJ_DIR_MODE 0777
 
 // TODO: make this value configurable
-#define PROJ_WAIT_SEC 5
-#define PROJ_WAIT_NSEC 0
+#define PROJ_WAIT_MSEC 5000
 
 struct projfs_dir {
 	DIR *dir;
@@ -144,88 +143,97 @@ static int projfs_fuse_perm_event(uint64_t mask,
 
 struct node_userdata
 {
+	int fd;
+
 	uint8_t proj_flag; // USER_PROJECTION_EMPTY
 };
 
 #define USER_PROJECTION_EMPTY "user.projection.empty"
 
-static __thread char *mapped_path;
-
-static void set_mapped_path(char const *path, int parent)
+/**
+ * If parent is 0, returns a copy of path.
+ *
+ * If parent is non-zero, return a copy of path with the last component removed
+ * (e.g. "x/y/z" will yield "x/y").  If path has only one component,
+ * returns ".".
+ *
+ * The caller is responsible for freeing the returned string.
+ */
+static char *get_mapped_path(char const *path, int parent)
 {
 	const char *last;
 
-	free(mapped_path);
-	if (!parent) {
-		mapped_path = strdup(path);
-		return;
-	}
+	if (!parent)
+		return strdup(path);
+
 	last = strrchr(path, '/');
 	if (!last)
-		mapped_path = strdup(".");
+		return strdup(".");
 	else
-		mapped_path = strndup(path, last - path);
+		return strndup(path, last - path);
 }
 
 /**
- * @return the userdata struct pointer, or NULL and sets errno.  If non-NULL is
- *         returned, the FUSE userdata is acquired and must be released with
- *         fuse_context_node_userdata_release.
+ * Acquires a lock on mapped_path and populates the supplied node_userdata
+ * argument with the open and locked fd, and proj_flag based on the
+ * USER_PROJECTION_EMPTY xattr.
+ *
+ * @return 0 or an errno
  */
-static struct node_userdata *get_path_userdata(int parent)
+static int get_path_userdata(struct node_userdata *user, const char *mapped_path)
 {
-	struct timespec abs_timeout;
-	struct fuse_node_userdata *fuserdata;
-	struct node_userdata *user;
 	ssize_t sz;
-	int fd, err;
+	int err, wait_ms;
+	struct timespec ts;
 
-	clock_gettime(CLOCK_REALTIME, &abs_timeout);
-	abs_timeout.tv_sec += PROJ_WAIT_SEC;
-	abs_timeout.tv_nsec += PROJ_WAIT_NSEC;
+	memset(user, 0, sizeof(*user));
 
-	fuserdata = fuse_context_node_userdata_timedacquire(parent,
-							    &abs_timeout);
+	user->fd = openat(lowerdir_fd(), mapped_path, O_RDONLY);
+	if (user->fd == -1)
+		return errno;
 
-	if (!fuserdata) {
-		errno = 0;
-		return NULL;
-	}
+	wait_ms = PROJ_WAIT_MSEC;
 
-	if (fuserdata->data)
-		return (struct node_userdata *)fuserdata->data;
+retry_flock:
+	err = flock(user->fd, LOCK_EX | LOCK_NB);
+	if (err == -1) {
+		if (errno == EWOULDBLOCK && wait_ms > 0) {
+			/* sleep 100ms, retry */
+			ts.tv_sec = 0;
+			ts.tv_nsec = 1000 * 1000 * 100;
+			nanosleep(&ts, NULL);
+			wait_ms -= 100;
+			goto retry_flock;
+		}
 
-	user = calloc(1, sizeof(*user));
-	if (!user) {
-		fuse_context_node_userdata_release(parent);
-		return NULL;
+		err = errno;
+		close(user->fd);
+		return err;
 	}
 
 	// fill cache from xattrs
-	fd = openat(lowerdir_fd(), mapped_path, O_RDONLY);
+	sz = fgetxattr(user->fd, USER_PROJECTION_EMPTY, NULL, 0);
 	err = errno;
-	if (fd == -1) {
-		free(user);
-		fuse_context_node_userdata_release(parent);
-		errno = err;
-		return NULL;
-	}
-
-	sz = fgetxattr(fd, USER_PROJECTION_EMPTY, NULL, 0);
-	err = errno;
-	close(fd);
 	if (sz == -1 && err != ENOATTR) {
-		free(user);
-		fuse_context_node_userdata_release(parent);
-		errno = err;
-		return NULL;
+		close(user->fd);
+		return err;
 	}
 	user->proj_flag = sz > 0;
 
-	fuserdata->data = user;
-	fuserdata->finalize = free;
+	return 0;
+}
 
-	return user;
+/**
+ * Closes the open fd associated with user, which in turn releases any locks
+ * associated with the fd.
+ */
+static void finalize_userdata(struct node_userdata *user)
+{
+	if (user->fd == -1)
+		return;
+
+	close(user->fd);
+	user->fd = -1;
 }
 
 /**
@@ -234,7 +242,6 @@ static struct node_userdata *get_path_userdata(int parent)
 static int projfs_fuse_proj_dir_locked(struct node_userdata *user,
                                        const char *path)
 {
-	int fd;
 	int res, err;
 
 	if (!user->proj_flag)
@@ -248,13 +255,8 @@ static int projfs_fuse_proj_dir_locked(struct node_userdata *user,
 	if (err < 0)
 		return -err;
 
-	fd = openat(lowerdir_fd(), mapped_path, O_RDONLY);
-	if (fd == -1)
-		return errno;
-
-	res = fremovexattr(fd, USER_PROJECTION_EMPTY);
+	res = fremovexattr(user->fd, USER_PROJECTION_EMPTY);
 	err = errno;
-	close(fd);
 	if (res == 0 || (res == -1 && err == ENOATTR))
 		user->proj_flag = 0;
 	else
@@ -267,6 +269,7 @@ static int projfs_fuse_proj_dir_locked(struct node_userdata *user,
  * Project a directory. Takes the lower path, and a flag indicating whether the
  * directory is the parent of the path, or the path itself.
  *
+ * @param op op name (for debugging)
  * @param path the lower path (from lower_path)
  * @param parent 1 if we should look at the parent directory containing path, 0
  *               if we look at path itself
@@ -274,25 +277,32 @@ static int projfs_fuse_proj_dir_locked(struct node_userdata *user,
  */
 static int projfs_fuse_proj_dir(const char *op, const char *path, int parent)
 {
-	struct node_userdata *user;
+	struct node_userdata user;
 	int res;
+	char *mapped_path;
 
 	(void)op;
 
-	set_mapped_path(path, parent);
-
-	user = get_path_userdata(parent);
-	if (!user)
+	mapped_path = get_mapped_path(path, parent);
+	if (!mapped_path)
 		return errno;
 
-	if (!user->proj_flag) {
-		fuse_context_node_userdata_release(parent);
-		return 0;
-	}
+	res = get_path_userdata(&user, mapped_path);
+	if (res != 0)
+		goto out;
 
-	res = projfs_fuse_proj_dir_locked(user, path);
+	if (!user.proj_flag)
+		goto out_finalize;
 
-	fuse_context_node_userdata_release(parent);
+	/* pass mapped path (i.e. containing directory we want to project) to
+	 * provider */
+	res = projfs_fuse_proj_dir_locked(&user, mapped_path);
+
+out_finalize:
+	finalize_userdata(&user);
+
+out:
+	free(mapped_path);
 
 	return res;
 }
