@@ -82,7 +82,7 @@ is already in place!
 Because many distributions still supply libfuse v2.x as their default
 libfuse package under `/usr`, however, unless you specifically have a
 system which has a libfuse v3.x installation already, you may be safe
-installing our modified libfuse into a system location.  Note also that
+installing FUSE 3 into a system location.  Note also that
 libfuse v3.x is designed to co-exist with libfuse v2.x; both libraries
 can be installed under `/usr` as the v3.x libfuse header files will be
 located in `/usr/include/fuse3`.  But please *be cautious* and check
@@ -150,13 +150,13 @@ the test provider we are developing against for now), add the
 $ ./configure --enable-vfs-api && make && make test
 ```
 
-Note that unless you installed your modified libfuse library into a system
+Note that unless you installed FUSE 3 into a system
 location, you will need to ensure that the `configure` script finds your
 libfuse installation by either setting the `CPPFLAGS` and `LDFLAGS`
 environment variables, or by providing the path to the `fuse3.pc` package
 configuration metadata file with the `--with-libfusepkg` option.
 
-For example, if you installed your modified libfuse library into
+For example, if you installed FUSE 3 into
 `/path/to/libfuse` and you have a `fuse3.pc` metadata file under
 `lib64/pkgconfig/fuse3.pc`, you can use the `--with-libfusepkg` option
 as follows (and note that this example also enables the VFSForGit API):
@@ -338,8 +338,8 @@ or if it's installed in a custom location, you will need to provide
 that path in the `LD_LIBRARY_PATH` environment variable.
 
 For instance, to use the `libprojfs.so` shared library without having
-to install it (and assuming you supplied the location of your modified
-libfuse to the linker by using the `-Wl,-R` compiler option when configuring
+to install it (and assuming you supplied the location of
+FUSE 3 to the linker by using the `-Wl,-R` compiler opTion when configuring
 your libprojfs build), you may reference the `lib/.libs` hidden directory
 that was created by the libprojfs build process:
 ```
@@ -405,7 +405,7 @@ Now start MirrorProvider; it should start successfully and
 wait for a keypress to exit.  The example below assumes that you have
 compiled libprojfs but not installed it, and that you supplied an
 `-Wl,-R/path/to/libfuse/lib` option in `LDFLAGS` when building libprojfs,
-so that the location of your modified libfuse is in the runtime library
+so that the location of FUSE 3 is in the runtime library
 search path of `libprojfs.so`.
 ```
 $ LD_LIBRARY_PATH=/path/to/libprojfs/lib/.libs \
