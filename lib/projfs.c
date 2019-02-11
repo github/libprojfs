@@ -49,8 +49,7 @@
 #define PROJ_DIR_MODE 0777
 
 // TODO: make this value configurable
-#define PROJ_WAIT_SEC 5
-#define PROJ_WAIT_NSEC 0
+#define PROJ_WAIT_MSEC 5000
 
 struct projfs_dir {
 	DIR *dir;
@@ -184,7 +183,8 @@ static char *get_mapped_path(char const *path, int parent)
 static int get_path_userdata(struct node_userdata *user, const char *mapped_path)
 {
 	ssize_t sz;
-	int err;
+	int err, wait_ms;
+	struct timespec ts;
 
 	memset(user, 0, sizeof(*user));
 
@@ -192,13 +192,20 @@ static int get_path_userdata(struct node_userdata *user, const char *mapped_path
 	if (user->fd == -1)
 		return errno;
 
+	wait_ms = PROJ_WAIT_MSEC;
+
+retry_flock:
 	err = flock(user->fd, LOCK_EX | LOCK_NB);
-	if (err == -1 && errno == EWOULDBLOCK) {
-		// TODO proper retry based on PROJ_WAIT_SEC/PROJ_WAIT_NSEC
-		sleep(1);
-		err = flock(user->fd, LOCK_EX | LOCK_NB);
-	}
 	if (err == -1) {
+		if (errno == EWOULDBLOCK && wait_ms > 0) {
+			/* sleep 100ms, retry */
+			ts.tv_sec = 0;
+			ts.tv_nsec = 1000 * 1000 * 100;
+			nanosleep(&ts, NULL);
+			wait_ms -= 100;
+			goto retry_flock;
+		}
+
 		err = errno;
 		close(user->fd);
 		return err;
