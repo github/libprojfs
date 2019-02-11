@@ -41,21 +41,19 @@ suitable for all Linux distributions, we hope the preceding information
 will suffice to assist those using other distros.  Please let us know
 if there are specific dependencies we should further enumerate!
 
-## Building libfuse with Modifications
+## Building libfuse3
 
-We are currently using a slightly-modified fork of the upstream
-libfuse project which allows libprojfs to store custom per-inode
-data in memory, specifically a mutex and an empty-vs-full projection
-status flag.
+We are currently targetting FUSE 3.3.0; we plan to work toward compatibility
+with FUSE 2.x in the future also, which can be found in most distribution's
+package archives.
 
-To build our modified version of libfuse, clone (or download as a
-Zip archive) the [`context-node-userdata` branch][libfuse-userdata]
-of our forked libfuse repository, and then build libfuse using Meson
-and Ninja:
+To build FUSE 3, clone (or download as a Zip archive) the [`fuse-3.3.0`
+tag][libfuse-3.3.0] of `libfuse/libfuse` repository, and then build libfuse
+using Meson and Ninja:
 ```
-$ git clone https://github.com/kivikakk/libfuse.git libfuse-userdata
-$ cd libfuse-userdata
-$ git checkout context-node-userdata
+$ git clone https://github.com/libfuse/libfuse.git
+$ cd libfuse
+$ git checkout fuse-3.3.0
 
 $ mkdir build
 $ cd build
@@ -64,7 +62,7 @@ $ meson .. && \
   ninja
 ```
 
-If you wish to install the modified libfuse somewhere other than
+If you wish to install the libfuse somewhere other than
 the default `/usr/local` system location, you may wish to supply
 that path in the `--prefix` option when running Meson.
 
@@ -96,7 +94,7 @@ refresh the linker's cache using [`ldconfig`][ldconfig-man]:
 $ sudo ldconfig
 ```
 
-If you choose not to install your modified libfuse into a system
+If you choose not to install FUSE 3 into a system
 location, you will still likely benefit from installing it into
 at least a working directory, for several reasons.  First, libprojfs
 will expect the version 3.x `fuse.h` to be within a `fuse3` directory,
@@ -113,7 +111,7 @@ To install libfuse into such a working location, you can use the
 You will then need to supply the path to this location when building
 libprojfs.  The recommended way to do this is to use the `--with-libfusepkg`
 option (described in the next section), which should ensure you do
-not also need to supply the path to your modified libfuse when running
+not also need to supply the path to your newly built FUSE 3 when running
 the [VFSForGit `MirrorProvider`][vfs4git-mirror] test programs.
 
 ## Building libprojfs
@@ -530,7 +528,7 @@ specify the user ID which should run the libprojfs process.
 [ldconfig-man]: http://man7.org/linux/man-pages/man8/ldconfig.8.html
 [libfuse]: https://github.com/libfuse/libfuse
 [libfuse-mount3]: http://man7.org/linux/man-pages/man1/fusermount3.1.html
-[libfuse-userdata]: https://github.com/kivikakk/libfuse/tree/context-node-userdata
+[libfuse-3.3.0]: https://github.com/libfuse/libfuse/tree/fuse-3.3.0
 [libunwind]: https://www.nongnu.org/libunwind/
 [lttng]: https://lttng.org/
 [make]: https://www.gnu.org/software/make/
