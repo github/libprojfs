@@ -12,6 +12,7 @@ cd "$(dirname "$0")"
 ./projfs develop make
 ./projfs develop test || (
 	cat ../t/test-suite.log;
+	tail -n +1 ../t/test-output/*;
 	exit 1
 )
 

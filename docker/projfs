@@ -21,6 +21,8 @@
 # License along with this library, in the file COPYING; if not,
 # see <http://www.gnu.org/licenses/>.
 
+require 'shellwords'
+
 require_relative 'project'
 require_relative 'tests'
 
@@ -78,12 +80,42 @@ def usage
   exit 1
 end
 
+def escape_shellarg(str)
+  Shellwords.shellescape(str).gsub('\=', '=')
+end
+
+def to_shellstr(a)
+  a.map { |s| escape_shellarg(s) }.join ' '
+end
+
 def system(*args)
-  puts ">> #{args.join " "}"
+  puts ">> #{to_shellstr(args)}"
   result = Kernel.system(*args)
   if !result
-    raise "failed to run '#{args.join " "}"
+    raise "failed to run '#{to_shellstr(args)}"
   end
+end
+
+# We assume /tmp is a regular directory in the container's root filesystem,
+# and that the writable upper layer of that union filesystem is stored
+# on a host filesytem which supports "user.*" extended attributes, like ext4.
+#
+# Note that a Docker option like "--tmpfs /tmp" may break this assumption,
+# as tmpfs does not support user extended attributes.
+#
+# We avoid using our /data/* build directories for testing because they
+# may be bind-mounted on an external filesystem which lacks xattr support.
+
+def test_options
+  opts = ['--root=/tmp', '--verbose-log', '-x']
+  ["PROJFS_TEST_OPTS=#{opts.join ' '}"]
+end
+
+def dotnet_env
+  vars = ["DOTNET_CLI_TELEMETRY_OPTOUT=1",
+          "DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1",
+          "NUGET_XMLDOC_MODE=skip"]
+  ["env", *vars]
 end
 
 usage if ARGV.length == 0
@@ -101,9 +133,9 @@ develop = Project.new('develop',
     autogen: ['./autogen.sh'],
     configure: ['./configure', '--enable-vfs-api'],
     make: ['make'],
-    test: ['make', 'test'],
+    test: [['env', *test_options, 'make', 'test']],
     dist: ['make', 'dist'],
-    clean: ['make', 'clean'],
+    clean: [['env', *test_options, 'make', 'clean']],
   },
   build_options: ['--build-arg', "UID=#{Process.uid}"],
   options: ['--device', '/dev/fuse', '--cap-add', 'SYS_ADMIN', '--security-opt', 'apparmor:unconfined'])
@@ -124,12 +156,12 @@ vfs = Project.new('vfs',
   ],
   commands: {
     restore: [
-      ["dotnet", "restore", "MirrorProvider/MirrorProvider.sln", "/p:Configuration=Debug.Linux", "--packages", "../packages"],
-      ["dotnet", "restore", "ProjFS.Linux/PrjFSLib.Linux.Managed/PrjFSLib.Linux.Managed.csproj", "/p:Configuration=Debug", "/p:Platform=x64", "--packages", "../packages"],
+      [*dotnet_env, "dotnet", "restore", "MirrorProvider/MirrorProvider.sln", "/p:Configuration=Debug.Linux", "--packages", "../packages"],
+      [*dotnet_env, "dotnet", "restore", "ProjFS.Linux/PrjFSLib.Linux.Managed/PrjFSLib.Linux.Managed.csproj", "/p:Configuration=Debug", "/p:Platform=x64", "--packages", "../packages"],
     ],
     make: [
-      ["dotnet", "build", "ProjFS.Linux/PrjFSLib.Linux.Managed/PrjFSLib.Linux.Managed.csproj", "/p:Configuration=Debug", "/p:Platform=x64", "--no-restore"],
-      ["dotnet", "build", "MirrorProvider/MirrorProvider.sln", "/p:Configuration=Debug.Linux", "--no-restore"],
+      [*dotnet_env, "dotnet", "build", "ProjFS.Linux/PrjFSLib.Linux.Managed/PrjFSLib.Linux.Managed.csproj", "/p:Configuration=Debug", "/p:Platform=x64", "--no-restore"],
+      [*dotnet_env, "dotnet", "build", "MirrorProvider/MirrorProvider.sln", "/p:Configuration=Debug.Linux", "--no-restore"],
     ]
   })
 
