@@ -66,9 +66,7 @@ $ meson .. && \
 
 If you wish to install the modified libfuse somewhere other than
 the default `/usr/local` system location, you may wish to supply
-that path in the `--prefix` option when running Meson.  Note, though,
-that the `DESTDIR` environment variable can also be used; see below
-for an example.
+that path in the `--prefix` option when running Meson.
 
 Finally, run the `ninja install` command as the superuser so it can
 set the necessary permissions on the libfuse binaries:
@@ -110,18 +108,13 @@ which is required to allow non-privileged users to mount virtual
 filesystems (like libprojfs!)
 
 To install libfuse into such a working location, you can use the
-`--prefix` Meson option, or the `DESTDIR` environment variable when
-running `ninja install`, as shown below:
-```
-sudo DESTDIR=/path/to/libfuse-userdata-install ninja install
-```
+`--prefix` option to Meson, as shown above.
 
-Whether you use the `--prefix` Meson option or the `DESTDIR`
-variable, you will need to supply the path to this location when
-building libprojfs (see below).  You may also need to supply this
-path in your `LD_LIBRARY_PATH` environment variable when running the
-[VFSForGit `MirrorProvider`][vfs4git-mirror] test programs, unless you
-build libprojfs with the `-Wl,-R` option (again, see below).
+You will then need to supply the path to this location when building
+libprojfs.  The recommended way to do this is to use the `--with-libfusepkg`
+option (described in the next section), which should ensure you do
+not also need to supply the path to your modified libfuse when running
+the [VFSForGit `MirrorProvider`][vfs4git-mirror] test programs.
 
 ## Building libprojfs
 
