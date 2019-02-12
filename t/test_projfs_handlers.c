@@ -19,6 +19,7 @@
    see <http://www.gnu.org/licenses/>.
 */
 
+#include <errno.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,7 +27,7 @@
 #include "test_common.h"
 
 static int test_handle_event(struct projfs_event *event, const char *desc,
-			     int perm)
+			     int proj, int perm)
 {
 	unsigned int opt_flags, ret_flags;
 	const char *retfile;
@@ -44,6 +45,13 @@ static int test_handle_event(struct projfs_event *event, const char *desc,
 		       event->pid);
 	}
 
+	if (proj) {
+		if ((event->mask & ~PROJFS_ONDIR) != PROJFS_CREATE_SELF) {
+			fprintf(stderr, "unknown projection flags\n");
+			ret = -EINVAL;
+		}
+	}
+
 	if ((ret_flags & TEST_VAL_SET) == TEST_VAL_UNSET)
 		ret = perm ? PROJFS_ALLOW : 0;
 	else if(!perm && ret > 0)
@@ -52,14 +60,19 @@ static int test_handle_event(struct projfs_event *event, const char *desc,
 	return ret;
 }
 
+static int test_proj_event(struct projfs_event *event)
+{
+	return test_handle_event(event, "projection request", 1, 0);
+}
+
 static int test_notify_event(struct projfs_event *event)
 {
-	return test_handle_event(event, "event notification", 0);
+	return test_handle_event(event, "event notification", 0, 0);
 }
 
 static int test_perm_event(struct projfs_event *event)
 {
-	return test_handle_event(event, "permission request", 1);
+	return test_handle_event(event, "permission request", 0, 1);
 }
 
 int main(int argc, char *const argv[])
@@ -72,6 +85,7 @@ int main(int argc, char *const argv[])
 			      (TEST_OPT_RETVAL | TEST_OPT_RETFILE),
 			      &lower_path, &mount_path);
 
+	handlers.handle_proj_event = &test_proj_event;
 	handlers.handle_notify_event = &test_notify_event;
 	handlers.handle_perm_event = &test_perm_event;
 
