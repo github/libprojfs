@@ -66,7 +66,8 @@ static int wait_for_mount(dev_t prior_dev, const char *mountdir,
 		if (stat(mountdir, &mnt) != 0) {
 			// limit warnings to once per second
 			if (warn_sec < wait) {
-				warn("unable to check mount point");
+				warn("unable to query mount point: %s",
+				     mountdir);
 				warn_sec = wait;
 			}
 		} else if (prior_dev != mnt.st_dev)
@@ -80,7 +81,8 @@ static int wait_for_mount(dev_t prior_dev, const char *mountdir,
 
 		wait = now - start;
 		if (wait >= max_wait) {
-			warnx("timeout waiting for filesystem mount");
+			warnx("timeout waiting for filesystem mount at: %s",
+			      mountdir);
 			ret = -1;
 			break;
 		}

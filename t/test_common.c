@@ -298,14 +298,16 @@ void test_parse_opts(int argc, char *const argv[], unsigned int opt_flags,
 		case TEST_OPT_NUM_TIMEOUT:
 			timeout = test_parse_long(optarg, 10);
 			if (errno > 0 || timeout < 0)
-				test_exit_error(argv[0], "invalid timeout: %s",
+				test_exit_error(argv[0],
+						"invalid timeout: %s",
 						optarg);
 			opt_set_flags |= TEST_OPT_TIMEOUT;
 			break;
 
 		case '?':
 			if (optopt > 0)
-				test_exit_error(argv[0], "invalid option: -%c",
+				test_exit_error(argv[0],
+						"invalid option: -%c",
 						optopt);
 			else
 				test_exit_error(argv[0], "invalid option: %s",
@@ -378,8 +380,8 @@ unsigned int test_get_opts(unsigned int opt_flags, ...)
 				break;
 
 			default:
-				err(EXIT_FAILURE,
-				    "unknown option flag: %u", opt_flag);
+				errx(EXIT_FAILURE,
+				     "unknown option flag: %u", opt_flag);
 		}
 	}
 
@@ -398,10 +400,10 @@ struct projfs *test_start_mount(const char *lowerdir, const char *mountdir,
 			user_data);
 
 	if (fs == NULL)
-		err(EXIT_FAILURE, "unable to create filesystem");
+		errx(EXIT_FAILURE, "unable to create filesystem");
 
 	if (projfs_start(fs) < 0)
-		err(EXIT_FAILURE, "unable to start filesystem");
+		errx(EXIT_FAILURE, "unable to start filesystem");
 
 	return fs;
 }
@@ -426,7 +428,7 @@ void test_start_vfsapi_mount(const char *storageRootFullPath,
 						mountHandle);
 
 	if (ret != PrjFS_Result_Success)
-		err(EXIT_FAILURE, "unable to start filesystem: %d", ret);
+		errx(EXIT_FAILURE, "unable to start filesystem: %d", ret);
 }
 
 void test_stop_vfsapi_mount(PrjFS_MountHandle* mountHandle)
