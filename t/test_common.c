@@ -119,8 +119,8 @@ static const struct opt_usage all_opts_usage[] = {
 };
 
 /* option values */
-static int retval;
-static long int timeout;
+static int optval_retval;
+static long int optval_timeout;
 
 static unsigned int opt_set_flags = TEST_OPT_NONE;
 
@@ -288,7 +288,8 @@ void test_parse_opts(int argc, char *const argv[], unsigned int opt_flags,
 			exit_usage(0, argv[0], long_opts, args_usage);
 
 		case TEST_OPT_NUM_RETVAL:
-			if (test_parse_retsym(vfsapi, optarg, &retval) < 0)
+			if (test_parse_retsym(vfsapi, optarg,
+					      &optval_retval) < 0)
 				test_exit_error(argv[0], "invalid retval: %s",
 						optarg);
 			else
@@ -296,8 +297,8 @@ void test_parse_opts(int argc, char *const argv[], unsigned int opt_flags,
 			break;
 
 		case TEST_OPT_NUM_TIMEOUT:
-			timeout = test_parse_long(optarg, 10);
-			if (errno > 0 || timeout < 0)
+			optval_timeout = test_parse_long(optarg, 10);
+			if (errno > 0 || optval_timeout < 0)
 				test_exit_error(argv[0],
 						"invalid timeout: %s",
 						optarg);
@@ -370,13 +371,13 @@ unsigned int test_get_opts(unsigned int opt_flags, ...)
 			case TEST_OPT_RETVAL:
 				i = va_arg(ap, int*);
 				if (ret_flag != TEST_OPT_NONE)
-					*i = retval;
+					*i = optval_retval;
 				break;
 
 			case TEST_OPT_TIMEOUT:
 				l = va_arg(ap, long int*);
 				if (ret_flag != TEST_OPT_NONE)
-					*l = timeout;
+					*l = optval_timeout;
 				break;
 
 			default:
