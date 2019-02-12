@@ -102,7 +102,7 @@ static const struct retval vfsapi_retvals[] = {
 static const struct option all_long_opts[] = {
 	{ "help", no_argument, NULL, TEST_OPT_NUM_HELP },
 	{ "retval", required_argument, NULL, TEST_OPT_NUM_RETVAL},
-	{ },	// TODO: retval-file
+	{ "retval-file", required_argument, NULL, TEST_OPT_NUM_RETFILE},
 	{ "timeout", required_argument, NULL, TEST_OPT_NUM_TIMEOUT}
 };
 
@@ -114,12 +114,13 @@ struct opt_usage {
 static const struct opt_usage all_opts_usage[] = {
 	{ NULL, 1 },
 	{ "allow|deny|null|<error>", 1 },
-	{ },	// TODO: <retval-file>
+	{ "<retval-file>", 1 },
 	{ "<max-seconds>", 1 }
 };
 
 /* option values */
 static int optval_retval;
+static const char *optval_retfile;
 static long int optval_timeout;
 
 static unsigned int opt_set_flags = TEST_OPT_NONE;
@@ -200,7 +201,7 @@ long int test_parse_long(const char *arg, int base)
 	return val;
 }
 
-int test_parse_retsym(int vfsapi, const char *retsym, int *retvalp)
+int test_parse_retsym(int vfsapi, const char *retsym, int *retval)
 {
 	const struct retval *retvals = get_retvals(vfsapi);
 	int ret = -1;
@@ -214,7 +215,7 @@ int test_parse_retsym(int vfsapi, const char *retsym, int *retvalp)
 		     !strncmp(name, VFSAPI_PREFIX, VFSAPI_PREFIX_LEN) &&
 		     !strcasecmp(name + VFSAPI_PREFIX_LEN, retsym))) {
 			ret = 0;
-			*retvalp = retvals[i].val;
+			*retval = retvals[i].val;
 			break;
 		}
 
@@ -222,6 +223,46 @@ int test_parse_retsym(int vfsapi, const char *retsym, int *retvalp)
 	}
 
 	return ret;
+}
+
+static void read_retfile(int vfsapi, int *retval, unsigned int *flags)
+{
+	FILE *file;
+	char retsym[MAX_RETVAL_NAME_LEN + 1];
+
+	file = fopen(optval_retfile, "r");
+	if (file == NULL) {
+		if (errno != ENOENT)
+			warn("unable to open retval file: %s",
+			     optval_retfile);
+		goto out;
+	}
+
+	errno = 0;
+	if (fgets(retsym, sizeof(retsym), file) != NULL) {
+		char *c;
+
+		c = strchr(retsym, '\n');
+		if (c != NULL)
+			*c = '\0';
+
+		if (test_parse_retsym(vfsapi, retsym, retval) < 0) {
+			warnx("invalid symbol in retval file: %s: %s",
+			      optval_retfile, retsym);
+		}
+
+		*flags = TEST_VAL_SET | TEST_FILE_EXIST | TEST_FILE_VALID;
+	}
+	else if (errno > 0)
+		warn("unable to read retval file: %s", optval_retfile);
+	else
+		*flags = TEST_FILE_EXIST;
+
+	if (fclose(file) != 0)
+		warn("unable to close retval file: %s", optval_retfile);
+
+out:
+	return;
 }
 
 static struct option *get_long_opts(unsigned int opt_flags)
@@ -290,10 +331,15 @@ void test_parse_opts(int argc, char *const argv[], unsigned int opt_flags,
 		case TEST_OPT_NUM_RETVAL:
 			if (test_parse_retsym(vfsapi, optarg,
 					      &optval_retval) < 0)
-				test_exit_error(argv[0], "invalid retval: %s",
+				test_exit_error(argv[0],
+						"invalid retval symbol: %s",
 						optarg);
-			else
-				opt_set_flags |= TEST_OPT_RETVAL;
+			opt_set_flags |= TEST_OPT_RETVAL;
+			break;
+
+		case TEST_OPT_NUM_RETFILE:
+			optval_retfile = optarg;
+			opt_set_flags |= TEST_OPT_RETFILE;
 			break;
 
 		case TEST_OPT_NUM_TIMEOUT:
@@ -310,9 +356,8 @@ void test_parse_opts(int argc, char *const argv[], unsigned int opt_flags,
 				test_exit_error(argv[0],
 						"invalid option: -%c",
 						optopt);
-			else
-				test_exit_error(argv[0], "invalid option: %s",
-						argv[optind - 1]);
+			test_exit_error(argv[0], "invalid option: %s",
+					argv[optind - 1]);
 
 		default:
 			test_exit_error(argv[0], "unknown getopt code: %d",
@@ -346,6 +391,7 @@ void test_parse_mount_opts(int argc, char *const argv[],
 
 unsigned int test_get_opts(unsigned int opt_flags, ...)
 {
+	int vfsapi = (opt_flags & TEST_OPT_VFSAPI) ? 1 : 0;
 	unsigned int opt_flag = TEST_OPT_HELP;
 	unsigned int ret_flags = TEST_OPT_NONE;
 	va_list ap;
@@ -356,8 +402,10 @@ unsigned int test_get_opts(unsigned int opt_flags, ...)
 
 	while (opt_flags != TEST_OPT_NONE) {
 		unsigned int ret_flag;
+		unsigned int *f;
 		int *i;
 		long int *l;
+		const char **s;
 
 		opt_flag <<= 1;
 		if ((opt_flags & opt_flag) == TEST_OPT_NONE)
@@ -370,8 +418,22 @@ unsigned int test_get_opts(unsigned int opt_flags, ...)
 		switch (opt_flag) {
 			case TEST_OPT_RETVAL:
 				i = va_arg(ap, int*);
-				if (ret_flag != TEST_OPT_NONE)
+				f = va_arg(ap, unsigned int*);
+				*f = TEST_VAL_UNSET | TEST_FILE_NONE;
+				if (ret_flag != TEST_OPT_NONE) {
 					*i = optval_retval;
+					*f |= TEST_VAL_SET;
+				} else if ((opt_set_flags & TEST_OPT_RETFILE)
+					   != TEST_OPT_NONE) {
+					read_retfile(vfsapi, i, f);
+					ret_flags |= opt_flag;
+				}
+				break;
+
+			case TEST_OPT_RETFILE:
+				s = va_arg(ap, const char**);
+				if (ret_flag != TEST_OPT_NONE)
+					*s = optval_retfile;
 				break;
 
 			case TEST_OPT_TIMEOUT:

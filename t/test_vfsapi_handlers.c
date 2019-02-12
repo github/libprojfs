@@ -27,6 +27,51 @@
 
 #include "test_common.h"
 
+static int test_handle_event(const char *desc, const char *path,
+			     int pid, const char *procname,
+			     int isdir, int type, int proj)
+{
+	unsigned int opt_flags, ret_flags;
+	const char *retfile;
+	int ret;
+
+	opt_flags = test_get_opts((TEST_OPT_VFSAPI | TEST_OPT_RETVAL
+						   | TEST_OPT_RETFILE),
+				  &ret, &ret_flags, &retfile);
+
+	if ((opt_flags & TEST_OPT_RETFILE) == TEST_OPT_NONE ||
+	    (ret_flags & TEST_FILE_EXIST) != TEST_FILE_NONE) {
+		printf("  Test%s for %s: %d, %s, %hhd, 0x%08X\n",
+		       desc, path, pid, procname, isdir, type);
+	}
+
+	if (proj) {
+		if (!isdir) {
+			fprintf(stderr, "unsupported file projection\n");
+			ret = PrjFS_Result_Invalid;
+		}
+	}
+
+	if ((ret_flags & TEST_VAL_SET) == TEST_VAL_UNSET)
+		ret = PrjFS_Result_Success;
+
+	return ret;
+}
+
+static PrjFS_Result TestEnumerateDirectory(
+    _In_    unsigned long                           commandId,
+    _In_    const char*                             relativePath,
+    _In_    int                                     triggeringProcessId,
+    _In_    const char*                             triggeringProcessName
+)
+{
+	(void)commandId;		// prevent compiler warnings
+
+	return test_handle_event("EnumerateDirectory", relativePath,
+				 triggeringProcessId, triggeringProcessName,
+				 1, 0, 1);
+}
+
 static PrjFS_Result TestNotifyOperation(
     _In_    unsigned long                           commandId,
     _In_    const char*                             relativePath,
@@ -39,22 +84,14 @@ static PrjFS_Result TestNotifyOperation(
     _In_    const char*                             destinationRelativePath
 )
 {
-	unsigned int opt_flags;
-	int retval;
-
-	printf("  TestNotifyOperation for %s: %d, %s, %hhd, 0x%08X\n",
-	       relativePath, triggeringProcessId, triggeringProcessName,
-	       isDirectory, notificationType);
-
 	(void)commandId;		// prevent compiler warnings
 	(void)providerId;
 	(void)contentId;
 	(void)destinationRelativePath;
 
-	opt_flags = test_get_opts(TEST_OPT_RETVAL | TEST_OPT_VFSAPI, &retval);
-
-	return (opt_flags == TEST_OPT_NONE) ? PrjFS_Result_Success
-					    : retval;
+	return test_handle_event("NotifyOperation", relativePath,
+				 triggeringProcessId, triggeringProcessName,
+				 isDirectory, notificationType, 0);
 }
 
 int main(int argc, char *const argv[])
@@ -63,10 +100,13 @@ int main(int argc, char *const argv[])
 	PrjFS_MountHandle *handle;
 	PrjFS_Callbacks callbacks = { 0 };
 
-	test_parse_mount_opts(argc, argv, (TEST_OPT_VFSAPI | TEST_OPT_RETVAL),
+	test_parse_mount_opts(argc, argv,
+			      (TEST_OPT_VFSAPI | TEST_OPT_RETVAL
+					       | TEST_OPT_RETFILE),
 			      &lower_path, &mount_path);
 
 	memset(&callbacks, 0, sizeof(PrjFS_Callbacks));
+	callbacks.EnumerateDirectory = TestEnumerateDirectory;
 	callbacks.NotifyOperation = TestNotifyOperation;
 
 	test_start_vfsapi_mount(lower_path, mount_path, callbacks,

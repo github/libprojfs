@@ -25,7 +25,8 @@ the VFS API.
 . ./test-lib.sh
 . "$TEST_DIRECTORY"/test-lib-event.sh
 
-projfs_start test_vfsapi_handlers source target --retval null || exit 1
+projfs_start test_vfsapi_handlers source target --retval-file retval || exit 1
+echo null > retval
 
 # TODO: test_vfsapi_handlers always returns EINVAL with --retval null, unlike
 #	test_projfs_handlers, so mkdir sees a handler error; like t701.1,
@@ -59,6 +60,7 @@ test_expect_success 'test permission request denied on directory deletion' '
 	test_path_is_dir target/d1
 '
 
+rm retval
 projfs_stop || exit 1
 
 test_expect_success 'check all event notifications' '

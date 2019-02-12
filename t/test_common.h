@@ -28,15 +28,23 @@
 
 #define TEST_OPT_NUM_HELP	0
 #define TEST_OPT_NUM_RETVAL	1
-// TODO: TEST_OPT_NUM_RETFILE
+#define TEST_OPT_NUM_RETFILE	2
 #define TEST_OPT_NUM_TIMEOUT	3
 
 #define TEST_OPT_HELP		(0x0001 << TEST_OPT_NUM_HELP)
 #define TEST_OPT_RETVAL		(0x0001 << TEST_OPT_NUM_RETVAL)
+#define TEST_OPT_RETFILE	(0x0001 << TEST_OPT_NUM_RETFILE)
 #define TEST_OPT_TIMEOUT	(0x0001 << TEST_OPT_NUM_TIMEOUT)
 
 #define TEST_OPT_NONE		0x0000
 #define TEST_OPT_VFSAPI		0x8000		// not a command-line option
+
+#define TEST_VAL_UNSET		0x0000
+#define TEST_VAL_SET		0x0001
+
+#define TEST_FILE_NONE		0x0000
+#define TEST_FILE_EXIST		0x0002
+#define TEST_FILE_VALID		0x0004
 
 void test_exit_error(const char *argv0, const char *fmt, ...);
 
