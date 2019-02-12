@@ -446,13 +446,11 @@ void test_wait_signal(void)
 {
 	int tty = isatty(STDIN_FILENO);
 
-	if (tty < 0)
-		warn("unable to check stdin");
-	else if (tty) {
+	if (tty == 1) {
 		printf("hit Enter to stop: ");
 		getchar();
 	}
-	else {
+	else if (errno == EINVAL || errno == ENOTTY) {
 		struct sigaction sa;
 
 		memset(&sa, 0, sizeof(struct sigaction));
@@ -466,5 +464,7 @@ void test_wait_signal(void)
 		else
 			pause();
 	}
+	else
+		warn("unable to check stdin");
 }
 
