@@ -119,8 +119,8 @@ static const struct opt_usage all_opts_usage[] = {
 };
 
 /* option values */
-static int retval;
-static long int timeout;
+static int optval_retval;
+static long int optval_timeout;
 
 static unsigned int opt_set_flags = TEST_OPT_NONE;
 
@@ -288,7 +288,8 @@ void test_parse_opts(int argc, char *const argv[], unsigned int opt_flags,
 			exit_usage(0, argv[0], long_opts, args_usage);
 
 		case TEST_OPT_NUM_RETVAL:
-			if (test_parse_retsym(vfsapi, optarg, &retval) < 0)
+			if (test_parse_retsym(vfsapi, optarg,
+					      &optval_retval) < 0)
 				test_exit_error(argv[0], "invalid retval: %s",
 						optarg);
 			else
@@ -296,16 +297,18 @@ void test_parse_opts(int argc, char *const argv[], unsigned int opt_flags,
 			break;
 
 		case TEST_OPT_NUM_TIMEOUT:
-			timeout = test_parse_long(optarg, 10);
-			if (errno > 0 || timeout < 0)
-				test_exit_error(argv[0], "invalid timeout: %s",
+			optval_timeout = test_parse_long(optarg, 10);
+			if (errno > 0 || optval_timeout < 0)
+				test_exit_error(argv[0],
+						"invalid timeout: %s",
 						optarg);
 			opt_set_flags |= TEST_OPT_TIMEOUT;
 			break;
 
 		case '?':
 			if (optopt > 0)
-				test_exit_error(argv[0], "invalid option: -%c",
+				test_exit_error(argv[0],
+						"invalid option: -%c",
 						optopt);
 			else
 				test_exit_error(argv[0], "invalid option: %s",
@@ -368,18 +371,18 @@ unsigned int test_get_opts(unsigned int opt_flags, ...)
 			case TEST_OPT_RETVAL:
 				i = va_arg(ap, int*);
 				if (ret_flag != TEST_OPT_NONE)
-					*i = retval;
+					*i = optval_retval;
 				break;
 
 			case TEST_OPT_TIMEOUT:
 				l = va_arg(ap, long int*);
 				if (ret_flag != TEST_OPT_NONE)
-					*l = timeout;
+					*l = optval_timeout;
 				break;
 
 			default:
-				err(EXIT_FAILURE,
-				    "unknown option flag: %u", opt_flag);
+				errx(EXIT_FAILURE,
+				     "unknown option flag: %u", opt_flag);
 		}
 	}
 
@@ -398,10 +401,10 @@ struct projfs *test_start_mount(const char *lowerdir, const char *mountdir,
 			user_data);
 
 	if (fs == NULL)
-		err(EXIT_FAILURE, "unable to create filesystem");
+		errx(EXIT_FAILURE, "unable to create filesystem");
 
 	if (projfs_start(fs) < 0)
-		err(EXIT_FAILURE, "unable to start filesystem");
+		errx(EXIT_FAILURE, "unable to start filesystem");
 
 	return fs;
 }
@@ -426,7 +429,7 @@ void test_start_vfsapi_mount(const char *storageRootFullPath,
 						mountHandle);
 
 	if (ret != PrjFS_Result_Success)
-		err(EXIT_FAILURE, "unable to start filesystem: %d", ret);
+		errx(EXIT_FAILURE, "unable to start filesystem: %d", ret);
 }
 
 void test_stop_vfsapi_mount(PrjFS_MountHandle* mountHandle)
@@ -444,13 +447,11 @@ void test_wait_signal(void)
 {
 	int tty = isatty(STDIN_FILENO);
 
-	if (tty < 0)
-		warn("unable to check stdin");
-	else if (tty) {
+	if (tty == 1) {
 		printf("hit Enter to stop: ");
 		getchar();
 	}
-	else {
+	else if (errno == EINVAL || errno == ENOTTY) {
 		struct sigaction sa;
 
 		memset(&sa, 0, sizeof(struct sigaction));
@@ -464,5 +465,7 @@ void test_wait_signal(void)
 		else
 			pause();
 	}
+	else
+		warn("unable to check stdin");
 }
 
