@@ -24,7 +24,8 @@ denial responses caused by event handlers returning null.
 . ./test-lib.sh
 . "$TEST_DIRECTORY"/test-lib-event.sh
 
-projfs_start test_projfs_handlers source target --retval null || exit 1
+projfs_start test_projfs_handlers source target --retval-file retval || exit 1
+echo null > retval
 
 projfs_event_printf notify create_dir d1
 test_expect_success 'test event handler on directory creation' '
@@ -50,6 +51,7 @@ test_expect_success 'test permission request denied on directory deletion' '
 	test_path_is_dir target/d1
 '
 
+rm retval
 projfs_stop || exit 1
 
 test_expect_success 'check all event notifications' '

@@ -24,7 +24,8 @@ events are received and handled correctly through the VFS API.
 . ./test-lib.sh
 . "$TEST_DIRECTORY"/test-lib-event.sh
 
-projfs_start test_vfsapi_handlers source target || exit 1
+projfs_start test_vfsapi_handlers source target --retval-file retval || exit 1
+touch retval
 
 projfs_event_printf vfs create_dir d1
 test_expect_success 'test event handler on parent directory creation' '
@@ -76,6 +77,7 @@ test_expect_success 'test permission granted on parent directory deletion' '
 	test_path_is_missing target/d1
 '
 
+rm retval
 projfs_stop || exit 1
 
 test_expect_success 'check all event notifications' '

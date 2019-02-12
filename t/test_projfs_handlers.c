@@ -28,15 +28,21 @@
 static int test_handle_event(struct projfs_event *event, const char *desc,
 			     int perm)
 {
-	unsigned int ret_flags;
+	unsigned int opt_flags, ret_flags;
+	const char *retfile;
 	int ret;
 
-	printf("  test %s for %s: "
-	       "0x%04" PRIx64 "-%08" PRIx64 ", %d\n",
-	       desc, event->path,
-	       event->mask >> 32, event->mask & 0xFFFFFFFF, event->pid);
+	opt_flags = test_get_opts((TEST_OPT_RETVAL | TEST_OPT_RETFILE),
+				  &ret, &ret_flags, &retfile);
 
-	test_get_opts(TEST_OPT_RETVAL, &ret, &ret_flags);
+	if ((opt_flags & TEST_OPT_RETFILE) == TEST_OPT_NONE ||
+	    (ret_flags & TEST_FILE_EXIST) != TEST_FILE_NONE) {
+		printf("  test %s for %s: "
+		       "0x%04" PRIx64 "-%08" PRIx64 ", %d\n",
+		       desc, event->path,
+		       event->mask >> 32, event->mask & 0xFFFFFFFF,
+		       event->pid);
+	}
 
 	if ((ret_flags & TEST_VAL_SET) == TEST_VAL_UNSET)
 		ret = perm ? PROJFS_ALLOW : 0;
@@ -62,7 +68,8 @@ int main(int argc, char *const argv[])
 	struct projfs *fs;
 	struct projfs_handlers handlers = { 0 };
 
-	test_parse_mount_opts(argc, argv, TEST_OPT_RETVAL,
+	test_parse_mount_opts(argc, argv,
+			      (TEST_OPT_RETVAL | TEST_OPT_RETFILE),
 			      &lower_path, &mount_path);
 
 	handlers.handle_notify_event = &test_notify_event;

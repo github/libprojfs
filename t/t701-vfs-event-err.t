@@ -24,7 +24,8 @@ events respond to handler errors through the VFS API.
 . ./test-lib.sh
 . "$TEST_DIRECTORY"/test-lib-event.sh
 
-projfs_start test_vfsapi_handlers source target --retval EOutOfMemory || exit 1
+projfs_start test_vfsapi_handlers source target --retval-file retval || exit 1
+echo EOutOfMemory > retval
 
 # TODO: we expect mkdir to create a dir despite the handler error and
 #	regardless of mkdir's failure exit code
@@ -54,6 +55,7 @@ test_expect_success 'test event handler error on directory deletion' '
 	test_path_is_dir target/d1
 '
 
+rm retval
 projfs_stop || exit 1
 
 test_expect_success 'check all event notifications' '

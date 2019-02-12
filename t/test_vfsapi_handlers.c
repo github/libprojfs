@@ -39,19 +39,26 @@ static PrjFS_Result TestNotifyOperation(
     _In_    const char*                             destinationRelativePath
 )
 {
-	unsigned int ret_flags;
+	unsigned int opt_flags, ret_flags;
+	const char *retfile;
 	int ret;
 
-	printf("  TestNotifyOperation for %s: %d, %s, %hhd, 0x%08X\n",
-	       relativePath, triggeringProcessId, triggeringProcessName,
-	       isDirectory, notificationType);
+	opt_flags = test_get_opts((TEST_OPT_VFSAPI | TEST_OPT_RETVAL
+						   | TEST_OPT_RETFILE),
+				  &ret, &ret_flags, &retfile);
+
+	if ((opt_flags & TEST_OPT_RETFILE) == TEST_OPT_NONE ||
+	    (ret_flags & TEST_FILE_EXIST) != TEST_FILE_NONE) {
+		printf("  TestNotifyOperation for %s: %d, %s, %hhd, 0x%08X\n",
+		       relativePath,
+		       triggeringProcessId, triggeringProcessName,
+		       isDirectory, notificationType);
+	}
 
 	(void)commandId;		// prevent compiler warnings
 	(void)providerId;
 	(void)contentId;
 	(void)destinationRelativePath;
-
-	test_get_opts((TEST_OPT_VFSAPI | TEST_OPT_RETVAL), &ret, &ret_flags);
 
 	if ((ret_flags & TEST_VAL_SET) == TEST_VAL_UNSET)
 		ret = PrjFS_Result_Success;
@@ -65,7 +72,9 @@ int main(int argc, char *const argv[])
 	PrjFS_MountHandle *handle;
 	PrjFS_Callbacks callbacks = { 0 };
 
-	test_parse_mount_opts(argc, argv, (TEST_OPT_VFSAPI | TEST_OPT_RETVAL),
+	test_parse_mount_opts(argc, argv,
+			      (TEST_OPT_VFSAPI | TEST_OPT_RETVAL
+					       | TEST_OPT_RETFILE),
 			      &lower_path, &mount_path);
 
 	memset(&callbacks, 0, sizeof(PrjFS_Callbacks));
