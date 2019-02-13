@@ -153,6 +153,7 @@ static int convert_result_to_errno(PrjFS_Result result)
 		ret = EINVAL;
 		break;
 	case PrjFS_Result_EInvalidOperation:
+	case PrjFS_Result_EVirtualizationInvalidOperation:
 		ret = EPERM;
 		break;
 	case PrjFS_Result_ENotSupported:
@@ -187,7 +188,6 @@ static int convert_result_to_errno(PrjFS_Result result)
 		break;
 
 	case PrjFS_Result_Invalid:
-	case PrjFS_Result_EVirtualizationInvalidOperation:
 	default:
 		ret = EINVAL;	// should imply an internal error, not client's
 	}
