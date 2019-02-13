@@ -107,9 +107,6 @@ typedef enum
     PrjFS_Result_EAccessDenied                      = 0x20000010,
     PrjFS_Result_EInvalidHandle                     = 0x20000020,
     PrjFS_Result_EIOError                           = 0x20000040,
-    // TODO: remove VirtualizationRoot error codes unless needed
-    PrjFS_Result_ENotAVirtualizationRoot            = 0x20000080,
-    PrjFS_Result_EVirtualizationRootAlreadyExists   = 0x20000100,
     PrjFS_Result_EDirectoryNotEmpty                 = 0x20000200,
     PrjFS_Result_EVirtualizationInvalidOperation    = 0x20000400,
 
@@ -150,10 +147,6 @@ PrjFS_Result PrjFS_StartVirtualizationInstance(
 
 void PrjFS_StopVirtualizationInstance(
     _In_    const PrjFS_MountHandle*                mountHandle
-);
-
-PrjFS_Result PrjFS_ConvertDirectoryToVirtualizationRoot(
-    _In_    const char*                             virtualizationRootFullPath
 );
 
 PrjFS_Result PrjFS_WritePlaceholderDirectory(

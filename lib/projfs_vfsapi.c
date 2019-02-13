@@ -187,9 +187,7 @@ static int convert_result_to_errno(PrjFS_Result result)
 		break;
 
 	case PrjFS_Result_Invalid:
-	case PrjFS_Result_ENotAVirtualizationRoot:
 	case PrjFS_Result_EVirtualizationInvalidOperation:
-	case PrjFS_Result_EVirtualizationRootAlreadyExists:
 	default:
 		ret = EINVAL;	// should imply an internal error, not client's
 	}
@@ -371,19 +369,6 @@ void PrjFS_StopVirtualizationInstance(
 
 	user_data = projfs_stop(fs);
 	free(user_data);
-}
-
-// TODO: likely unneeded; remove from VFS API and LinuxFileSystemVirtualizer
-//       - OR -
-//       use as a place to check for pre-existing mounts and clean them up
-PrjFS_Result PrjFS_ConvertDirectoryToVirtualizationRoot(
-    _In_    const char*                             virtualizationRootFullPath
-)
-{
-	// TODO: remove from function signature if not used
-	(void) virtualizationRootFullPath;
-
-	return PrjFS_Result_Success;
 }
 
 PrjFS_Result PrjFS_WritePlaceholderDirectory(
