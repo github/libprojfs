@@ -1259,14 +1259,39 @@ int projfs_create_proj_dir(struct projfs *fs, const char *path)
 int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
                             mode_t mode)
 {
+	int fd, res;
+	char v = 1;
+
 	if (!check_safe_rel_path(path))
 		return EINVAL;
 
-	// TODO: return _projfs_create_file(fs, path, size, mode, ...)
-	//	 until then, prevent compiler warnings
-	(void)fs;
-	(void)size;
-	(void)mode;
+	fd = openat(fs->lowerdir_fd, path, O_WRONLY | O_CREAT | O_EXCL, mode);
+	if (fd == -1)
+		return errno;
+
+	res = ftruncate(fd, size);
+	if (res == -1) {
+		res = errno;
+		close(fd);
+
+		/* best effort */
+		(void)unlinkat(fs->lowerdir_fd, path, 0);
+
+		return res;
+	}
+
+	res = fsetxattr(fd, USER_PROJECTION_EMPTY, &v, 1, 0);
+	if (res == -1) {
+		res = errno;
+		close(fd);
+
+		/* best effort */
+		(void)unlinkat(fs->lowerdir_fd, path, 0);
+
+		return res;
+	}
+
+	close(fd);
 
 	return 0;
 }
@@ -1278,7 +1303,7 @@ int _projfs_make_dir(struct projfs *fs, const char *path, mode_t mode,
 
 	(void)fs;
 
-	res = mkdirat(lowerdir_fd(), path, mode);
+	res = mkdirat(fs->lowerdir_fd, path, mode);
 	if (res == -1)
 		return errno;
 	if (proj_flag) {
