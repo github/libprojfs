@@ -239,28 +239,20 @@ static void finalize_userdata(struct node_userdata *user)
 /**
  * @return 0 or an errno
  */
-static int projfs_fuse_proj_dir_locked(struct node_userdata *user,
-                                       const char *path)
+static int projfs_fuse_proj_locked(uint64_t mask,
+				   struct node_userdata *user,
+				   const char *path)
 {
-	int res, err;
+	int res = projfs_fuse_proj_event(mask, path, 0);
 
-	if (!user->proj_flag)
-		return 0;
-
-	err = projfs_fuse_proj_event(
-		PROJFS_CREATE_SELF | PROJFS_ONDIR,
-		path,
-		0);
-
-	if (err < 0)
-		return -err;
+	if (res < 0)
+		return -res;
 
 	res = fremovexattr(user->fd, USER_PROJECTION_EMPTY);
-	err = errno;
-	if (res == 0 || (res == -1 && err == ENOATTR))
+	if (res == 0 || (res == -1 && errno == ENOATTR))
 		user->proj_flag = 0;
 	else
-		return err;
+		return errno;
 
 	return 0;
 }
@@ -296,7 +288,8 @@ static int projfs_fuse_proj_dir(const char *op, const char *path, int parent)
 
 	/* pass mapped path (i.e. containing directory we want to project) to
 	 * provider */
-	res = projfs_fuse_proj_dir_locked(&user, mapped_path);
+	res = projfs_fuse_proj_locked(
+		PROJFS_CREATE_SELF | PROJFS_ONDIR, &user, mapped_path);
 
 out_finalize:
 	finalize_userdata(&user);
@@ -304,6 +297,29 @@ out_finalize:
 out:
 	free(mapped_path);
 
+	return res;
+}
+
+static int projfs_fuse_proj_file(const char *op, const char *path)
+{
+	struct node_userdata user;
+	int res;
+
+	(void)op;
+
+	res = get_path_userdata(&user, path);
+	if (res != 0)
+		goto out;
+
+	if (!user.proj_flag)
+		goto out_finalize;
+
+	res = projfs_fuse_proj_locked(PROJFS_CREATE_SELF, &user, path);
+
+out_finalize:
+	finalize_userdata(&user);
+
+out:
 	return res;
 }
 
@@ -330,6 +346,9 @@ static int projfs_op_getattr(char const *path, struct stat *attr,
 		res = projfs_fuse_proj_dir("getattr", lowerpath(path), 1);
 		if (res)
 			return -res;
+		res = projfs_fuse_proj_file("getattr", lowerpath(path));
+		if (res)
+			return -res;
 		res = fstatat(lowerdir_fd(), lowerpath(path), attr,
 			      AT_SYMLINK_NOFOLLOW);
 	}
@@ -339,6 +358,9 @@ static int projfs_op_getattr(char const *path, struct stat *attr,
 static int projfs_op_readlink(char const *path, char *buf, size_t size)
 {
 	int res = projfs_fuse_proj_dir("readlink", lowerpath(path), 1);
+	if (res)
+		return -res;
+	res = projfs_fuse_proj_file("readlink", lowerpath(path));
 	if (res)
 		return -res;
 	res = readlinkat(lowerdir_fd(), lowerpath(path), buf, size - 1);
@@ -356,6 +378,9 @@ static int projfs_op_link(char const *src, char const *dst)
 	 *       fail when src is an empty path, as we expect.
 	 */
 	int res = projfs_fuse_proj_dir("link", lowerpath(src), 1);
+	if (res)
+		return -res;
+	res = projfs_fuse_proj_file("link", lowerpath(src));
 	if (res)
 		return -res;
 	res = projfs_fuse_proj_dir("link2", lowerpath(dst), 1);
@@ -455,6 +480,9 @@ static int projfs_op_open(char const *path, struct fuse_file_info *fi)
 	int fd;
 
 	res = projfs_fuse_proj_dir("open", lowerpath(path), 1);
+	if (res)
+		return -res;
+	res = projfs_fuse_proj_file("open", lowerpath(path));
 	if (res)
 		return -res;
 	fd = openat(lowerdir_fd(), lowerpath(path), flags);
@@ -570,6 +598,9 @@ static int projfs_op_rename(char const *src, char const *dst,
                             unsigned int flags)
 {
 	int res = projfs_fuse_proj_dir("rename", lowerpath(src), 1);
+	if (res)
+		return -res;
+	res = projfs_fuse_proj_file("rename", lowerpath(src));
 	if (res)
 		return -res;
 	res = projfs_fuse_proj_dir("rename2", lowerpath(dst), 1);
@@ -739,6 +770,9 @@ static int projfs_op_truncate(char const *path, off_t off,
 		res = projfs_fuse_proj_dir("truncate", lowerpath(path), 1);
 		if (res)
 			return -res;
+		res = projfs_fuse_proj_file("truncate", lowerpath(path));
+		if (res)
+			return -res;
 
 		fd = openat(lowerdir_fd(), lowerpath(path),
 				O_WRONLY);
@@ -783,6 +817,8 @@ static int projfs_op_setxattr(char const *path, char const *name,
 
 	path = lowerpath(path);
 
+	// TODO: filter user.projection.* attrs
+
 	res = projfs_fuse_proj_dir("setxattr", path, 1);
 	if (res)
 		return -res;
@@ -809,6 +845,8 @@ static int projfs_op_getxattr(char const *path, char const *name,
 
 	path = lowerpath(path);
 
+	// TODO: filter user.projection.* attrs
+
 	res = projfs_fuse_proj_dir("getxattr", path, 1);
 	if (res)
 		return -res;
@@ -834,6 +872,8 @@ static int projfs_op_listxattr(char const *path, char *list, size_t size)
 
 	path = lowerpath(path);
 
+	// TODO: filter user.projection.* attrs
+
 	res = projfs_fuse_proj_dir("listxattr", path, 1);
 	if (res)
 		return -res;
@@ -858,6 +898,8 @@ static int projfs_op_removexattr(char const *path, char const *name)
 	int fd;
 
 	path = lowerpath(path);
+
+	// TODO: filter user.projection.* attrs
 
 	res = projfs_fuse_proj_dir("removexattr", path, 1);
 	if (res)
