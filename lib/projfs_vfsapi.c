@@ -211,7 +211,7 @@ static int handle_proj_event(struct projfs_event *event)
 	if (cmdline != NULL)
 		triggeringProcessName = (const char *) cmdline;
 
-	if (event->mask | PROJFS_ONDIR) {
+	if (event->mask & PROJFS_ONDIR) {
 		PrjFS_EnumerateDirectoryCallback *callback =
 			callbacks->EnumerateDirectory;
 
