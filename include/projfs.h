@@ -141,6 +141,8 @@ int projfs_create_proj_dir(struct projfs *fs, const char *path);
 int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
 			    mode_t mode);
 
+// XXX
+int projfs_write_proj_file(struct projfs *fs, int fd, const void *bytes, unsigned int byteCount);
 #ifdef __cplusplus
 }
 #endif

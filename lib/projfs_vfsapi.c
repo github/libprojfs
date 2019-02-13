@@ -38,6 +38,7 @@
 
 struct _PrjFS_FileHandle
 {
+	struct projfs *fs;
 	int fd;
 };
 
@@ -226,7 +227,7 @@ static int handle_proj_event(struct projfs_event *event)
 			callbacks->GetFileStream;
 		unsigned char providerId[PrjFS_PlaceholderIdLength];
 		unsigned char contentId[PrjFS_PlaceholderIdLength];
-		PrjFS_FileHandle fh = { event->fd };
+		PrjFS_FileHandle fh = { event->fs, event->fd };
 
 		if (callback == NULL)
 			goto out;
@@ -401,6 +402,19 @@ PrjFS_Result PrjFS_WritePlaceholderFile(
 	ret = projfs_create_proj_file(fs, relativePath, fileSize, fileMode);
 	(void)providerId;
 	(void)contentId;
+
+	return convert_errno_to_result(ret);
+}
+
+PrjFS_Result PrjFS_WriteFileContents(
+    _In_    const PrjFS_FileHandle*                 fileHandle,
+    _In_    const void*                             bytes,
+    _In_    unsigned int                            byteCount
+)
+{
+	int ret;
+
+	ret = projfs_write_proj_file(fileHandle->fs, fileHandle->fd, bytes, byteCount);
 
 	return convert_errno_to_result(ret);
 }

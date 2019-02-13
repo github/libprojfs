@@ -211,6 +211,7 @@ PrjFS_Result PrjFS_DeleteFile(
     _In_    PrjFS_UpdateType                        updateFlags,
     _Out_   PrjFS_UpdateFailureCause*               failureCause
 );
+#endif
 
 PrjFS_Result PrjFS_WriteFileContents(
     _In_    const PrjFS_FileHandle*                 fileHandle,
@@ -218,6 +219,7 @@ PrjFS_Result PrjFS_WriteFileContents(
     _In_    unsigned int                            byteCount
 );
 
+#if 0
 typedef enum
 {
     PrjFS_FileState_Invalid                         = 0x00000000,

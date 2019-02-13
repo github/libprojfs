@@ -241,9 +241,10 @@ static void finalize_userdata(struct node_userdata *user)
  */
 static int projfs_fuse_proj_locked(uint64_t mask,
 				   struct node_userdata *user,
-				   const char *path)
+				   const char *path,
+				   int fd)
 {
-	int res = projfs_fuse_proj_event(mask, path, 0);
+	int res = projfs_fuse_proj_event(mask, path, fd);
 
 	if (res < 0)
 		return -res;
@@ -289,7 +290,7 @@ static int projfs_fuse_proj_dir(const char *op, const char *path, int parent)
 	/* pass mapped path (i.e. containing directory we want to project) to
 	 * provider */
 	res = projfs_fuse_proj_locked(
-		PROJFS_CREATE_SELF | PROJFS_ONDIR, &user, mapped_path);
+		PROJFS_CREATE_SELF | PROJFS_ONDIR, &user, mapped_path, 0);
 
 out_finalize:
 	finalize_userdata(&user);
@@ -314,7 +315,8 @@ static int projfs_fuse_proj_file(const char *op, const char *path)
 	if (!user.proj_flag)
 		goto out_finalize;
 
-	res = projfs_fuse_proj_locked(PROJFS_CREATE_SELF, &user, path);
+	/* XXX: fd */
+	res = projfs_fuse_proj_locked(PROJFS_CREATE_SELF, &user, path, 0);
 
 out_finalize:
 	finalize_userdata(&user);
