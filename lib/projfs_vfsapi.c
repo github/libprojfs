@@ -412,9 +412,15 @@ PrjFS_Result PrjFS_WriteFileContents(
     _In_    unsigned int                            byteCount
 )
 {
-	int ret;
+	int fd = fileHandle->fd;
 
-	ret = projfs_write_proj_file(fileHandle->fs, fileHandle->fd, bytes, byteCount);
+	while (byteCount) {
+		ssize_t res = write(fd, bytes, byteCount);
+		if (res == -1)
+			return convert_errno_to_result(errno);
+		bytes = (void *)(((uintptr_t)bytes) + res);
+		byteCount -= res;
+	}
 
-	return convert_errno_to_result(ret);
+	return PrjFS_Result_Success;
 }

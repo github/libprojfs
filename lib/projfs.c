@@ -1378,14 +1378,3 @@ int _projfs_make_dir(struct projfs *fs, const char *path, mode_t mode,
 	return 0;
 }
 
-int projfs_write_proj_file(struct projfs *fs, int fd, const void *bytes, unsigned int byteCount)
-{
-	while (byteCount) {
-		ssize_t res = write(fd, bytes, byteCount);
-		if (res == -1)
-			return errno;
-		bytes = (void *)(((uintptr_t)bytes) + res);
-		byteCount -= res;
-	}
-	return 0;
-}
