@@ -180,7 +180,9 @@ static char *get_mapped_path(char const *path, int parent)
  *
  * @return 0 or an errno
  */
-static int get_path_userdata(struct node_userdata *user, const char *mapped_path)
+static int get_path_userdata(struct node_userdata *user,
+			     const char *mapped_path,
+			     mode_t mode)
 {
 	ssize_t sz;
 	int err, wait_ms;
@@ -188,7 +190,7 @@ static int get_path_userdata(struct node_userdata *user, const char *mapped_path
 
 	memset(user, 0, sizeof(*user));
 
-	user->fd = openat(lowerdir_fd(), mapped_path, O_RDONLY);
+	user->fd = openat(lowerdir_fd(), mapped_path, mode);
 	if (user->fd == -1)
 		return errno;
 
@@ -280,7 +282,7 @@ static int projfs_fuse_proj_dir(const char *op, const char *path, int parent)
 	if (!mapped_path)
 		return errno;
 
-	res = get_path_userdata(&user, mapped_path);
+	res = get_path_userdata(&user, mapped_path, O_RDONLY | O_DIRECTORY);
 	if (res != 0)
 		goto out;
 
@@ -308,15 +310,21 @@ static int projfs_fuse_proj_file(const char *op, const char *path)
 
 	(void)op;
 
-	res = get_path_userdata(&user, path);
-	if (res != 0)
+	res = get_path_userdata(&user, path, O_RDWR);
+	if (res == EISDIR) {
+		/* tried to project a directory as a file, ignore
+		 * XXX should we just always project dirs as dirs and files as
+		 * files? */
+		res = 0;
+		goto out;
+	} else if (res != 0)
 		goto out;
 
 	if (!user.proj_flag)
 		goto out_finalize;
 
-	/* XXX: fd */
-	res = projfs_fuse_proj_locked(PROJFS_CREATE_SELF, &user, path, 0);
+	/* `path` relative to lowerdir exists and is a placeholder -- hydrate it */
+	res = projfs_fuse_proj_locked(PROJFS_CREATE_SELF, &user, path, user.fd);
 
 out_finalize:
 	finalize_userdata(&user);
@@ -1364,6 +1372,18 @@ int _projfs_make_dir(struct projfs *fs, const char *path, mode_t mode,
 		close(fd);
 		if (res == -1)
 			return err;
+	}
+	return 0;
+}
+
+int projfs_write_proj_file(struct projfs *fs, int fd, const void *bytes, unsigned int byteCount)
+{
+	while (byteCount) {
+		ssize_t res = write(fd, bytes, byteCount);
+		if (res == -1)
+			return errno;
+		bytes = (void *)(((uintptr_t)bytes) + res);
+		byteCount -= res;
 	}
 	return 0;
 }
