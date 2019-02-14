@@ -38,7 +38,6 @@
 
 struct _PrjFS_FileHandle
 {
-	struct projfs *fs;
 	int fd;
 };
 
@@ -227,7 +226,7 @@ static int handle_proj_event(struct projfs_event *event)
 			callbacks->GetFileStream;
 		unsigned char providerId[PrjFS_PlaceholderIdLength];
 		unsigned char contentId[PrjFS_PlaceholderIdLength];
-		PrjFS_FileHandle fh = { event->fs, event->fd };
+		PrjFS_FileHandle fh = { event->fd };
 
 		if (callback == NULL)
 			goto out;
