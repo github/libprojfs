@@ -356,9 +356,6 @@ static int projfs_op_getattr(char const *path, struct stat *attr,
 		res = projfs_fuse_proj_dir("getattr", lowerpath(path), 1);
 		if (res)
 			return -res;
-		res = projfs_fuse_proj_file("getattr", lowerpath(path));
-		if (res)
-			return -res;
 		res = fstatat(lowerdir_fd(), lowerpath(path), attr,
 			      AT_SYMLINK_NOFOLLOW);
 	}
