@@ -310,11 +310,16 @@ static int projfs_fuse_proj_file(const char *op, const char *path)
 
 	(void)op;
 
-	res = get_path_userdata(&user, path, O_RDWR);
+	res = get_path_userdata(&user, path, O_RDWR | O_NOFOLLOW);
 	if (res == EISDIR) {
 		/* tried to project a directory as a file, ignore
 		 * XXX should we just always project dirs as dirs and files as
 		 * files? */
+		res = 0;
+		goto out;
+	} else if (res == ELOOP) {
+		/* tried to project a symlink. it already exists as a symlink
+		 * on disk so we have nothing to do */
 		res = 0;
 		goto out;
 	} else if (res != 0)
