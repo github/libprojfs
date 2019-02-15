@@ -241,12 +241,12 @@ static void finalize_userdata(struct node_userdata *user)
 /**
  * @return 0 or an errno
  */
-static int projfs_fuse_proj_locked(uint64_t mask,
+static int projfs_fuse_proj_locked(uint64_t event_mask,
 				   struct node_userdata *user,
 				   const char *path,
 				   int fd)
 {
-	int res = projfs_fuse_proj_event(mask, path, fd);
+	int res = projfs_fuse_proj_event(event_mask, path, fd);
 
 	if (res < 0)
 		return -res;
@@ -265,7 +265,7 @@ static int projfs_fuse_proj_locked(uint64_t mask,
  * directory is the parent of the path, or the path itself.
  *
  * @param op op name (for debugging)
- * @param path the lower path (from lower_path)
+ * @param path the lower path (from lowerpath)
  * @param parent 1 if we should look at the parent directory containing path, 0
  *               if we look at path itself
  * @return 0 or an errno
@@ -303,6 +303,13 @@ out:
 	return res;
 }
 
+/**
+ * Project a file. Takes the lower path.
+ *
+ * @param op op name (for debugging)
+ * @param path the lower path (from lowerpath)
+ * @return 0 or an errno
+ */
 static int projfs_fuse_proj_file(const char *op, const char *path)
 {
 	struct node_userdata user;
@@ -340,6 +347,10 @@ out:
 
 static const char *dotpath = ".";
 
+/**
+ * Makes a path from FUSE usable as a relative path to lowerdir_fd.  Removes
+ * any leading forward slashes.  If the resulting path is empty, returns ".".
+ * */
 static inline const char *lowerpath(const char *path)
 {
 	while (*path == '/')
