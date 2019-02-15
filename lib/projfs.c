@@ -389,12 +389,18 @@ static int projfs_op_link(char const *src, char const *dst)
 	int res = projfs_fuse_proj_dir("link", lowerpath(src), 1);
 	if (res)
 		return -res;
+
+	/* hydrate the source file before adding a hard link to it, otherwise
+	 * a user could access the newly created link and end up modifying the
+	 * non-hydrated placeholder */
 	res = projfs_fuse_proj_file("link", lowerpath(src));
 	if (res)
 		return -res;
+
 	res = projfs_fuse_proj_dir("link2", lowerpath(dst), 1);
 	if (res)
 		return -res;
+
 	res = linkat(lowerdir_fd, lowerpath(src),
 	             lowerdir_fd, lowerpath(dst), 0);
 	return res == -1 ? -errno : 0;
@@ -462,12 +468,22 @@ static int projfs_op_symlink(char const *link, char const *path)
 static int projfs_op_create(char const *path, mode_t mode,
                             struct fuse_file_info *fi)
 {
+	/* FUSE sets fi.flags = O_CREAT | O_EXCL | O_WRONLY in fuse_lib_mknod,
+	 * untouched in fuse_lib_create where it comes straight from
+	 * FUSE_CREATE.  In Linux 4.9 at least, we never hit a codepath where
+	 * we send FUSE_CREATE without first checking that O_CREAT is set.
+	 * There's no guarantee O_EXCL (or O_TRUNC) are set, though, so we need
+	 * to hydrate it if it exists. */
+
 	int flags = fi->flags & ~O_NOFOLLOW;
 	int res;
 	int fd;
 
 	res = projfs_fuse_proj_dir("create", lowerpath(path), 1);
 	if (res)
+		return -res;
+	res = projfs_fuse_proj_file("create", lowerpath(path));
+	if (res && res != ENOENT)
 		return -res;
 	fd = openat(lowerdir_fd(), lowerpath(path), flags, mode);
 
@@ -491,13 +507,19 @@ static int projfs_op_open(char const *path, struct fuse_file_info *fi)
 	res = projfs_fuse_proj_dir("open", lowerpath(path), 1);
 	if (res)
 		return -res;
-	res = projfs_fuse_proj_file("open", lowerpath(path));
-	if (res)
-		return -res;
-	fd = openat(lowerdir_fd(), lowerpath(path), flags);
 
+	/* Per above, allow hydration to fail with ENOENT; if the file
+	 * operation should fail for that reason (i.e. O_CREAT is not specified
+	 * and the file doesn't exist), we'll return the failure from openat(2)
+	 * below */
+	res = projfs_fuse_proj_file("open", lowerpath(path));
+	if (res && res != ENOENT)
+		return -res;
+
+	fd = openat(lowerdir_fd(), lowerpath(path), flags);
 	if (fd == -1)
 		return -errno;
+
 	fi->fh = fd;
 	return 0;
 }
@@ -512,8 +534,9 @@ static int projfs_op_statfs(char const *path, struct statvfs *buf)
 	return res == -1 ? -errno : 0;
 }
 
-static int projfs_op_read_buf(char const *path, struct fuse_bufvec **bufp, size_t size,
-                          off_t off, struct fuse_file_info *fi)
+static int projfs_op_read_buf(char const *path, struct fuse_bufvec **bufp,
+			      size_t size, off_t off,
+			      struct fuse_file_info *fi)
 {
 	struct fuse_bufvec *src = malloc(sizeof(*src));
 
@@ -534,7 +557,7 @@ static int projfs_op_read_buf(char const *path, struct fuse_bufvec **bufp, size_
 }
 
 static int projfs_op_write_buf(char const *path, struct fuse_bufvec *src,
-                                off_t off, struct fuse_file_info *fi)
+			       off_t off, struct fuse_file_info *fi)
 {
 	struct fuse_bufvec buf = FUSE_BUFVEC_INIT(fuse_buf_size(src));
 
