@@ -372,9 +372,6 @@ static int projfs_op_readlink(char const *path, char *buf, size_t size)
 	int res = projfs_fuse_proj_dir("readlink", lowerpath(path), 1);
 	if (res)
 		return -res;
-	res = projfs_fuse_proj_file("readlink", lowerpath(path));
-	if (res)
-		return -res;
 	res = readlinkat(lowerdir_fd(), lowerpath(path), buf, size - 1);
 	if (res == -1)
 		return -errno;
