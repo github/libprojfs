@@ -151,22 +151,17 @@ struct node_userdata
 #define USER_PROJECTION_EMPTY "user.projection.empty"
 
 /**
- * If parent is 0, returns a copy of path.
- *
- * If parent is non-zero, return a copy of path with the last component removed
- * (e.g. "x/y/z" will yield "x/y").  If path has only one component,
- * returns ".".
+ * Return a copy of path with the last component removed (e.g. "x/y/z" will
+ * yield "x/y").  If path has only one component, returns ".".
  *
  * The caller is responsible for freeing the returned string.
+ *
+ * @param path path to get parent directory of
+ * @return name of parent of path; may be NULL if strdup or strndup fails
  */
-static char *get_mapped_path(char const *path, int parent)
+static char *get_path_parent(char const *path)
 {
-	const char *last;
-
-	if (!parent)
-		return strdup(path);
-
-	last = strrchr(path, '/');
+	const char *last = strrchr(path, '/');
 	if (!last)
 		return strdup(".");
 	else
@@ -174,14 +169,18 @@ static char *get_mapped_path(char const *path, int parent)
 }
 
 /**
- * Acquires a lock on mapped_path and populates the supplied node_userdata
- * argument with the open and locked fd, and proj_flag based on the
+ * Acquires a lock on path and populates the supplied node_userdata argument
+ * with the open and locked fd, and proj_flag based on the
  * USER_PROJECTION_EMPTY xattr.
  *
+ * @param user userdata to fill out (zeroed by this function)
+ * @param path path relative to lowerdir to lock and open
+ * @param mode filemode to open path with; the fd populated in user will have
+ *             this mode
  * @return 0 or an errno
  */
 static int get_path_userdata(struct node_userdata *user,
-			     const char *mapped_path,
+			     const char *path,
 			     mode_t mode)
 {
 	ssize_t sz;
@@ -190,7 +189,7 @@ static int get_path_userdata(struct node_userdata *user,
 
 	memset(user, 0, sizeof(*user));
 
-	user->fd = openat(lowerdir_fd(), mapped_path, mode);
+	user->fd = openat(lowerdir_fd(), path, mode);
 	if (user->fd == -1)
 		return errno;
 
@@ -228,6 +227,8 @@ retry_flock:
 /**
  * Closes the open fd associated with user, which in turn releases any locks
  * associated with the fd.
+ *
+ * @param user userdata to clean up
  */
 static void finalize_userdata(struct node_userdata *user)
 {
@@ -239,14 +240,19 @@ static void finalize_userdata(struct node_userdata *user)
 }
 
 /**
+ * Projects a path by notifying the provider with the given event mask.  If the
+ * provider succeeds, clears the projection flag on the path.
+ *
+ * @param event_mask the event mask passed up to the provider
+ * @param user userdata collected from get_path_userdata
+ * @param path the path the userdata was collected for
  * @return 0 or an errno
  */
 static int projfs_fuse_proj_locked(uint64_t event_mask,
 				   struct node_userdata *user,
-				   const char *path,
-				   int fd)
+				   const char *path)
 {
-	int res = projfs_fuse_proj_event(event_mask, path, fd);
+	int res = projfs_fuse_proj_event(event_mask, path, user->fd);
 
 	if (res < 0)
 		return -res;
@@ -274,15 +280,18 @@ static int projfs_fuse_proj_dir(const char *op, const char *path, int parent)
 {
 	struct node_userdata user;
 	int res;
-	char *mapped_path;
+	char *target_path;
 
 	(void)op;
 
-	mapped_path = get_mapped_path(path, parent);
-	if (!mapped_path)
+	if (parent)
+		target_path = get_path_parent(path);
+	else
+		target_path = strdup(path);
+	if (!target_path)
 		return errno;
 
-	res = get_path_userdata(&user, mapped_path, O_RDONLY | O_DIRECTORY);
+	res = get_path_userdata(&user, target_path, O_RDONLY | O_DIRECTORY);
 	if (res != 0)
 		goto out;
 
@@ -292,13 +301,13 @@ static int projfs_fuse_proj_dir(const char *op, const char *path, int parent)
 	/* pass mapped path (i.e. containing directory we want to project) to
 	 * provider */
 	res = projfs_fuse_proj_locked(
-		PROJFS_CREATE_SELF | PROJFS_ONDIR, &user, mapped_path, 0);
+		PROJFS_CREATE_SELF | PROJFS_ONDIR, &user, target_path);
 
 out_finalize:
 	finalize_userdata(&user);
 
 out:
-	free(mapped_path);
+	free(target_path);
 
 	return res;
 }
@@ -336,7 +345,7 @@ static int projfs_fuse_proj_file(const char *op, const char *path)
 		goto out_finalize;
 
 	/* `path` relative to lowerdir exists and is a placeholder -- hydrate it */
-	res = projfs_fuse_proj_locked(PROJFS_CREATE_SELF, &user, path, user.fd);
+	res = projfs_fuse_proj_locked(PROJFS_CREATE_SELF, &user, path);
 
 out_finalize:
 	finalize_userdata(&user);
