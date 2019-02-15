@@ -83,6 +83,8 @@ static int test_handle_event(struct projfs_event *event, const char *desc,
 	else if (!perm && ret > 0)
 		ret = 0;
 
+	test_free_opts();
+
 	return ret;
 }
 

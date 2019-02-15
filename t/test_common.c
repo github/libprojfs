@@ -26,6 +26,7 @@
 
 #include <err.h>
 #include <errno.h>
+#include <limits.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -40,6 +41,9 @@
 #define MOUNT_ARGS_USAGE "<lower-path> <mount-path>"
 
 #define MAX_RETVAL_NAME_LEN 40
+#define MAX_PROJLIST_ENTRY_LEN (NAME_MAX * 2 + 100)	// enough for tests
+
+#define is_projlist_delim(c) ((c) == ' ' || (c) == '\t')
 
 #define retval_entry(s) #s, -s
 
@@ -69,8 +73,10 @@ static const struct option all_long_opts[] = {
 	{ "help", no_argument, NULL, TEST_OPT_NUM_HELP },
 	{ "retval", required_argument, NULL, TEST_OPT_NUM_RETVAL },
 	{ "retval-file", required_argument, NULL, TEST_OPT_NUM_RETFILE },
+	{ "projlist", required_argument, NULL, TEST_OPT_NUM_PROJLIST },
+	{ "projlist-file", required_argument, NULL, TEST_OPT_NUM_PROJFILE },
 	{ "timeout", required_argument, NULL, TEST_OPT_NUM_TIMEOUT },
-	{ "lock-file", required_argument, NULL, TEST_OPT_NUM_LOCKFILE },
+	{ "lock-file", required_argument, NULL, TEST_OPT_NUM_LOCKFILE }
 };
 
 struct opt_usage {
@@ -82,13 +88,17 @@ static const struct opt_usage all_opts_usage[] = {
 	{ NULL, 1 },
 	{ "allow|deny|null|<error>", 1 },
 	{ "<retval-file>", 1 },
+	{ "[d <name> <mode>|f <name> <mode> <size> <source>]...", 1 },
+	{ "<projlist-file>", 1 },
 	{ "<max-seconds>", 1 },
-	{ "<lock-file>", 1 },
+	{ "<lock-file>", 1 }
 };
 
 /* option values */
 static int optval_retval;
 static const char *optval_retfile;
+static struct test_projlist_entry *optval_projlist;
+static const char *optval_projfile;
 static long int optval_timeout;
 static const char *optval_lockfile;
 
@@ -230,6 +240,221 @@ out:
 	return;
 }
 
+static inline const char *skip_projlist_delim(const char *s)
+{
+	while(*s != '\0' && is_projlist_delim(*s))
+		++s;
+	return s;
+}
+
+static int parse_projlist_path(const char *s, char q, int ispath,
+				  char **path)
+{
+	int len = 0;
+
+	//// DEBUG:
+	//// support "" and ''
+	//// enforce NAME_MAX on name and source -- -ENAMETOOLONG, -EINVAL
+	//// strdup name and source
+	//// -ENOMEM
+
+	return len;
+}
+
+static struct test_projlist_entry *parse_projlist_entry(const char *buf)
+{
+	struct test_projlist_entry entry = { 0 };
+	struct test_projlist_entry *ret;
+	const char *s = buf;
+	char q = '\0';
+	int len;
+
+	s = skip_projlist_delim(s);
+	if (*s == '\0' || *s == '#')
+		return NULL;
+
+	if (is_projlist_delim(*(s + 1)) && (*s == 'd' || *s == 'f'))
+		entry.isdir = (*s == 'd') ? 1 : 0;
+	else {
+		warnx("invalid type flag in projection list: %s", buf);
+		return NULL;
+	}
+
+	s = skip_projlist_delim(++s);
+	if (*s == '\0') {
+		warnx("missing entry name in projection list: %s", buf);
+		return NULL;
+	}
+	else if (*s == '"' || *s == '\'')
+		q = *s++;
+
+	len = parse_projlist_path(s, q, 0, &entry.name);
+	if (len < 0) {
+		int err = -len;
+
+		if (err == ENOMEM)
+			warn("unable to allocate projection list entry name");
+		else
+			warnx("invalid entry name %sin projection list: %s",
+			      (err == ENAMETOOLONG ? "(too long) " : ""),
+			      buf);
+		return NULL;
+	}
+	s += len;
+	q = '\0';
+
+	s = skip_projlist_delim(s);
+	if (*s == '\0') {
+		warnx("missing entry mode in projection list: %s", buf);
+		goto out_name;
+	}
+
+	//// TODO:
+	//// parse mode, and if file, size and source path
+
+	ret = malloc(sizeof(entry));
+	if (ret == NULL) {
+		warn("unable to allocate projection list entry");
+		goto out_source;
+	}
+	memcpy(ret, &entry, sizeof(entry));
+	return ret;
+
+out_source:
+	if (entry.source != NULL)
+		free(entry.source);
+out_name:
+	free(entry.name);
+	return NULL;
+}
+
+static void append_projlist_entry(struct test_projlist_entry *entry,
+				  struct test_projlist_entry **first_entry,
+				  struct test_projlist_entry **last_entry)
+{
+	if (entry == NULL)
+		return;
+
+	if (*first_entry == NULL)
+		*first_entry = entry;
+
+	if (*last_entry != NULL)
+		(*last_entry)->next = entry;
+	*last_entry = entry;
+}
+
+static int parse_projlist(const char *list,
+			  struct test_projlist_entry **projlist)
+{
+	char buf[MAX_PROJLIST_ENTRY_LEN + 1];
+	struct test_projlist_entry *first_entry = NULL, *last_entry = NULL;
+	int ret = 0;
+
+	while (*list != '\0') {
+		struct test_projlist_entry *entry;
+		const char *c;
+		size_t len;
+
+		c = strchr(list, '\n');
+		if (c == NULL) {
+			len = strlen(list);
+			c = list + len;
+		}
+		else {
+			len = c - list;
+			++c;
+		}
+
+		if (len > MAX_PROJLIST_ENTRY_LEN) {
+			warnx("invalid entry (line too long) in "
+			      "projection list: %s", list);
+			ret = -1;
+			goto out;
+		}
+
+		memcpy(buf, list, len);
+		buf[len] = '\0';
+
+		entry = parse_projlist_entry(buf);
+		if (entry == NULL) {
+			warnx("invalid entry in projection list: %s", buf);
+			ret = -1;
+			goto out;
+		}
+
+		append_projlist_entry(entry, &first_entry, &last_entry);
+
+		list = c;
+	}
+
+out:
+	if (ret == 0)
+		*projlist = first_entry;
+
+	return ret;
+}
+
+static void read_projfile(struct test_projlist_entry **projlist,
+			  unsigned int *flags)
+{
+	FILE *file;
+	char buf[MAX_PROJLIST_ENTRY_LEN + 1];
+	struct test_projlist_entry *first_entry = NULL, *last_entry = NULL;
+
+	*projlist = NULL;
+
+	file = fopen(optval_projfile, "r");
+	if (file == NULL) {
+		if (errno != ENOENT)
+			warn("unable to open projection list file: %s",
+			     optval_projfile);
+		goto out;
+	}
+
+	errno = 0;
+	while (fgets(buf, sizeof(buf), file) != NULL) {
+		struct test_projlist_entry *entry;
+		char *c;
+
+		c = strchr(buf, '\n');
+		if (c != NULL)
+			*c = '\0';
+		else if (!feof(file)) {
+			warnx("invalid entry (line too long) in "
+			      "projection list file: %s: %s",
+			      optval_projfile, buf);
+			goto out_close;
+		}
+
+		entry = parse_projlist_entry(buf);
+		if (entry == NULL) {
+			warnx("invalid entry in projection list file: %s: %s",
+			      optval_projfile, buf);
+			goto out_close;
+		}
+
+		append_projlist_entry(entry, &first_entry, &last_entry);
+	}
+
+	if (errno > 0)
+		warn("unable to read projection list file: %s",
+		     optval_projfile);
+	else if (last_entry == NULL)
+		*flags = TEST_FILE_EXIST;
+	else {
+		*projlist = first_entry;
+		*flags = TEST_VAL_SET | TEST_FILE_EXIST | TEST_FILE_VALID;
+	}
+
+out_close:
+	if (fclose(file) != 0)
+		warn("unable to close projection list file: %s",
+		     optval_projfile);
+
+out:
+	return;
+}
+
 static struct option *get_long_opts(unsigned int opt_flags)
 {
 	struct option *long_opts;
@@ -247,7 +472,7 @@ static struct option *get_long_opts(unsigned int opt_flags)
 
 	long_opts = calloc(num_opts + 1, sizeof(struct option));
 	if (long_opts == NULL) {
-		fprintf(stderr, "unable to get options array: %s\n",
+		fprintf(stderr, "unable to allocate options array: %s\n",
 			strerror(errno));
 		exit(EXIT_FAILURE);
 	}
@@ -302,6 +527,19 @@ void test_parse_opts(int argc, char *const argv[], unsigned int opt_flags,
 		case TEST_OPT_NUM_RETFILE:
 			optval_retfile = optarg;
 			opt_set_flags |= TEST_OPT_RETFILE;
+			break;
+
+		case TEST_OPT_NUM_PROJLIST:
+			if (parse_projlist(optarg, &optval_projlist) < 0)
+				test_exit_error(argv[0],
+						"invalid projection list: %s",
+						optarg);
+			opt_set_flags |= TEST_OPT_PROJLIST;
+			break;
+
+		case TEST_OPT_NUM_PROJFILE:
+			optval_projfile = optarg;
+			opt_set_flags |= TEST_OPT_PROJFILE;
 			break;
 
 		case TEST_OPT_NUM_TIMEOUT:
@@ -366,6 +604,7 @@ unsigned int test_get_opts(unsigned int opt_flags, ...)
 
 	while (opt_flags != TEST_OPT_NONE) {
 		unsigned int ret_flag;
+		struct test_projlist_entry **e;
 		unsigned int *f;
 		int *i;
 		long int *l;
@@ -400,6 +639,25 @@ unsigned int test_get_opts(unsigned int opt_flags, ...)
 					*s = optval_retfile;
 				break;
 
+			case TEST_OPT_PROJLIST:
+				e = va_arg(ap, struct test_projlist_entry**);
+				f = va_arg(ap, unsigned int*);
+				*f = TEST_VAL_UNSET | TEST_FILE_NONE;
+				if (ret_flag != TEST_OPT_NONE) {
+					*e = optval_projlist;
+					*f |= TEST_VAL_SET;
+				} else if ((opt_set_flags & TEST_OPT_PROJFILE)
+					   != TEST_OPT_NONE) {
+					read_projfile(e, f);
+					ret_flags |= opt_flag;
+				}
+				break;
+			case TEST_OPT_PROJFILE:
+				s = va_arg(ap, const char**);
+				if (ret_flag != TEST_OPT_NONE)
+					*s = optval_projfile;
+				break;
+
 			case TEST_OPT_TIMEOUT:
 				l = va_arg(ap, long int*);
 				if (ret_flag != TEST_OPT_NONE)
@@ -421,6 +679,22 @@ unsigned int test_get_opts(unsigned int opt_flags, ...)
 	va_end(ap);
 
 	return ret_flags;
+}
+
+void test_free_opts(void)
+{
+	struct test_projlist_entry *next_entry, *entry = optval_projlist;
+
+	while (entry != NULL) {
+		next_entry = entry->next;
+
+		free(entry->name);
+		if (entry->source != NULL)
+			free(entry->source);
+		free(entry);
+
+		entry = next_entry;
+	}
 }
 
 struct projfs *test_start_mount(const char *lowerdir, const char *mountdir,

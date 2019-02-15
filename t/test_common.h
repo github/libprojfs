@@ -26,12 +26,16 @@
 #define TEST_OPT_NUM_HELP	0
 #define TEST_OPT_NUM_RETVAL	1
 #define TEST_OPT_NUM_RETFILE	2
-#define TEST_OPT_NUM_TIMEOUT	3
-#define TEST_OPT_NUM_LOCKFILE	4
+#define TEST_OPT_NUM_PROJLIST	3
+#define TEST_OPT_NUM_PROJFILE	4
+#define TEST_OPT_NUM_TIMEOUT	5
+#define TEST_OPT_NUM_LOCKFILE	6
 
 #define TEST_OPT_HELP		(0x0001 << TEST_OPT_NUM_HELP)
 #define TEST_OPT_RETVAL		(0x0001 << TEST_OPT_NUM_RETVAL)
 #define TEST_OPT_RETFILE	(0x0001 << TEST_OPT_NUM_RETFILE)
+#define TEST_OPT_PROJLIST	(0x0001 << TEST_OPT_NUM_PROJLIST)
+#define TEST_OPT_PROJFILE	(0x0001 << TEST_OPT_NUM_PROJFILE)
 #define TEST_OPT_TIMEOUT	(0x0001 << TEST_OPT_NUM_TIMEOUT)
 #define TEST_OPT_LOCKFILE	(0x0001 << TEST_OPT_NUM_LOCKFILE)
 
@@ -43,6 +47,15 @@
 #define TEST_FILE_NONE		0x0000
 #define TEST_FILE_EXIST		0x0002
 #define TEST_FILE_VALID		0x0004
+
+struct test_projlist_entry {
+	unsigned int isdir;
+	char *name;
+	mode_t mode;
+	off_t size;
+	char *source;
+	struct test_projlist_entry *next;
+};
 
 void test_exit_error(const char *argv0, const char *fmt, ...);
 
@@ -59,6 +72,8 @@ void test_parse_mount_opts(int argc, char *const argv[],
 			   const char **lower_path, const char **mount_path);
 
 unsigned int test_get_opts(unsigned int opt_flags, ...);
+
+void test_free_opts(void);
 
 struct projfs *test_start_mount(const char *lowerdir, const char *mountdir,
 				const struct projfs_handlers *handlers,
