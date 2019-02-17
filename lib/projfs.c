@@ -151,22 +151,17 @@ struct node_userdata
 #define USER_PROJECTION_EMPTY "user.projection.empty"
 
 /**
- * If parent is 0, returns a copy of path.
- *
- * If parent is non-zero, return a copy of path with the last component removed
- * (e.g. "x/y/z" will yield "x/y").  If path has only one component,
- * returns ".".
+ * Return a copy of path with the last component removed (e.g. "x/y/z" will
+ * yield "x/y").  If path has only one component, returns ".".
  *
  * The caller is responsible for freeing the returned string.
+ *
+ * @param path path to get parent directory of
+ * @return name of parent of path; may be NULL if strdup or strndup fails
  */
-static char *get_mapped_path(char const *path, int parent)
+static char *get_path_parent(char const *path)
 {
-	const char *last;
-
-	if (!parent)
-		return strdup(path);
-
-	last = strrchr(path, '/');
+	const char *last = strrchr(path, '/');
 	if (!last)
 		return strdup(".");
 	else
@@ -174,13 +169,19 @@ static char *get_mapped_path(char const *path, int parent)
 }
 
 /**
- * Acquires a lock on mapped_path and populates the supplied node_userdata
- * argument with the open and locked fd, and proj_flag based on the
+ * Acquires a lock on path and populates the supplied node_userdata argument
+ * with the open and locked fd, and proj_flag based on the
  * USER_PROJECTION_EMPTY xattr.
  *
+ * @param user userdata to fill out (zeroed by this function)
+ * @param path path relative to lowerdir to lock and open
+ * @param mode filemode to open path with; the fd populated in user will have
+ *             this mode
  * @return 0 or an errno
  */
-static int get_path_userdata(struct node_userdata *user, const char *mapped_path)
+static int get_path_userdata(struct node_userdata *user,
+			     const char *path,
+			     mode_t mode)
 {
 	ssize_t sz;
 	int err, wait_ms;
@@ -188,7 +189,7 @@ static int get_path_userdata(struct node_userdata *user, const char *mapped_path
 
 	memset(user, 0, sizeof(*user));
 
-	user->fd = openat(lowerdir_fd(), mapped_path, O_RDONLY);
+	user->fd = openat(lowerdir_fd(), path, mode);
 	if (user->fd == -1)
 		return errno;
 
@@ -226,6 +227,8 @@ retry_flock:
 /**
  * Closes the open fd associated with user, which in turn releases any locks
  * associated with the fd.
+ *
+ * @param user userdata to clean up
  */
 static void finalize_userdata(struct node_userdata *user)
 {
@@ -237,30 +240,28 @@ static void finalize_userdata(struct node_userdata *user)
 }
 
 /**
+ * Projects a path by notifying the provider with the given event mask.  If the
+ * provider succeeds, clears the projection flag on the path.
+ *
+ * @param event_mask the event mask passed up to the provider
+ * @param user userdata collected from get_path_userdata
+ * @param path the path the userdata was collected for
  * @return 0 or an errno
  */
-static int projfs_fuse_proj_dir_locked(struct node_userdata *user,
-                                       const char *path)
+static int projfs_fuse_proj_locked(uint64_t event_mask,
+				   struct node_userdata *user,
+				   const char *path)
 {
-	int res, err;
+	int res = projfs_fuse_proj_event(event_mask, path, user->fd);
 
-	if (!user->proj_flag)
-		return 0;
-
-	err = projfs_fuse_proj_event(
-		PROJFS_CREATE_SELF | PROJFS_ONDIR,
-		path,
-		0);
-
-	if (err < 0)
-		return -err;
+	if (res < 0)
+		return -res;
 
 	res = fremovexattr(user->fd, USER_PROJECTION_EMPTY);
-	err = errno;
-	if (res == 0 || (res == -1 && err == ENOATTR))
+	if (res == 0 || (res == -1 && errno == ENOATTR))
 		user->proj_flag = 0;
 	else
-		return err;
+		return errno;
 
 	return 0;
 }
@@ -270,7 +271,7 @@ static int projfs_fuse_proj_dir_locked(struct node_userdata *user,
  * directory is the parent of the path, or the path itself.
  *
  * @param op op name (for debugging)
- * @param path the lower path (from lower_path)
+ * @param path the lower path (from lowerpath)
  * @param parent 1 if we should look at the parent directory containing path, 0
  *               if we look at path itself
  * @return 0 or an errno
@@ -279,15 +280,18 @@ static int projfs_fuse_proj_dir(const char *op, const char *path, int parent)
 {
 	struct node_userdata user;
 	int res;
-	char *mapped_path;
+	char *target_path;
 
 	(void)op;
 
-	mapped_path = get_mapped_path(path, parent);
-	if (!mapped_path)
+	if (parent)
+		target_path = get_path_parent(path);
+	else
+		target_path = strdup(path);
+	if (!target_path)
 		return errno;
 
-	res = get_path_userdata(&user, mapped_path);
+	res = get_path_userdata(&user, target_path, O_RDONLY | O_DIRECTORY);
 	if (res != 0)
 		goto out;
 
@@ -296,19 +300,66 @@ static int projfs_fuse_proj_dir(const char *op, const char *path, int parent)
 
 	/* pass mapped path (i.e. containing directory we want to project) to
 	 * provider */
-	res = projfs_fuse_proj_dir_locked(&user, mapped_path);
+	res = projfs_fuse_proj_locked(
+		PROJFS_CREATE_SELF | PROJFS_ONDIR, &user, target_path);
 
 out_finalize:
 	finalize_userdata(&user);
 
 out:
-	free(mapped_path);
+	free(target_path);
 
+	return res;
+}
+
+/**
+ * Project a file. Takes the lower path.
+ *
+ * @param op op name (for debugging)
+ * @param path the lower path (from lowerpath)
+ * @return 0 or an errno
+ */
+static int projfs_fuse_proj_file(const char *op, const char *path)
+{
+	struct node_userdata user;
+	int res;
+
+	(void)op;
+
+	res = get_path_userdata(&user, path, O_RDWR | O_NOFOLLOW);
+	if (res == EISDIR) {
+		/* tried to project a directory as a file, ignore
+		 * XXX should we just always project dirs as dirs and files as
+		 * files? */
+		res = 0;
+		goto out;
+	} else if (res == ELOOP) {
+		/* tried to project a symlink. it already exists as a symlink
+		 * on disk so we have nothing to do */
+		res = 0;
+		goto out;
+	} else if (res != 0)
+		goto out;
+
+	if (!user.proj_flag)
+		goto out_finalize;
+
+	/* `path` relative to lowerdir exists and is a placeholder -- hydrate it */
+	res = projfs_fuse_proj_locked(PROJFS_CREATE_SELF, &user, path);
+
+out_finalize:
+	finalize_userdata(&user);
+
+out:
 	return res;
 }
 
 static const char *dotpath = ".";
 
+/**
+ * Makes a path from FUSE usable as a relative path to lowerdir_fd.  Removes
+ * any leading forward slashes.  If the resulting path is empty, returns ".".
+ * */
 static inline const char *lowerpath(const char *path)
 {
 	while (*path == '/')
@@ -358,9 +409,18 @@ static int projfs_op_link(char const *src, char const *dst)
 	int res = projfs_fuse_proj_dir("link", lowerpath(src), 1);
 	if (res)
 		return -res;
+
+	/* hydrate the source file before adding a hard link to it, otherwise
+	 * a user could access the newly created link and end up modifying the
+	 * non-hydrated placeholder */
+	res = projfs_fuse_proj_file("link", lowerpath(src));
+	if (res)
+		return -res;
+
 	res = projfs_fuse_proj_dir("link2", lowerpath(dst), 1);
 	if (res)
 		return -res;
+
 	res = linkat(lowerdir_fd, lowerpath(src),
 	             lowerdir_fd, lowerpath(dst), 0);
 	return res == -1 ? -errno : 0;
@@ -428,12 +488,22 @@ static int projfs_op_symlink(char const *link, char const *path)
 static int projfs_op_create(char const *path, mode_t mode,
                             struct fuse_file_info *fi)
 {
+	/* FUSE sets fi.flags = O_CREAT | O_EXCL | O_WRONLY in fuse_lib_mknod,
+	 * untouched in fuse_lib_create where it comes straight from
+	 * FUSE_CREATE.  In Linux 4.9 at least, we never hit a codepath where
+	 * we send FUSE_CREATE without first checking that O_CREAT is set.
+	 * There's no guarantee O_EXCL (or O_TRUNC) are set, though, so we need
+	 * to hydrate it if it exists. */
+
 	int flags = fi->flags & ~O_NOFOLLOW;
 	int res;
 	int fd;
 
 	res = projfs_fuse_proj_dir("create", lowerpath(path), 1);
 	if (res)
+		return -res;
+	res = projfs_fuse_proj_file("create", lowerpath(path));
+	if (res && res != ENOENT)
 		return -res;
 	fd = openat(lowerdir_fd(), lowerpath(path), flags, mode);
 
@@ -457,10 +527,19 @@ static int projfs_op_open(char const *path, struct fuse_file_info *fi)
 	res = projfs_fuse_proj_dir("open", lowerpath(path), 1);
 	if (res)
 		return -res;
-	fd = openat(lowerdir_fd(), lowerpath(path), flags);
 
+	/* Per above, allow hydration to fail with ENOENT; if the file
+	 * operation should fail for that reason (i.e. O_CREAT is not specified
+	 * and the file doesn't exist), we'll return the failure from openat(2)
+	 * below */
+	res = projfs_fuse_proj_file("open", lowerpath(path));
+	if (res && res != ENOENT)
+		return -res;
+
+	fd = openat(lowerdir_fd(), lowerpath(path), flags);
 	if (fd == -1)
 		return -errno;
+
 	fi->fh = fd;
 	return 0;
 }
@@ -475,8 +554,9 @@ static int projfs_op_statfs(char const *path, struct statvfs *buf)
 	return res == -1 ? -errno : 0;
 }
 
-static int projfs_op_read_buf(char const *path, struct fuse_bufvec **bufp, size_t size,
-                          off_t off, struct fuse_file_info *fi)
+static int projfs_op_read_buf(char const *path, struct fuse_bufvec **bufp,
+			      size_t size, off_t off,
+			      struct fuse_file_info *fi)
 {
 	struct fuse_bufvec *src = malloc(sizeof(*src));
 
@@ -497,7 +577,7 @@ static int projfs_op_read_buf(char const *path, struct fuse_bufvec **bufp, size_
 }
 
 static int projfs_op_write_buf(char const *path, struct fuse_bufvec *src,
-                                off_t off, struct fuse_file_info *fi)
+			       off_t off, struct fuse_file_info *fi)
 {
 	struct fuse_bufvec buf = FUSE_BUFVEC_INIT(fuse_buf_size(src));
 
@@ -570,6 +650,9 @@ static int projfs_op_rename(char const *src, char const *dst,
                             unsigned int flags)
 {
 	int res = projfs_fuse_proj_dir("rename", lowerpath(src), 1);
+	if (res)
+		return -res;
+	res = projfs_fuse_proj_file("rename", lowerpath(src));
 	if (res)
 		return -res;
 	res = projfs_fuse_proj_dir("rename2", lowerpath(dst), 1);
@@ -739,6 +822,9 @@ static int projfs_op_truncate(char const *path, off_t off,
 		res = projfs_fuse_proj_dir("truncate", lowerpath(path), 1);
 		if (res)
 			return -res;
+		res = projfs_fuse_proj_file("truncate", lowerpath(path));
+		if (res)
+			return -res;
 
 		fd = openat(lowerdir_fd(), lowerpath(path),
 				O_WRONLY);
@@ -783,6 +869,8 @@ static int projfs_op_setxattr(char const *path, char const *name,
 
 	path = lowerpath(path);
 
+	// TODO: filter user.projection.* attrs
+
 	res = projfs_fuse_proj_dir("setxattr", path, 1);
 	if (res)
 		return -res;
@@ -809,6 +897,8 @@ static int projfs_op_getxattr(char const *path, char const *name,
 
 	path = lowerpath(path);
 
+	// TODO: filter user.projection.* attrs
+
 	res = projfs_fuse_proj_dir("getxattr", path, 1);
 	if (res)
 		return -res;
@@ -834,6 +924,8 @@ static int projfs_op_listxattr(char const *path, char *list, size_t size)
 
 	path = lowerpath(path);
 
+	// TODO: filter user.projection.* attrs
+
 	res = projfs_fuse_proj_dir("listxattr", path, 1);
 	if (res)
 		return -res;
@@ -858,6 +950,8 @@ static int projfs_op_removexattr(char const *path, char const *name)
 	int fd;
 
 	path = lowerpath(path);
+
+	// TODO: filter user.projection.* attrs
 
 	res = projfs_fuse_proj_dir("removexattr", path, 1);
 	if (res)
@@ -1259,14 +1353,39 @@ int projfs_create_proj_dir(struct projfs *fs, const char *path)
 int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
                             mode_t mode)
 {
+	int fd, res;
+	char v = 1;
+
 	if (!check_safe_rel_path(path))
 		return EINVAL;
 
-	// TODO: return _projfs_create_file(fs, path, size, mode, ...)
-	//	 until then, prevent compiler warnings
-	(void)fs;
-	(void)size;
-	(void)mode;
+	fd = openat(fs->lowerdir_fd, path, O_WRONLY | O_CREAT | O_EXCL, mode);
+	if (fd == -1)
+		return errno;
+
+	res = ftruncate(fd, size);
+	if (res == -1) {
+		res = errno;
+		close(fd);
+
+		/* best effort */
+		(void)unlinkat(fs->lowerdir_fd, path, 0);
+
+		return res;
+	}
+
+	res = fsetxattr(fd, USER_PROJECTION_EMPTY, &v, 1, 0);
+	if (res == -1) {
+		res = errno;
+		close(fd);
+
+		/* best effort */
+		(void)unlinkat(fs->lowerdir_fd, path, 0);
+
+		return res;
+	}
+
+	close(fd);
 
 	return 0;
 }
@@ -1278,7 +1397,7 @@ int _projfs_make_dir(struct projfs *fs, const char *path, mode_t mode,
 
 	(void)fs;
 
-	res = mkdirat(lowerdir_fd(), path, mode);
+	res = mkdirat(fs->lowerdir_fd, path, mode);
 	if (res == -1)
 		return errno;
 	if (proj_flag) {
@@ -1298,3 +1417,4 @@ int _projfs_make_dir(struct projfs *fs, const char *path, mode_t mode,
 	}
 	return 0;
 }
+

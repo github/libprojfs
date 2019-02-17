@@ -211,7 +211,7 @@ static int handle_proj_event(struct projfs_event *event)
 	if (cmdline != NULL)
 		triggeringProcessName = (const char *) cmdline;
 
-	if (event->mask | PROJFS_ONDIR) {
+	if (event->mask & PROJFS_ONDIR) {
 		PrjFS_EnumerateDirectoryCallback *callback =
 			callbacks->EnumerateDirectory;
 
@@ -403,4 +403,23 @@ PrjFS_Result PrjFS_WritePlaceholderFile(
 	(void)contentId;
 
 	return convert_errno_to_result(ret);
+}
+
+PrjFS_Result PrjFS_WriteFileContents(
+    _In_    const PrjFS_FileHandle*                 fileHandle,
+    _In_    const void*                             bytes,
+    _In_    unsigned int                            byteCount
+)
+{
+	int fd = fileHandle->fd;
+
+	while (byteCount) {
+		ssize_t res = write(fd, bytes, byteCount);
+		if (res == -1)
+			return convert_errno_to_result(errno);
+		bytes = (void *)(((uintptr_t)bytes) + res);
+		byteCount -= res;
+	}
+
+	return PrjFS_Result_Success;
 }
