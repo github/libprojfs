@@ -167,13 +167,15 @@ PrjFS_Result PrjFS_WritePlaceholderFile(
 PrjFS_Result PrjFS_ConvertDirectoryToPlaceholder(
     _In_    const char*                             relativePath
 );
-
+#endif
 
 PrjFS_Result PrjFS_WriteSymLink(
+    _In_    const PrjFS_MountHandle*                mountHandle,
     _In_    const char*                             relativePath,
     _In_    const char*                             symLinkTarget
 );
 
+#if 0
 typedef enum
 {
     PrjFS_UpdateType_Invalid                        = 0x00000000,
