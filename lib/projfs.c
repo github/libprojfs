@@ -1157,6 +1157,49 @@ static int check_dir_empty(const char *path)
 	}
 }
 
+/**
+ * Uses the f*xattr family of functions to check that xattrs are supported on
+ * the supplied open file descriptor.
+ */
+static int test_xattr_support(int fd)
+{
+	int res;
+	char v = 1;
+
+	res = fsetxattr(fd, USER_PROJECTION_TEST, &v, 1, 0);
+	if (res == -1)
+		return -1;
+
+	res = fgetxattr(fd, USER_PROJECTION_TEST, &v, 1);
+	if (res != 1 || v != 1)
+		return -1;
+
+	res = fremovexattr(fd, USER_PROJECTION_TEST);
+	if (res != 0)
+		return -1;
+
+	return 0;
+}
+
+/**
+ * Sets the empty xattr on the given fd, and checks that it was set
+ * successfully. */
+static int set_and_check_empty_xattr(int fd)
+{
+	char v = 1;
+	int res;
+
+	res = fsetxattr(fd, USER_PROJECTION_EMPTY, &v, 1, 0);
+	if (res == -1)
+		return -1;
+
+	res = fgetxattr(fd, USER_PROJECTION_EMPTY, &v, 1);
+	if (res != 1 || v != 1)
+		return -1;
+
+	return 0;
+}
+
 static void *projfs_loop(void *data)
 {
 	struct projfs *fs = (struct projfs *)data;
@@ -1166,7 +1209,6 @@ static void *projfs_loop(void *data)
 	struct fuse_loop_config loop;
 	struct fuse *fuse;
 	struct fuse_session *se;
-	char v = 1;
 	int res = 0;
 	int err;
 
@@ -1197,40 +1239,14 @@ static void *projfs_loop(void *data)
 	 * actually set.  if not, set and check a test xattr, so that in either
 	 * case we can be sure the lower fs supports xattrs.
 	 * exit code 3 can be summarised as "bad or no xattr support" */
-	if (res == 1) {
-		res = fsetxattr(
-			fs->lowerdir_fd, USER_PROJECTION_EMPTY, &v, 1, 0);
-		if (res == -1) {
-			res = 3;
-			goto out_close;
-		}
+	if (res == 1)
+		res = set_and_check_empty_xattr(fs->lowerdir_fd);
+	else
+		res = test_xattr_support(fs->lowerdir_fd);
 
-		res = fgetxattr(fs->lowerdir_fd, USER_PROJECTION_EMPTY, &v, 1);
-		if (res != 1 || v != 1) {
-			res = 3;
-			goto out_close;
-		}
-
-		res = 0;
-	} else {
-		res = fsetxattr(
-			fs->lowerdir_fd, USER_PROJECTION_TEST, &v, 1, 0);
-		if (res == -1) {
-			res = 3;
-			goto out_close;
-		}
-
-		res = fgetxattr(fs->lowerdir_fd, USER_PROJECTION_TEST, &v, 1);
-		if (res != 1 || v != 1) {
-			res = 3;
-			goto out_close;
-		}
-
-		res = fremovexattr(fs->lowerdir_fd, USER_PROJECTION_TEST);
-		if (res != 0) {
-			res = 3;
-			goto out_close;
-		}
+	if (res == -1) {
+		res = 3;
+		goto out_close;
 	}
 
 	fuse = fuse_new(&args, &projfs_ops, sizeof(projfs_ops), fs);
