@@ -1200,6 +1200,83 @@ static int set_and_check_empty_xattr(int fd)
 	return 0;
 }
 
+#define SPARSE_TEST_FILENAME ".libprojfs-sparse-test"
+#define SPARSE_TEST_SIZE_BYTES 1048576
+
+/**
+ * Test that using ftruncate to create a sparse file works.
+ */
+static int test_sparse_support(struct projfs *fs)
+{
+	struct stat attrs;
+	int fd, res;
+
+	fd = openat(
+		fs->lowerdir_fd,
+		SPARSE_TEST_FILENAME,
+		O_CREAT | O_TRUNC | O_RDWR,
+		0600);
+	if (fd == -1) {
+		fprintf(stderr, "projfs: cannot openat sparse test file: %s\n",
+			strerror(errno));
+		return -1;
+	}
+
+	res = fstat(fd, &attrs);
+	if (res == -1) {
+		fprintf(stderr, "projfs: cannot fstat sparse test file: %s\n",
+			strerror(errno));
+		goto err_close;
+	}
+
+	if (attrs.st_size != 0) {
+		fprintf(stderr, "projfs: sparse test file should be 0 bytes, "
+				"is %ld bytes\n",
+			attrs.st_size);
+		goto err_close;
+	}
+
+	res = ftruncate(fd, SPARSE_TEST_SIZE_BYTES);
+	if (res == -1) {
+		fprintf(stderr, "projfs: cannot ftruncate sparse test "
+				"file: %s\n",
+			strerror(errno));
+		goto err_close;
+	}
+
+	res = fstat(fd, &attrs);
+	if (res == -1) {
+		fprintf(stderr, "projfs: cannot fstat sparse test file "
+				"after ftruncate: %s\n",
+			strerror(errno));
+		goto err_close;
+	}
+
+	if (attrs.st_size != SPARSE_TEST_SIZE_BYTES) {
+		fprintf(stderr, "projfs: sparse test file should be %d bytes, "
+				"is %ld bytes\n",
+			SPARSE_TEST_SIZE_BYTES,
+			attrs.st_size);
+		goto err_close;
+	}
+
+	/* check if the file consumes any actual blocks after ftruncate */
+	if (attrs.st_blocks > 0)
+		fprintf(stderr, "projfs: sparse files may not be "
+				"supported by the lower filesystem\n");
+
+	goto close;
+
+err_close:
+	res = -1;
+
+close:
+	close(fd);
+	unlinkat(fs->lowerdir_fd, SPARSE_TEST_FILENAME, 0);
+
+	return res;
+}
+
 static void *projfs_loop(void *data)
 {
 	struct projfs *fs = (struct projfs *)data;
@@ -1231,6 +1308,9 @@ static void *projfs_loop(void *data)
 	 * to modify this behaviour in the future */
 	res = check_dir_empty(fs->lowerdir);
 	if (res == -1) {
+		fprintf(stderr, "projfs: could not check if lowerdir "
+		                "is empty: %s: %s\n",
+			fs->lowerdir, strerror(errno));
 		res = 2;
 		goto out_close;
 	}
@@ -1245,13 +1325,22 @@ static void *projfs_loop(void *data)
 		res = test_xattr_support(fs->lowerdir_fd);
 
 	if (res == -1) {
+		fprintf(stderr, "projfs: xattr support check on lowerdir "
+		                "failed: %s: %s\n",
+			fs->lowerdir, strerror(errno));
 		res = 3;
+		goto out_close;
+	}
+
+	res = test_sparse_support(fs);
+	if (res == -1) {
+		res = 4;
 		goto out_close;
 	}
 
 	fuse = fuse_new(&args, &projfs_ops, sizeof(projfs_ops), fs);
 	if (fuse == NULL) {
-		res = 4;
+		res = 5;
 		goto out_close;
 	}
 
@@ -1260,13 +1349,13 @@ static void *projfs_loop(void *data)
 
 	// TODO: defer all signal handling to user, once we remove FUSE
 	if (fuse_set_signal_handlers(se) != 0) {
-		res = 5;
+		res = 6;
 		goto out_session;
 	}
 
 	// TODO: mount with x-gvfs-hide option and maybe others for KDE, etc.
 	if (fuse_mount(fuse, fs->mountdir) != 0) {
-		res = 6;
+		res = 7;
 		goto out_signal;
 	}
 
@@ -1278,7 +1367,7 @@ static void *projfs_loop(void *data)
 	if ((err = fuse_loop_mt(fuse, &loop)) != 0) {
 		if (err > 0)
 			fprintf(stderr, "projfs: %s signal\n", strsignal(err));
-		res = 7;
+		res = 8;
 	}
 
 	fuse_session_unmount(se);
