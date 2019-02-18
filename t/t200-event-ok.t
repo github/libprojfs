@@ -59,16 +59,29 @@ test_expect_success 'test permission granted on nested file deletion' '
 	test_path_is_missing target/d1/d2/f2.txt
 '
 
-projfs_event_printf perm delete_file f1.txt
-test_expect_success 'test permission granted on top-level file deletion' '
-	projfs_event_exec rm target/f1.txt &&
-	test_path_is_missing target/f1.txt
+projfs_event_printf notify rename_file f1a.txt
+test_expect_success 'test permission granted on file rename' '
+	projfs_event_exec mv target/f1.txt target/f1a.txt &&
+	test_path_is_missing target/f1.txt &&
+	test_path_is_file target/f1a.txt
 '
 
-projfs_event_printf perm delete_dir d1/d2
+projfs_event_printf perm delete_file f1a.txt
+test_expect_success 'test permission granted on top-level file deletion' '
+	projfs_event_exec rm target/f1a.txt &&
+	test_path_is_missing target/f1a.txt
+'
+
+projfs_event_printf notify rename_dir d1/d2a
+test_expect_success 'test permission granted on dir rename' '
+	projfs_event_exec mv target/d1/d2 target/d1/d2a &&
+	test_path_is_missing target/d1/d2 &&
+	test_path_is_dir target/d1/d2a
+'
+projfs_event_printf perm delete_dir d1/d2a
 test_expect_success 'test permission granted on nested directory deletion' '
-	projfs_event_exec rmdir target/d1/d2 &&
-	test_path_is_missing target/d1/d2
+	projfs_event_exec rmdir target/d1/d2a &&
+	test_path_is_missing target/d1/d2a
 '
 
 projfs_event_printf perm delete_dir d1
