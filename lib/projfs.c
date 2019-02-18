@@ -149,6 +149,7 @@ struct node_userdata
 };
 
 #define USER_PROJECTION_EMPTY "user.projection.empty"
+#define USER_PROJECTION_TEST  "user.projection.test"
 
 /**
  * Return a copy of path with the last component removed (e.g. "x/y/z" will
@@ -1192,10 +1193,41 @@ static void *projfs_loop(void *data)
 		goto out_close;
 	}
 
+	/* if the dir is empty, mark as such, and test that the xattr was
+	 * actually set.  if not, set and check a test xattr, so that in either
+	 * case we can be sure the lower fs supports xattrs.
+	 * exit code 3 can be summarised as "bad or no xattr support" */
 	if (res == 1) {
 		res = fsetxattr(
 			fs->lowerdir_fd, USER_PROJECTION_EMPTY, &v, 1, 0);
 		if (res == -1) {
+			res = 3;
+			goto out_close;
+		}
+
+		res = fgetxattr(fs->lowerdir_fd, USER_PROJECTION_EMPTY, &v, 1);
+		if (res != 1 || v != 1) {
+			res = 3;
+			goto out_close;
+		}
+
+		res = 0;
+	} else {
+		res = fsetxattr(
+			fs->lowerdir_fd, USER_PROJECTION_TEST, &v, 1, 0);
+		if (res == -1) {
+			res = 3;
+			goto out_close;
+		}
+
+		res = fgetxattr(fs->lowerdir_fd, USER_PROJECTION_TEST, &v, 1);
+		if (res != 1 || v != 1) {
+			res = 3;
+			goto out_close;
+		}
+
+		res = fremovexattr(fs->lowerdir_fd, USER_PROJECTION_TEST);
+		if (res != 0) {
 			res = 3;
 			goto out_close;
 		}
