@@ -411,8 +411,12 @@ PrjFS_Result PrjFS_WriteSymLink(
     _In_    const char*                             symLinkTarget
 )
 {
-	fprintf(stderr, "WriteSymLink: %p (%s -> %s)\n", mountHandle, relativePath, symLinkTarget);
-	return PrjFS_Result_Success;
+	struct projfs *fs = (struct projfs *) mountHandle;
+	int ret;
+
+	ret = projfs_create_proj_symlink(fs, relativePath, symLinkTarget);
+
+	return convert_errno_to_result(ret);
 }
 
 PrjFS_Result PrjFS_WriteFileContents(
