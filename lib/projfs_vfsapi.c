@@ -269,6 +269,8 @@ static int handle_nonproj_event(struct projfs_event *event, int perm)
 		notificationType = PrjFS_NotificationType_PreDelete;
 	else if (mask & PROJFS_CREATE_SELF)
 		notificationType = PrjFS_NotificationType_NewFileCreated;
+	else if (mask & PROJFS_MOVE_SELF)
+		notificationType = PrjFS_NotificationType_FileRenamed;
 	// TODO: dispatch for additional event types
 
 	if (notificationType == PrjFS_NotificationType_None)

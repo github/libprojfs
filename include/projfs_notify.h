@@ -40,6 +40,7 @@ extern "C" {
 #define PROJFS_OPEN		0x00000020	/* File was opened */
 #define PROJFS_DELETE_SELF	0x00000400	/* Delete permission */
 #define PROJFS_CREATE_SELF	himask(0x0001)	/* File was created */
+#define PROJFS_MOVE_SELF	0x00000800	/* File/dir was moved */
 
 /** Filesystem event flags */
 #define PROJFS_ONDIR		0x40000000	/* Event occurred on dir */
@@ -76,7 +77,8 @@ extern "C" {
 #if (PROJFS_CLOSE_WRITE	!= IN_CLOSE_WRITE ||	\
      PROJFS_OPEN	!= IN_OPEN ||		\
      PROJFS_DELETE_SELF	!= IN_DELETE_SELF ||	\
-     PROJFS_ONDIR	!= IN_ISDIR)
+     PROJFS_ONDIR	!= IN_ISDIR ||		\
+     PROJFS_MOVE_SELF	!= IN_MOVE_SELF)
 #error "Projfs notification API out of sync with sys/inotify.h API"
 #endif
 #endif /* HAVE_SYS_INOTIFY_H */
