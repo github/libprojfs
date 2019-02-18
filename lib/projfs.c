@@ -658,7 +658,7 @@ static int projfs_op_rename(char const *src, char const *dst,
 	res = projfs_fuse_proj_dir("rename2", lowerpath(dst), 1);
 	if (res)
 		return -res;
-	// TODO: may prevent us compiling on BSD; would renameat() suffice?
+	// TODO: for non Linux, use renameat(); fail if flags != 0
 	res = syscall(
 		SYS_renameat2,
 		lowerdir_fd(),
