@@ -39,8 +39,9 @@ test_expect_success 'test event handler on nested directory creation' '
 	test_path_is_dir target/d1/d2
 '
 
-# TODO: also use 'echo ... >' to exercise open() not create()
-
+# XXX: `touch` and `echo >` and `echo >>>` all issue `open(2)`; none issue
+# `creat(2)`.  Probably need a helper tool to issue one or the other so we can
+# test this precisely.
 projfs_event_printf notify create_file f1.txt
 test_expect_success 'test event handler on top-level file creation' '
 	projfs_event_exec touch target/f1.txt &&

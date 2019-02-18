@@ -521,8 +521,7 @@ static int projfs_op_create(char const *path, mode_t mode,
 static int projfs_op_open(char const *path, struct fuse_file_info *fi)
 {
 	int flags = fi->flags & ~O_NOFOLLOW;
-	int res;
-	int fd;
+	int res, fd, did_exist = 1;
 
 	res = projfs_fuse_proj_dir("open", lowerpath(path), 1);
 	if (res)
@@ -533,12 +532,36 @@ static int projfs_op_open(char const *path, struct fuse_file_info *fi)
 	 * and the file doesn't exist), we'll return the failure from openat(2)
 	 * below */
 	res = projfs_fuse_proj_file("open", lowerpath(path));
-	if (res && res != ENOENT)
+	if (res == ENOENT) {
+		did_exist = 0;
+		res = 0;
+	} else if (res)
 		return -res;
 
 	fd = openat(lowerdir_fd(), lowerpath(path), flags);
 	if (fd == -1)
 		return -errno;
+
+	/* It appears Linux/FUSE will never call the "open" op if we are
+	 * creating a new file, i.e. this exact `if` clause.  However, FUSE
+	 * docs for the "create" callback note:
+	 *
+	 *     If this method is not implemented or under Linux kernel versions
+	 *     earlier than 2.6.15, the mknod() and open() methods will be
+	 *     called instead.
+	 *
+	 * TODO: test this codepath is exercised (and correctly) on Linux <
+	 * 2.6.15. */
+	if (!did_exist && (flags & O_CREAT)) {
+		res = projfs_fuse_notify_event(
+			PROJFS_CREATE_SELF,
+			path,
+			NULL);
+		if (res == -1) {
+			close(fd);
+			return res;
+		}
+	}
 
 	fi->fh = fd;
 	return 0;
