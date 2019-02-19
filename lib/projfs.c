@@ -1161,65 +1161,46 @@ static int check_dir_empty(const char *path)
 
 /**
  * Test that using ftruncate to create a sparse file works.
+ *
+ * @return 1 if sparse files function as expected, 0 if not, -1 if an error
+ * occurred during testing (in which case errno is set).
  */
-static int test_sparse_support(struct projfs *fs)
+static int test_sparse_support(int lowerdir_fd)
 {
 	struct stat attrs;
 	int fd, res;
 
 	fd = openat(
-		fs->lowerdir_fd,
+		lowerdir_fd,
 		SPARSE_TEST_FILENAME,
 		O_CREAT | O_TRUNC | O_RDWR,
 		0600);
-	if (fd == -1) {
-		fprintf(stderr, "projfs: cannot openat sparse test file: %s\n",
-			strerror(errno));
+	if (fd == -1)
 		return -1;
-	}
 
 	res = fstat(fd, &attrs);
-	if (res == -1) {
-		fprintf(stderr, "projfs: cannot fstat sparse test file: %s\n",
-			strerror(errno));
+	if (res == -1)
 		goto err_close;
-	}
 
 	if (attrs.st_size != 0) {
-		fprintf(stderr, "projfs: sparse test file should be 0 bytes, "
-				"is %ld bytes\n",
-			attrs.st_size);
+		errno = EINVAL;
 		goto err_close;
 	}
 
 	res = ftruncate(fd, SPARSE_TEST_SIZE_BYTES);
-	if (res == -1) {
-		fprintf(stderr, "projfs: cannot ftruncate sparse test "
-				"file: %s\n",
-			strerror(errno));
+	if (res == -1)
 		goto err_close;
-	}
 
 	res = fstat(fd, &attrs);
-	if (res == -1) {
-		fprintf(stderr, "projfs: cannot fstat sparse test file "
-				"after ftruncate: %s\n",
-			strerror(errno));
+	if (res == -1)
 		goto err_close;
-	}
 
 	if (attrs.st_size != SPARSE_TEST_SIZE_BYTES) {
-		fprintf(stderr, "projfs: sparse test file should be %d bytes, "
-				"is %ld bytes\n",
-			SPARSE_TEST_SIZE_BYTES,
-			attrs.st_size);
+		errno = EINVAL;
 		goto err_close;
 	}
 
-	/* check if the file consumes any actual blocks after ftruncate */
-	if (attrs.st_blocks > 0)
-		fprintf(stderr, "projfs: sparse files may not be "
-				"supported by the lower filesystem\n");
+	res = attrs.st_blocks == 0;
 
 	goto close;
 
@@ -1228,7 +1209,7 @@ err_close:
 
 close:
 	close(fd);
-	unlinkat(fs->lowerdir_fd, SPARSE_TEST_FILENAME, 0);
+	unlinkat(lowerdir_fd, SPARSE_TEST_FILENAME, 0);
 
 	return res;
 }
@@ -1286,16 +1267,26 @@ static void *projfs_loop(void *data)
 		res = fsetxattr(
 			fs->lowerdir_fd, USER_PROJECTION_EMPTY, &v, 1, 0);
 		if (res == -1) {
+			fprintf(stderr, "projfs: could not set projection "
+					"xattr: %s: %s\n",
+				fs->lowerdir, strerror(errno));
 			res = 4;
 			goto out_close;
 		}
 	}
 
-	res = test_sparse_support(fs);
+	res = test_sparse_support(fs->lowerdir_fd);
 	if (res == -1) {
+		fprintf(stderr, "projfs: unable to test sparse file support: "
+				"%s/%s: %s\n",
+			fs->lowerdir, SPARSE_TEST_FILENAME, strerror(errno));
 		res = 5;
 		goto out_close;
-	}
+	} else if (res == 0)
+		fprintf(stderr, "projfs: sparse files may not be supported by "
+		                "lower filesystem: %s\n", fs->lowerdir);
+	else if (res == 1)
+		res = 0;
 
 	fuse = fuse_new(&args, &projfs_ops, sizeof(projfs_ops), fs);
 	if (fuse == NULL) {
