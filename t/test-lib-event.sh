@@ -37,14 +37,16 @@ event_vfs_delete_dir="1, 0x00000010"
 event_vfs_create_file="0, 0x00000004"
 event_vfs_delete_file="0, 0x00000010"
 
-# Format into "$event_msg" and "$event_err_msg" log and error messages
-# matching those output by the test mount helper programs.  If an error
-# is expected, "$1" should be "error" and "$2" should contain the errno
-# name, e.g., "ENOMEM".  The next three arguments (starting at either
+# Format into "$event_msg_head", "$event_msg_tail", and "$event_err_msg"
+# log and error messages matching those output by the test mount helper
+# programs.
+# If an error is expected, "$1" should be "error" and "$2" should contain
+# the errno name, e.g., "ENOMEM".  The next arguments (starting at either
 # "$3" or "$1", depending on whether an error is expected or not) should be
-# the category of event (e.g., "notify" or "perm"), and the type of event
-# (e.g., "create_dir" or "delete_file"), and the file path
+# the category of event (e.g., "notify" or "perm"), the type of event
+# (e.g., "create_dir" or "delete_file"), the file path
 # (relative to the projfs mount point) on which the event is expected,
+# and optionally the target file path of the event if one is expected.
 projfs_event_printf () {
 	if test ":$1" = ":error"
 	then
@@ -64,7 +66,12 @@ projfs_event_printf () {
 		event_msg_head="  $msg $3: "
 		event_msg_tail=", $vfs_code"
 	else
-		event_msg_head="  $msg $3: $code, "
+		event_msg_head="  $msg $3"
+		if test ":$4" != ":"
+		then
+			event_msg_head="$event_msg_head, $4"
+		fi
+		event_msg_head="$event_msg_head: $code, "
 		event_msg_tail=""
 	fi
 

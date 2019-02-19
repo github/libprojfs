@@ -38,9 +38,12 @@ static int test_handle_event(struct projfs_event *event, const char *desc,
 
 	if ((opt_flags & TEST_OPT_RETFILE) == TEST_OPT_NONE ||
 	    (ret_flags & TEST_FILE_EXIST) != TEST_FILE_NONE) {
-		printf("  test %s for %s: "
+		printf("  test %s for %s%s%s: "
 		       "0x%04" PRIx64 "-%08" PRIx64 ", %d\n",
 		       desc, event->path,
+		       ((event->target_path == NULL) ? "" : ", "),
+		       ((event->target_path == NULL) ? ""
+						     : event->target_path),
 		       event->mask >> 32, event->mask & 0xFFFFFFFF,
 		       event->pid);
 	}
