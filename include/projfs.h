@@ -141,6 +141,16 @@ int projfs_create_proj_dir(struct projfs *fs, const char *path);
 int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
 			    mode_t mode);
 
+/**
+ * Create a symlink with the given target.
+ *
+ * @param[in] fs Projected filesystem handle.
+ * @param[in] path Relative path of new file under projfs mount point.
+ * @param[in] target The target of the symlink.
+ * @return Zero on success or an \p errno(3) code on failure.
+ */
+int projfs_create_proj_symlink(struct projfs *fs, const char *path,
+			       const char *target);
 #ifdef __cplusplus
 }
 #endif

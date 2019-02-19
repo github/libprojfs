@@ -1390,6 +1390,21 @@ int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
 	return 0;
 }
 
+int projfs_create_proj_symlink(struct projfs *fs, const char *path,
+			       const char *target)
+{
+	int res;
+
+	if (!check_safe_rel_path(path))
+		return EINVAL;
+	
+	res = symlinkat(target, fs->lowerdir_fd, path);
+	if (res == -1)
+		return errno;
+
+	return 0;
+}
+
 int _projfs_make_dir(struct projfs *fs, const char *path, mode_t mode,
                      uint8_t proj_flag)
 {

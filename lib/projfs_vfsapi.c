@@ -405,6 +405,20 @@ PrjFS_Result PrjFS_WritePlaceholderFile(
 	return convert_errno_to_result(ret);
 }
 
+PrjFS_Result PrjFS_WriteSymLink(
+    _In_    const PrjFS_MountHandle*                mountHandle,
+    _In_    const char*                             relativePath,
+    _In_    const char*                             symLinkTarget
+)
+{
+	struct projfs *fs = (struct projfs *) mountHandle;
+	int ret;
+
+	ret = projfs_create_proj_symlink(fs, relativePath, symLinkTarget);
+
+	return convert_errno_to_result(ret);
+}
+
 PrjFS_Result PrjFS_WriteFileContents(
     _In_    const PrjFS_FileHandle*                 fileHandle,
     _In_    const void*                             bytes,
