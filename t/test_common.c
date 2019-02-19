@@ -101,9 +101,10 @@ static const struct retval vfsapi_retvals[] = {
 
 static const struct option all_long_opts[] = {
 	{ "help", no_argument, NULL, TEST_OPT_NUM_HELP },
-	{ "retval", required_argument, NULL, TEST_OPT_NUM_RETVAL},
-	{ "retval-file", required_argument, NULL, TEST_OPT_NUM_RETFILE},
-	{ "timeout", required_argument, NULL, TEST_OPT_NUM_TIMEOUT}
+	{ "retval", required_argument, NULL, TEST_OPT_NUM_RETVAL },
+	{ "retval-file", required_argument, NULL, TEST_OPT_NUM_RETFILE },
+	{ "timeout", required_argument, NULL, TEST_OPT_NUM_TIMEOUT },
+	{ "lock-file", required_argument, NULL, TEST_OPT_NUM_LOCKFILE },
 };
 
 struct opt_usage {
@@ -115,13 +116,15 @@ static const struct opt_usage all_opts_usage[] = {
 	{ NULL, 1 },
 	{ "allow|deny|null|<error>", 1 },
 	{ "<retval-file>", 1 },
-	{ "<max-seconds>", 1 }
+	{ "<max-seconds>", 1 },
+	{ "<lock-file>", 1 },
 };
 
 /* option values */
 static int optval_retval;
 static const char *optval_retfile;
 static long int optval_timeout;
+static const char *optval_lockfile;
 
 static unsigned int opt_set_flags = TEST_OPT_NONE;
 
@@ -351,6 +354,11 @@ void test_parse_opts(int argc, char *const argv[], unsigned int opt_flags,
 			opt_set_flags |= TEST_OPT_TIMEOUT;
 			break;
 
+		case TEST_OPT_NUM_LOCKFILE:
+			optval_lockfile = optarg;
+			opt_set_flags |= TEST_OPT_LOCKFILE;
+			break;
+
 		case '?':
 			if (optopt > 0)
 				test_exit_error(argv[0],
@@ -440,6 +448,12 @@ unsigned int test_get_opts(unsigned int opt_flags, ...)
 				l = va_arg(ap, long int*);
 				if (ret_flag != TEST_OPT_NONE)
 					*l = optval_timeout;
+				break;
+
+			case TEST_OPT_LOCKFILE:
+				s = va_arg(ap, const char**);
+				if (ret_flag != TEST_OPT_NONE)
+					*s = optval_lockfile;
 				break;
 
 			default:

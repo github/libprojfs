@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see http://www.gnu.org/licenses/ .
 
-test_description='projfs file operation permission denial tests
+test_description='projfs file operation permission null-denial tests
 
 Check that projfs file operation permission requests respond to
 denial responses caused by event handlers returning null.
