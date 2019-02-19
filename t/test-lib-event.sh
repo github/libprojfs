@@ -33,9 +33,11 @@ event_create_file="0x0001-00000000"
 
 event_vfs_create_dir="1, 0x00000004"
 event_vfs_delete_dir="1, 0x00000010"
+event_vfs_rename_dir="1, 0x00000080"
 
 event_vfs_create_file="0, 0x00000004"
 event_vfs_delete_file="0, 0x00000010"
+event_vfs_rename_file="0, 0x00000080"
 
 # Format into "$event_msg_head", "$event_msg_tail", and "$event_err_msg"
 # log and error messages matching those output by the test mount helper
@@ -63,7 +65,12 @@ projfs_event_printf () {
 	if test ":$1" = ":vfs"
 	then
 		eval vfs_code=\$event_vfs_"$2"
-		event_msg_head="  $msg $3: "
+		event_msg_head="  $msg $3"
+		if test ":$4" != ":"
+		then
+			event_msg_head="$event_msg_head, $4"
+		fi
+		event_msg_head="$event_msg_head: "
 		event_msg_tail=", $vfs_code"
 	else
 		event_msg_head="  $msg $3"
