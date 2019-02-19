@@ -23,13 +23,13 @@ event_msg_perm="test permission request for"
 
 event_msg_vfs="TestNotifyOperation for"
 
-event_create_dir="0x0001-40000000"
-event_rename_dir="0x0000-40000800"
 event_delete_dir="0x0000-40000400"
+event_rename_dir="0x0000-40000800"
+event_create_dir="0x0001-40000000"
 
-event_create_file="0x0001-00000000"
-event_rename_file="0x0000-00000800"
 event_delete_file="0x0000-00000400"
+event_rename_file="0x0000-00000800"
+event_create_file="0x0001-00000000"
 
 event_vfs_create_dir="1, 0x00000004"
 event_vfs_delete_dir="1, 0x00000010"
