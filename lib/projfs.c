@@ -149,7 +149,6 @@ struct node_userdata
 };
 
 #define USER_PROJECTION_EMPTY "user.projection.empty"
-#define USER_PROJECTION_TEST  "user.projection.test"
 
 /**
  * Return a copy of path with the last component removed (e.g. "x/y/z" will
@@ -1157,49 +1156,6 @@ static int check_dir_empty(const char *path)
 	}
 }
 
-/**
- * Uses the f*xattr family of functions to check that xattrs are supported on
- * the supplied open file descriptor.
- */
-static int test_xattr_support(int fd)
-{
-	int res;
-	char v = 1;
-
-	res = fsetxattr(fd, USER_PROJECTION_TEST, &v, 1, 0);
-	if (res == -1)
-		return -1;
-
-	res = fgetxattr(fd, USER_PROJECTION_TEST, &v, 1);
-	if (res != 1 || v != 1)
-		return -1;
-
-	res = fremovexattr(fd, USER_PROJECTION_TEST);
-	if (res != 0)
-		return -1;
-
-	return 0;
-}
-
-/**
- * Sets the empty xattr on the given fd, and checks that it was set
- * successfully. */
-static int set_and_check_empty_xattr(int fd)
-{
-	char v = 1;
-	int res;
-
-	res = fsetxattr(fd, USER_PROJECTION_EMPTY, &v, 1, 0);
-	if (res == -1)
-		return -1;
-
-	res = fgetxattr(fd, USER_PROJECTION_EMPTY, &v, 1);
-	if (res != 1 || v != 1)
-		return -1;
-
-	return 0;
-}
-
 #define SPARSE_TEST_FILENAME ".libprojfs-sparse-test"
 #define SPARSE_TEST_SIZE_BYTES 1048576
 
@@ -1288,6 +1244,7 @@ static void *projfs_loop(void *data)
 	struct fuse_session *se;
 	int res = 0;
 	int err;
+	char v = 1;
 
 	// TODO: verify the way we're setting signal handlers on the underlying
 	// session works correctly when using the high-level API
@@ -1303,6 +1260,15 @@ static void *projfs_loop(void *data)
 		goto out;
 	}
 
+	if (fgetxattr(fs->lowerdir_fd, USER_PROJECTION_EMPTY, NULL, 0) == -1 &&
+			errno == ENOTSUP) {
+		fprintf(stderr, "projfs: xattr support check on lowerdir "
+		                "failed: %s: %s\n",
+			fs->lowerdir, strerror(errno));
+		res = 2;
+		goto out_close;
+	}
+
 	/* mark lowerdir as needing projection if it's empty (because the
 	 * provider creates it for us before we start running) -- probably want
 	 * to modify this behaviour in the future */
@@ -1311,36 +1277,29 @@ static void *projfs_loop(void *data)
 		fprintf(stderr, "projfs: could not check if lowerdir "
 		                "is empty: %s: %s\n",
 			fs->lowerdir, strerror(errno));
-		res = 2;
-		goto out_close;
-	}
-
-	/* if the dir is empty, mark as such, and test that the xattr was
-	 * actually set.  if not, set and check a test xattr, so that in either
-	 * case we can be sure the lower fs supports xattrs.
-	 * exit code 3 can be summarised as "bad or no xattr support" */
-	if (res == 1)
-		res = set_and_check_empty_xattr(fs->lowerdir_fd);
-	else
-		res = test_xattr_support(fs->lowerdir_fd);
-
-	if (res == -1) {
-		fprintf(stderr, "projfs: xattr support check on lowerdir "
-		                "failed: %s: %s\n",
-			fs->lowerdir, strerror(errno));
 		res = 3;
 		goto out_close;
 	}
 
+	if (res == 1) {
+		/* dir is empty */
+		res = fsetxattr(
+			fs->lowerdir_fd, USER_PROJECTION_EMPTY, &v, 1, 0);
+		if (res == -1) {
+			res = 4;
+			goto out_close;
+		}
+	}
+
 	res = test_sparse_support(fs);
 	if (res == -1) {
-		res = 4;
+		res = 5;
 		goto out_close;
 	}
 
 	fuse = fuse_new(&args, &projfs_ops, sizeof(projfs_ops), fs);
 	if (fuse == NULL) {
-		res = 5;
+		res = 6;
 		goto out_close;
 	}
 
@@ -1349,13 +1308,13 @@ static void *projfs_loop(void *data)
 
 	// TODO: defer all signal handling to user, once we remove FUSE
 	if (fuse_set_signal_handlers(se) != 0) {
-		res = 6;
+		res = 7;
 		goto out_session;
 	}
 
 	// TODO: mount with x-gvfs-hide option and maybe others for KDE, etc.
 	if (fuse_mount(fuse, fs->mountdir) != 0) {
-		res = 7;
+		res = 8;
 		goto out_signal;
 	}
 
@@ -1367,7 +1326,7 @@ static void *projfs_loop(void *data)
 	if ((err = fuse_loop_mt(fuse, &loop)) != 0) {
 		if (err > 0)
 			fprintf(stderr, "projfs: %s signal\n", strsignal(err));
-		res = 8;
+		res = 9;
 	}
 
 	fuse_session_unmount(se);
