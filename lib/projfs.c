@@ -664,7 +664,6 @@ static int projfs_op_rename(char const *src, char const *dst,
 	if (res)
 		return -res;
 
-
 	// TODO: for non Linux, use renameat(); fail if flags != 0
 	res = syscall(
 		SYS_renameat2,
@@ -676,10 +675,7 @@ static int projfs_op_rename(char const *src, char const *dst,
 	if (res == -1)
 		return -errno;
 
-	// Mimicking how this works on Mac for now: only the destination path
-	// is specified in the notify, as the primary path.  We can revisit if
-	// this assumption turns out to be incorrect in practice with GVFS.
-	res = projfs_fuse_notify_event(mask, dst, NULL);
+	res = projfs_fuse_notify_event(mask, src, dst);
 	return res;
 }
 

@@ -48,16 +48,38 @@ test_expect_success 'test event handler on file creation' '
 	test_path_is_file target/f1.txt
 '
 
-projfs_event_printf error EINVAL vfs delete_file f1.txt
-test_expect_success 'test permission request denied on file deletion' '
-	test_must_fail projfs_event_exec rm target/f1.txt &&
-	test_path_is_file target/f1.txt
+# TODO: test_vfsapi_handlers always returns EPERM with --retval deny, unlike
+#	test_projfs_handlers, so mv sees a handler error; like t701.3,
+#	we expect mv to rename a dir despite the handler error and
+#	regardless of mv's failure exit code
+projfs_event_printf error EINVAL vfs rename_dir d1 d1a
+test_expect_success 'test event handler on directory rename' '
+	test_must_fail projfs_event_exec mv target/d1 target/d1a &&
+	test_path_is_missing target/d1 &&
+	test_path_is_dir target/d1a
 '
 
-projfs_event_printf error EINVAL vfs delete_dir d1
+# TODO: test_vfsapi_handlers always returns EPERM with --retval deny, unlike
+#	test_projfs_handlers, so mv sees a handler error; like t701.4,
+#	we expect mv to rename a file despite the handler error and
+#	regardless of mv's failure exit code
+projfs_event_printf error EINVAL vfs rename_file f1.txt f1a.txt
+test_expect_success 'test event handler on file rename' '
+	test_must_fail projfs_event_exec mv target/f1.txt target/f1a.txt &&
+	test_path_is_missing target/f1.txt &&
+	test_path_is_file target/f1a.txt
+'
+
+projfs_event_printf error EINVAL vfs delete_file f1a.txt
+test_expect_success 'test permission request denied on file deletion' '
+	test_must_fail projfs_event_exec rm target/f1a.txt &&
+	test_path_is_file target/f1a.txt
+'
+
+projfs_event_printf error EINVAL vfs delete_dir d1a
 test_expect_success 'test permission request denied on directory deletion' '
-	test_must_fail projfs_event_exec rmdir target/d1 &&
-	test_path_is_dir target/d1
+	test_must_fail projfs_event_exec rmdir target/d1a &&
+	test_path_is_dir target/d1a
 '
 
 rm retval
