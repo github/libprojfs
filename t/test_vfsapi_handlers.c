@@ -30,7 +30,8 @@
 static int test_handle_event(const char *desc, const char *path,
 			     const char *target_path,
 			     int pid, const char *procname,
-			     int isdir, int type, int proj)
+			     int isdir, int type, int proj,
+			     const PrjFS_FileHandle *fileHandle)
 {
 	unsigned int opt_flags, ret_flags;
 	const char *retfile;
@@ -50,10 +51,13 @@ static int test_handle_event(const char *desc, const char *path,
 	}
 
 	if (proj) {
-		if (!isdir) {
-			fprintf(stderr, "unsupported file projection\n");
+		if (!isdir && fileHandle == NULL) {
+			fprintf(stderr,
+				"null filehandle for file projection\n");
 			ret = PrjFS_Result_Invalid;
 		}
+
+		// TODO: hydrate file/dir based on projection list
 	}
 
 	if ((ret_flags & TEST_VAL_SET) == TEST_VAL_UNSET)
@@ -73,7 +77,26 @@ static PrjFS_Result TestEnumerateDirectory(
 
 	return test_handle_event("EnumerateDirectory", relativePath, NULL,
 				 triggeringProcessId, triggeringProcessName,
-				 1, 0, 1);
+				 1, 0, 1, NULL);
+}
+
+static PrjFS_Result TestGetFileStream(
+    _In_    unsigned long                           commandId,
+    _In_    const char*                             relativePath,
+    _In_    unsigned char                           providerId[PrjFS_PlaceholderIdLength],
+    _In_    unsigned char                           contentId[PrjFS_PlaceholderIdLength],
+    _In_    int                                     triggeringProcessId,
+    _In_    const char*                             triggeringProcessName,
+    _In_    const PrjFS_FileHandle*                 fileHandle
+)
+{
+	(void)commandId;		// prevent compiler warnings
+	(void)providerId;
+	(void)contentId;
+
+	return test_handle_event("GetFileStream", relativePath, NULL,
+				 triggeringProcessId, triggeringProcessName,
+				 0, 0, 1, fileHandle);
 }
 
 static PrjFS_Result TestNotifyOperation(
@@ -95,7 +118,7 @@ static PrjFS_Result TestNotifyOperation(
 	return test_handle_event("NotifyOperation", relativePath,
 				 destinationRelativePath,
 				 triggeringProcessId, triggeringProcessName,
-				 isDirectory, notificationType, 0);
+				 isDirectory, notificationType, 0, NULL);
 }
 
 int main(int argc, char *const argv[])
@@ -111,6 +134,7 @@ int main(int argc, char *const argv[])
 
 	memset(&callbacks, 0, sizeof(PrjFS_Callbacks));
 	callbacks.EnumerateDirectory = TestEnumerateDirectory;
+	callbacks.GetFileStream = TestGetFileStream;
 	callbacks.NotifyOperation = TestNotifyOperation;
 
 	test_start_vfsapi_mount(lower_path, mount_path, callbacks,
