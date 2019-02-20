@@ -25,6 +25,7 @@
 
 #include "../include/config.h"
 
+#include <ctype.h>
 #include <err.h>
 #include <errno.h>
 #include <limits.h>
@@ -46,8 +47,7 @@
 #define MAX_PROJLIST_PATH_LEN NAME_MAX		// sufficient for testing
 #define MAX_PROJLIST_ENTRY_LEN (MAX_PROJLIST_PATH_LEN * 2 + 100)
 
-#define is_projlist_space(c) ((c) == ' ' || (c) == '\t')
-#define is_projlist_quote(c) ((c) == '"' || (c) == '\'')
+#define isquote(c) ((c) == '"' || (c) == '\'')
 
 #define retval_entry(s) #s, -s
 
@@ -244,9 +244,9 @@ out:
 	return;
 }
 
-static inline const char *skip_projlist_space(const char *s)
+static inline const char *skip_blanks(const char *s)
 {
-	while(*s != '\0' && is_projlist_space(*s))
+	while(*s != '\0' && isblank(*s))
 		++s;
 	return s;
 }
@@ -259,7 +259,7 @@ static int parse_projlist_path(const char *s, int ispath, char **path)
 	char q = '\0';
 	size_t len = 0;
 
-	if (is_projlist_quote(*s)) {
+	if (isquote(*s)) {
 		q = *s;
 		++s;
 	}
@@ -268,7 +268,7 @@ static int parse_projlist_path(const char *s, int ispath, char **path)
 		if (q != '\0') {
 			if (c == q) {
 				++e;
-				if (*e == '\0' || is_projlist_space(*e))
+				if (*e == '\0' || isblank(*e))
 					break;
 				else
 					return -EINVAL;
@@ -296,7 +296,7 @@ static int parse_projlist_path(const char *s, int ispath, char **path)
 				}
 			}
 		}
-		else if (is_projlist_space(c)) {
+		else if (isblank(c)) {
 			break;
 		}
 
@@ -338,11 +338,11 @@ static struct test_projlist_entry *parse_projlist_entry(const char *buf)
 	const char *s = buf;
 	int len;
 
-	s = skip_projlist_space(s);
+	s = skip_blanks(s);
 	if (*s == '\0' || *s == '#')
 		return NULL;
 
-	if (is_projlist_space(*(s + 1))) {
+	if (isblank(*(s + 1))) {
 		switch (*s) {
 		case 'd':
 			entry.mode = S_IFDIR;
@@ -365,7 +365,7 @@ static struct test_projlist_entry *parse_projlist_entry(const char *buf)
 		return NULL;
 	}
 
-	s = skip_projlist_space(++s);
+	s = skip_blanks(++s);
 	if (*s == '\0') {
 		warnx("missing entry name in projection list: %s", buf);
 		return NULL;
@@ -379,25 +379,57 @@ static struct test_projlist_entry *parse_projlist_entry(const char *buf)
 	s += len;
 
 	if (S_ISREG(entry.mode) || S_ISDIR(entry.mode)) {
-		s = skip_projlist_space(s);
+		s = skip_blanks(s);
 		if (*s == '\0') {
 			warnx("missing entry mode in projection list: %s",
 			      buf);
 			goto out_name;
 		}
+		else if (*s == '0' && *(s + 1) != 'x') {
+			unsigned long int mode;
+			char *e;
 
-		//// DEBUG octal mode
+			errno = 0;
+			mode = strtoul(s, &e, 0);
+			len = e - s;
+			if (errno == 0 && len >= 4 && len <= 5 &&
+			    (S_ISREG(entry.mode) ? isblank(*e)
+						 : (*e == '\0'))) {
+				entry.mode |= mode;
+			}
+		}
+
+		if ((entry.mode & ~S_IFMT) == 0) {
+			warnx("invalid entry mode in projection list: %s",
+			      buf);
+			goto out_name;
+		}
 	}
 
 	if (S_ISREG(entry.mode)) {
-		s = skip_projlist_space(s);
+		s = skip_blanks(s);
 		if (*s == '\0') {
 			warnx("missing entry size in projection list: %s",
 			      buf);
 			goto out_name;
 		}
 
-		//// DEBUG int too big?
+		entry.size = -1;
+		if (isdigit(*s) && (*s != '0' || isblank(*(s + 1)))) {
+			unsigned long long int size;
+			char *e;
+
+			errno = 0;
+			size = strtoull(s, &e, 0);
+			if (errno == 0 && isblank(*e))
+				entry.size = size;
+		}
+
+		if (entry.size < 0) {
+			warnx("invalid entry size in projection list: %s",
+			      buf);
+			goto out_name;
+		}
 	}
 
 	if (S_ISREG(entry.mode) || S_ISLNK(entry.mode)) {
@@ -405,7 +437,7 @@ static struct test_projlist_entry *parse_projlist_entry(const char *buf)
 
 		field = S_ISREG(entry.mode) ? "source path" : "target path";
 
-		s = skip_projlist_space(s);
+		s = skip_blanks(s);
 		if (*s == '\0') {
 			warnx("missing entry %s in projection list: %s",
 			      field, buf);
@@ -420,7 +452,7 @@ static struct test_projlist_entry *parse_projlist_entry(const char *buf)
 		s += len;
 	}
 
-	s = skip_projlist_space(s);
+	s = skip_blanks(s);
 	if (*s != '\0') {
 		warnx("invalid extra fields in projection list: %s", buf);
 		goto out_src_link;
