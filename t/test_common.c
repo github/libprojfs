@@ -21,6 +21,7 @@
 
 #define _GNU_SOURCE		// for basename() in <string.h>
 				// and getopt_long() in <getopt.h>
+				// and S_IS*() in <unistd.h>
 
 #include "../include/config.h"
 
@@ -41,9 +42,12 @@
 #define MOUNT_ARGS_USAGE "<lower-path> <mount-path>"
 
 #define MAX_RETVAL_NAME_LEN 40
-#define MAX_PROJLIST_ENTRY_LEN (NAME_MAX * 2 + 100)	// enough for tests
 
-#define is_projlist_delim(c) ((c) == ' ' || (c) == '\t')
+#define MAX_PROJLIST_PATH_LEN NAME_MAX		// sufficient for testing
+#define MAX_PROJLIST_ENTRY_LEN (MAX_PROJLIST_PATH_LEN * 2 + 100)
+
+#define is_projlist_space(c) ((c) == ' ' || (c) == '\t')
+#define is_projlist_quote(c) ((c) == '"' || (c) == '\'')
 
 #define retval_entry(s) #s, -s
 
@@ -88,7 +92,7 @@ static const struct opt_usage all_opts_usage[] = {
 	{ NULL, 1 },
 	{ "allow|deny|null|<error>", 1 },
 	{ "<retval-file>", 1 },
-	{ "[d <name> <mode>|f <name> <mode> <size> <source>]...", 1 },
+	{ "[d|f|s <name> [<dfmode> [<fsize> <fsource>]]|[<slink>]]...", 1 },
 	{ "<projlist-file>", 1 },
 	{ "<max-seconds>", 1 },
 	{ "<lock-file>", 1 }
@@ -240,25 +244,91 @@ out:
 	return;
 }
 
-static inline const char *skip_projlist_delim(const char *s)
+static inline const char *skip_projlist_space(const char *s)
 {
-	while(*s != '\0' && is_projlist_delim(*s))
+	while(*s != '\0' && is_projlist_space(*s))
 		++s;
 	return s;
 }
 
-static int parse_projlist_path(const char *s, char q, int ispath,
-				  char **path)
+static int parse_projlist_path(const char *s, int ispath, char **path)
 {
-	int len = 0;
+	char buf[MAX_PROJLIST_PATH_LEN + 1];
+	const char *e = s;
+	char c = *e;
+	char q = '\0';
+	size_t len = 0;
 
-	//// DEBUG:
-	//// support "" and ''
-	//// enforce NAME_MAX on name and source -- -ENAMETOOLONG, -EINVAL
-	//// strdup name and source
-	//// -ENOMEM
+	if (is_projlist_quote(*s)) {
+		q = *s;
+		++s;
+	}
 
-	return len;
+	while (c != '\0') {
+		if (q != '\0') {
+			if (c == q) {
+				++e;
+				if (*e == '\0' || is_projlist_space(*e))
+					break;
+				else
+					return -EINVAL;
+			}
+			else if (c == '\\') {
+				++e;
+				c = *e;
+
+				switch (c) {
+				case 'n':
+					c = '\n';
+					break;
+
+				case 't':
+					c = '\t';
+					break;
+
+				case '"':
+				case '\'':
+				case '\\':
+					break;
+
+				default:
+					return -EINVAL;
+				}
+			}
+		}
+		else if (is_projlist_space(c)) {
+			break;
+		}
+
+		if (c == '/' && !ispath)
+			return -EINVAL;
+
+		buf[len++] = c;
+		c = *(++e);
+	}
+	buf[len] = '\0';
+
+	if (len == 0)
+		return -EINVAL;
+	else if (len > NAME_MAX)
+		return -ENAMETOOLONG;
+
+	*path = strdup(buf);
+	if (*path == NULL)
+		return -errno;
+
+	return (e - s);
+}
+
+static void warn_projlist_path(int err, const char *field, const char *buf)
+{
+	if (err == ENOMEM) {
+		warn("unable to allocate projection list entry %s", field);
+	}
+	else {
+		warnx("invalid entry %s %sin projection list: %s", field,
+		      (err == ENAMETOOLONG ? "(too long) " : ""), buf);
+	}
 }
 
 static struct test_projlist_entry *parse_projlist_entry(const char *buf)
@@ -266,63 +336,107 @@ static struct test_projlist_entry *parse_projlist_entry(const char *buf)
 	struct test_projlist_entry entry = { 0 };
 	struct test_projlist_entry *ret;
 	const char *s = buf;
-	char q = '\0';
 	int len;
 
-	s = skip_projlist_delim(s);
+	s = skip_projlist_space(s);
 	if (*s == '\0' || *s == '#')
 		return NULL;
 
-	if (is_projlist_delim(*(s + 1)) && (*s == 'd' || *s == 'f'))
-		entry.isdir = (*s == 'd') ? 1 : 0;
-	else {
+	if (is_projlist_space(*(s + 1))) {
+		switch (*s) {
+		case 'd':
+			entry.mode = S_IFDIR;
+			break;
+
+		case 'f':
+			entry.mode = S_IFREG;
+			break;
+
+		case 's':
+			entry.mode = S_IFLNK;
+			break;
+
+		default:
+			break;
+		}
+	}
+	if (entry.mode == 0) {
 		warnx("invalid type flag in projection list: %s", buf);
 		return NULL;
 	}
 
-	s = skip_projlist_delim(++s);
+	s = skip_projlist_space(++s);
 	if (*s == '\0') {
 		warnx("missing entry name in projection list: %s", buf);
 		return NULL;
 	}
-	else if (*s == '"' || *s == '\'')
-		q = *s++;
 
-	len = parse_projlist_path(s, q, 0, &entry.name);
+	len = parse_projlist_path(s, 0, &entry.name);
 	if (len < 0) {
-		int err = -len;
-
-		if (err == ENOMEM)
-			warn("unable to allocate projection list entry name");
-		else
-			warnx("invalid entry name %sin projection list: %s",
-			      (err == ENAMETOOLONG ? "(too long) " : ""),
-			      buf);
+		warn_projlist_path(-len, "name", buf);
 		return NULL;
 	}
 	s += len;
-	q = '\0';
 
-	s = skip_projlist_delim(s);
-	if (*s == '\0') {
-		warnx("missing entry mode in projection list: %s", buf);
-		goto out_name;
+	if (S_ISREG(entry.mode) || S_ISDIR(entry.mode)) {
+		s = skip_projlist_space(s);
+		if (*s == '\0') {
+			warnx("missing entry mode in projection list: %s",
+			      buf);
+			goto out_name;
+		}
+
+		//// DEBUG octal mode
 	}
 
-	//// TODO:
-	//// parse mode, and if file, size and source path
+	if (S_ISREG(entry.mode)) {
+		s = skip_projlist_space(s);
+		if (*s == '\0') {
+			warnx("missing entry size in projection list: %s",
+			      buf);
+			goto out_name;
+		}
+
+		//// DEBUG int too big?
+	}
+
+	if (S_ISREG(entry.mode) || S_ISLNK(entry.mode)) {
+		const char *field;
+
+		field = S_ISREG(entry.mode) ? "source path" : "target path";
+
+		s = skip_projlist_space(s);
+		if (*s == '\0') {
+			warnx("missing entry %s in projection list: %s",
+			      field, buf);
+			goto out_name;
+		}
+
+		len = parse_projlist_path(s, 0, &entry.name);
+		if (len < 0) {
+			warn_projlist_path(-len, field, buf);
+			goto out_name;
+		}
+		s += len;
+	}
+
+	s = skip_projlist_space(s);
+	if (*s != '\0') {
+		warnx("invalid extra fields in projection list: %s", buf);
+		goto out_src_link;
+	}
 
 	ret = malloc(sizeof(entry));
 	if (ret == NULL) {
 		warn("unable to allocate projection list entry");
-		goto out_source;
+		goto out_src_link;
 	}
 	memcpy(ret, &entry, sizeof(entry));
 	return ret;
 
-out_source:
-	if (entry.source != NULL)
-		free(entry.source);
+out_src_link:
+	if (entry.src_or_link != NULL)
+		free(entry.src_or_link);
 out_name:
 	free(entry.name);
 	return NULL;
@@ -689,8 +803,8 @@ void test_free_opts(void)
 		next_entry = entry->next;
 
 		free(entry->name);
-		if (entry->source != NULL)
-			free(entry->source);
+		if (entry->src_or_link != NULL)
+			free(entry->src_or_link);
 		free(entry);
 
 		entry = next_entry;

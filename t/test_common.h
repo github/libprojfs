@@ -49,11 +49,10 @@
 #define TEST_FILE_VALID		0x0004
 
 struct test_projlist_entry {
-	unsigned int isdir;
 	char *name;
 	mode_t mode;
 	off_t size;
-	char *source;
+	char *src_or_link;
 	struct test_projlist_entry *next;
 };
 
