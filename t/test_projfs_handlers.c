@@ -53,6 +53,8 @@ static int test_handle_event(struct projfs_event *event, const char *desc,
 			fprintf(stderr, "unknown projection flags\n");
 			ret = -EINVAL;
 		}
+
+		// TODO: hydrate file/dir based on projection list
 	}
 
 	if ((ret_flags & TEST_VAL_SET) == TEST_VAL_UNSET)
