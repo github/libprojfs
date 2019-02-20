@@ -43,16 +43,32 @@ test_expect_success 'test event handler error on file creation' '
 	test_path_is_file target/f1.txt
 '
 
-projfs_event_printf error ENOMEM vfs delete_file f1.txt
-test_expect_success 'test event handler error on file deletion' '
-	test_must_fail projfs_event_exec rm target/f1.txt &&
-	test_path_is_file target/f1.txt
+# TODO: we expect mv to rename a dir despite the handler error and
+#	regardless of mv's failure exit code
+projfs_event_printf error ENOMEM vfs rename_dir d1 d1a
+test_expect_success 'test event handler error on directory rename' '
+	test_must_fail projfs_event_exec mv target/d1 target/d1a &&
+	test_path_is_dir target/d1a
 '
 
-projfs_event_printf error ENOMEM vfs delete_dir d1
+# TODO: we expect mv to rename a file despite the handler error and
+#	regardless of mv's failure exit code
+projfs_event_printf error ENOMEM vfs rename_file f1.txt f1a.txt
+test_expect_success 'test event handler error on file rename' '
+	test_must_fail projfs_event_exec mv target/f1.txt target/f1a.txt &&
+	test_path_is_file target/f1a.txt
+'
+
+projfs_event_printf error ENOMEM vfs delete_file f1a.txt
+test_expect_success 'test event handler error on file deletion' '
+	test_must_fail projfs_event_exec rm target/f1a.txt &&
+	test_path_is_file target/f1a.txt
+'
+
+projfs_event_printf error ENOMEM vfs delete_dir d1a
 test_expect_success 'test event handler error on directory deletion' '
-	test_must_fail projfs_event_exec rmdir target/d1 &&
-	test_path_is_dir target/d1
+	test_must_fail projfs_event_exec rmdir target/d1a &&
+	test_path_is_dir target/d1a
 '
 
 rm retval

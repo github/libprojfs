@@ -331,7 +331,6 @@ static int projfs_fuse_proj_file(const char *op, const char *path)
 		/* tried to project a directory as a file, ignore
 		 * XXX should we just always project dirs as dirs and files as
 		 * files? */
-		res = 0;
 		goto out;
 	} else if (res == ELOOP) {
 		/* tried to project a symlink. it already exists as a symlink
@@ -531,9 +530,11 @@ static int projfs_op_open(char const *path, struct fuse_file_info *fi)
 	/* Per above, allow hydration to fail with ENOENT; if the file
 	 * operation should fail for that reason (i.e. O_CREAT is not specified
 	 * and the file doesn't exist), we'll return the failure from openat(2)
-	 * below */
+	 * below.
+	 * We allow hydration to fail with EISDIR in case the user is doing an
+	 * open(2) on a directory. */
 	res = projfs_fuse_proj_file("open", lowerpath(path));
-	if (res && res != ENOENT)
+	if (res && res != ENOENT && res != EISDIR)
 		return -res;
 
 	fd = openat(lowerdir_fd(), lowerpath(path), flags);
@@ -649,16 +650,21 @@ static int projfs_op_rmdir(char const *path)
 static int projfs_op_rename(char const *src, char const *dst,
                             unsigned int flags)
 {
+	uint64_t mask = PROJFS_MOVE_SELF;
+
 	int res = projfs_fuse_proj_dir("rename", lowerpath(src), 1);
 	if (res)
 		return -res;
 	res = projfs_fuse_proj_file("rename", lowerpath(src));
-	if (res)
+	if (res == EISDIR)
+		mask |= PROJFS_ONDIR;
+	else if (res)
 		return -res;
 	res = projfs_fuse_proj_dir("rename2", lowerpath(dst), 1);
 	if (res)
 		return -res;
-	// TODO: may prevent us compiling on BSD; would renameat() suffice?
+
+	// TODO: for non Linux, use renameat(); fail if flags != 0
 	res = syscall(
 		SYS_renameat2,
 		lowerdir_fd(),
@@ -666,7 +672,11 @@ static int projfs_op_rename(char const *src, char const *dst,
 		lowerdir_fd(),
 		lowerpath(dst),
 		flags);
-	return res == -1 ? -errno : 0;
+	if (res == -1)
+		return -errno;
+
+	res = projfs_fuse_notify_event(mask, src, dst);
+	return res;
 }
 
 static int projfs_op_opendir(char const *path, struct fuse_file_info *fi)

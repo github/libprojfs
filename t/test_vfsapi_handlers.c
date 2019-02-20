@@ -28,6 +28,7 @@
 #include "test_common.h"
 
 static int test_handle_event(const char *desc, const char *path,
+			     const char *target_path,
 			     int pid, const char *procname,
 			     int isdir, int type, int proj)
 {
@@ -41,8 +42,11 @@ static int test_handle_event(const char *desc, const char *path,
 
 	if ((opt_flags & TEST_OPT_RETFILE) == TEST_OPT_NONE ||
 	    (ret_flags & TEST_FILE_EXIST) != TEST_FILE_NONE) {
-		printf("  Test%s for %s: %d, %s, %hhd, 0x%08X\n",
-		       desc, path, pid, procname, isdir, type);
+		printf("  Test%s for %s%s%s: %d, %s, %hhd, 0x%08X\n",
+		       desc, path,
+		       ((target_path == NULL) ? "" : ", "),
+		       ((target_path == NULL) ? "" : target_path),
+		       pid, procname, isdir, type);
 	}
 
 	if (proj) {
@@ -67,7 +71,7 @@ static PrjFS_Result TestEnumerateDirectory(
 {
 	(void)commandId;		// prevent compiler warnings
 
-	return test_handle_event("EnumerateDirectory", relativePath,
+	return test_handle_event("EnumerateDirectory", relativePath, NULL,
 				 triggeringProcessId, triggeringProcessName,
 				 1, 0, 1);
 }
@@ -87,9 +91,9 @@ static PrjFS_Result TestNotifyOperation(
 	(void)commandId;		// prevent compiler warnings
 	(void)providerId;
 	(void)contentId;
-	(void)destinationRelativePath;
 
 	return test_handle_event("NotifyOperation", relativePath,
+				 destinationRelativePath,
 				 triggeringProcessId, triggeringProcessName,
 				 isDirectory, notificationType, 0);
 }
