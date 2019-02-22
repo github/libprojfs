@@ -22,9 +22,7 @@ given path.
 '
 
 . ./test-lib.sh
-. "$TEST_DIRECTORY"/test-lib-event.sh
 
-rm lock >/dev/null 2>/dev/null
 projfs_start test_projfs_handlers source target --timeout 1 --lock-file lock || exit 1
 
 # wait_mount will trigger a projection, so we need to reset it to empty
