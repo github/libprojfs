@@ -58,7 +58,8 @@ TESTS = t000-mirror-read.t \
 	t201-event-err.t \
 	t202-event-deny.t \
 	t203-event-null.t \
-	t204-event-allow.t
+	t204-event-allow.t \
+	t205-event-locking.t
 
 if ENABLE_VFSAPI
 TESTS += t500-vfs-mirror-basic.t \

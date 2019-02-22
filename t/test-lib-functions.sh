@@ -805,3 +805,21 @@ projfs_log_exec () {
 	return $ret
 }
 
+# Run the given command twice in parallel, wait for both to complete, and
+# return with 1 if at least one of the executions fails.
+projfs_run_twice () {
+	"$@" &
+	pidA="$!"
+	"$@" &
+	pidB="$!"
+
+	ret=0
+	if ! wait $pidA; then
+		ret=1
+	fi
+	if ! wait $pidB; then
+		ret=1
+	fi
+
+	return $ret
+}

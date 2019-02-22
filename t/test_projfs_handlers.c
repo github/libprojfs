@@ -23,6 +23,7 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include "test_common.h"
 
@@ -30,11 +31,13 @@ static int test_handle_event(struct projfs_event *event, const char *desc,
 			     int proj, int perm)
 {
 	unsigned int opt_flags, ret_flags;
-	const char *retfile;
-	int ret;
+	const char *retfile, *lockfile = NULL;
+	int ret, timeout = 0, fd = 0, res;
 
-	opt_flags = test_get_opts((TEST_OPT_RETVAL | TEST_OPT_RETFILE),
-				  &ret, &ret_flags, &retfile);
+	opt_flags = test_get_opts((TEST_OPT_RETVAL | TEST_OPT_RETFILE |
+				   TEST_OPT_TIMEOUT | TEST_OPT_LOCKFILE),
+				  &ret, &ret_flags, &retfile, &timeout,
+				  &lockfile);
 
 	if ((opt_flags & TEST_OPT_RETFILE) == TEST_OPT_NONE ||
 	    (ret_flags & TEST_FILE_EXIST) != TEST_FILE_NONE) {
@@ -57,9 +60,27 @@ static int test_handle_event(struct projfs_event *event, const char *desc,
 		// TODO: hydrate file/dir based on projection list
 	}
 
+	if (lockfile) {
+		fd = open(lockfile, (O_CREAT | O_EXCL | O_RDWR), 0600);
+		if (fd == -1 && errno == EEXIST)
+			return -EEXIST;
+		else if (fd == -1)
+			return -EINVAL;
+	}
+
+	if (timeout)
+		sleep(timeout);
+
+	if (lockfile) {
+		close(fd);
+		res = unlink(lockfile);
+		if (res == -1)
+			return -EINVAL;
+	}
+
 	if ((ret_flags & TEST_VAL_SET) == TEST_VAL_UNSET)
 		ret = perm ? PROJFS_ALLOW : 0;
-	else if(!perm && ret > 0)
+	else if (!perm && ret > 0)
 		ret = 0;
 
 	return ret;
@@ -87,7 +108,8 @@ int main(int argc, char *const argv[])
 	struct projfs_handlers handlers = { 0 };
 
 	test_parse_mount_opts(argc, argv,
-			      (TEST_OPT_RETVAL | TEST_OPT_RETFILE),
+			      (TEST_OPT_RETVAL | TEST_OPT_RETFILE |
+			       TEST_OPT_TIMEOUT | TEST_OPT_LOCKFILE),
 			      &lower_path, &mount_path);
 
 	handlers.handle_proj_event = &test_proj_event;
