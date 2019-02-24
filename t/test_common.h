@@ -52,10 +52,11 @@ struct test_projlist_entry {
 	char *name;
 	mode_t mode;
 	off_t size;
-	char *src_or_link;
+	char *lnk_or_src;
 	struct test_projlist_entry *next;
 };
 
+__attribute__((noreturn))
 void test_exit_error(const char *argv0, const char *fmt, ...);
 
 long int test_parse_long(const char *arg, int base);
