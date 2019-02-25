@@ -381,6 +381,8 @@ static struct test_projlist_entry *parse_projlist_entry(const char *buf)
 	s += len;
 
 	if (S_ISDIR(entry.mode) || S_ISREG(entry.mode)) {
+		int set = 0;
+
 		s = skip_blanks(s);
 		if (*s == '\0') {
 			warnx("missing entry mode in projection list: %s",
@@ -397,11 +399,12 @@ static struct test_projlist_entry *parse_projlist_entry(const char *buf)
 			if (errno == 0 && len >= 4 && len <= 5 &&
 			    (isblank(*e) || *e == '\0')) {
 				entry.mode |= mode;
+				set = 1;
 			}
 			s = e;
 		}
 
-		if ((entry.mode & ~S_IFMT) == 0) {
+		if (!set) {
 			warnx("invalid entry mode in projection list: %s",
 			      buf);
 			goto out_name;

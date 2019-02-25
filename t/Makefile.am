@@ -38,7 +38,8 @@ test_handlers_SOURCES = test_handlers.c $(test_common)
 test_simple_SOURCES = test_simple.c $(test_common)
 wait_mount_SOURCES = wait_mount.c $(test_common)
 
-TESTS = t000-mirror-read.t \
+TESTS = c000-check-projlist.t \
+	t000-mirror-read.t \
 	t001-mirror-mkdir.t \
 	t002-mirror-write.t \
 	t003-mirror-remove.t \
