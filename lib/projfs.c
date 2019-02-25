@@ -1527,3 +1527,15 @@ int _projfs_make_dir(struct projfs *fs, const char *path, mode_t mode,
 	return 0;
 }
 
+int projfs_write_file_contents(int fd, const void *bytes, unsigned int count)
+{
+	while (count) {
+		ssize_t res = write(fd, bytes, count);
+		if (res == -1)
+			return errno;
+		bytes = (void *)(((uintptr_t)bytes) + res);
+		count -= res;
+	}
+
+	return 0;
+}

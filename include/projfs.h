@@ -151,6 +151,9 @@ int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
  */
 int projfs_create_proj_symlink(struct projfs *fs, const char *path,
 			       const char *target);
+
+int projfs_write_file_contents(int fd, const void *bytes, unsigned int count);
+
 #ifdef __cplusplus
 }
 #endif
