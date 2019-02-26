@@ -131,7 +131,7 @@ develop = Project.new('develop',
   mounts: ["#{Dir.pwd}/..:/data/projfs"],
   commands: {
     autogen: ['./autogen.sh'],
-    configure: ['./configure', '--enable-vfs-api'],
+    configure: ['./configure'],
     make: ['make'],
     test: [['env', *test_options, 'make', 'test']],
     dist: ['make', 'dist'],

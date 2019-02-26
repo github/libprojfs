@@ -41,10 +41,6 @@
 
 #include <fuse3/fuse.h>
 
-#ifdef PROJFS_VFSAPI
-#include "projfs_vfsapi.h"
-#endif
-
 #define lowerdir_fd() (projfs_context_fs()->lowerdir_fd)
 #define PROJ_DIR_MODE 0777
 

@@ -141,15 +141,6 @@ $ ./configure && make && make test
 Running `./configure --help` will output the full set of configuration
 options available, including the usual `--prefix` option.
 
-To build libprojfs with the VFSForGit API option (which is
-required if you plan to run a VFSForGit "provider" such as MirrorProvider,
-the test provider we are developing against for now), add the
-`--enable-vfs-api` flag to the arguments for `configure`:
-
-```
-$ ./configure --enable-vfs-api && make && make test
-```
-
 Note that unless you installed FUSE 3 into a system
 location, you will need to ensure that the `configure` script finds your
 libfuse installation by either setting the `CPPFLAGS` and `LDFLAGS`
@@ -159,10 +150,9 @@ configuration metadata file with the `--with-libfusepkg` option.
 For example, if you installed FUSE 3 into
 `/path/to/libfuse` and you have a `fuse3.pc` metadata file under
 `lib64/pkgconfig/fuse3.pc`, you can use the `--with-libfusepkg` option
-as follows (and note that this example also enables the VFSForGit API):
+as follows:
 ```
-  ./configure --with-libfusepkg=/path/to/libfuse/lib64/pkgconfig/fuse3.pc \
-              --enable-vfs-api && \
+  ./configure --with-libfusepkg=/path/to/libfuse/lib64/pkgconfig/fuse3.pc && \
   make && \
   make test
 ```
@@ -176,7 +166,7 @@ path segments such as `x86_64-linux-gnu` or similar subdirectories.)
 ```
 $ CPPFLAGS=-I/path/to/libfuse/include \
     LDFLAGS='-L/path/to/libfuse/lib -Wl,-R/path/to/libfuse/lib' \
-    ./configure --enable-vfs-api && \
+    ./configure && \
   make && \
   make test
 ```
@@ -328,14 +318,9 @@ $ ./MirrorProvider_Clone.sh && \
   ./MirrorProvider_Mount.sh
 ```
 
-The libprojfs library you built in the preceding
-[Building libprojfs](#building-libprojfs) section must have been
-configured with the `--enable-vfs-api` option in order for it to
-support the VFSForGit API.
-
-Further, if your libprojfs library is not installed,
-or if it's installed in a custom location, you will need to provide
-that path in the `LD_LIBRARY_PATH` environment variable.
+If your libprojfs library is not installed, or if it's installed in a custom
+location, you will need to provide that path in the `LD_LIBRARY_PATH`
+environment variable.
 
 For instance, to use the `libprojfs.so` shared library without having
 to install it (and assuming you supplied the location of

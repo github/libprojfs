@@ -48,7 +48,6 @@ struct retval {
 	int val;
 };
 
-// list based on VFS API convert_result_to_errno()
 static const struct retval errno_retvals[] = {
 	{ "null",	0		},
 	{ "allow", 	PROJFS_ALLOW	},
@@ -65,39 +64,6 @@ static const struct retval errno_retvals[] = {
 	{ retval_entry(ENOSYS)		},
 	{ NULL,		0		}
 };
-
-#define VFSAPI_PREFIX "PrjFS_Result_"
-#define VFSAPI_PREFIX_LEN (sizeof(VFSAPI_PREFIX) - 1)
-
-#ifdef PROJFS_VFSAPI
-#define get_retvals(v) ((v) ? vfsapi_retvals : errno_retvals)
-
-#define retval_vfsapi_entry(s) #s, s
-
-// list based on VFS API convert_result_to_errno()
-static const struct retval vfsapi_retvals[] = {
-	{ "null",	PrjFS_Result_Invalid			},
-	{ "allow",	PrjFS_Result_Success			},
-	{ "deny",	PrjFS_Result_EAccessDenied		},
-	{ retval_vfsapi_entry(PrjFS_Result_Invalid)		},
-	{ retval_vfsapi_entry(PrjFS_Result_Success)		},
-	{ retval_vfsapi_entry(PrjFS_Result_Pending)		},
-	{ retval_vfsapi_entry(PrjFS_Result_EInvalidArgs)	},
-	{ retval_vfsapi_entry(PrjFS_Result_EInvalidOperation)	},
-	{ retval_vfsapi_entry(PrjFS_Result_ENotSupported)	},
-	{ retval_vfsapi_entry(PrjFS_Result_EDriverNotLoaded)	},
-	{ retval_vfsapi_entry(PrjFS_Result_EOutOfMemory)	},
-	{ retval_vfsapi_entry(PrjFS_Result_EFileNotFound)	},
-	{ retval_vfsapi_entry(PrjFS_Result_EPathNotFound)	},
-	{ retval_vfsapi_entry(PrjFS_Result_EAccessDenied)	},
-	{ retval_vfsapi_entry(PrjFS_Result_EInvalidHandle)	},
-	{ retval_vfsapi_entry(PrjFS_Result_EIOError)		},
-	{ retval_vfsapi_entry(PrjFS_Result_ENotYetImplemented)	},
-	{ NULL,		0					}
-};
-#else /* !PROJFS_VFSAPI */
-#define get_retvals(v) errno_retvals
-#endif /* !PROJFS_VFSAPI */
 
 static const struct option all_long_opts[] = {
 	{ "help", no_argument, NULL, TEST_OPT_NUM_HELP },
@@ -204,21 +170,17 @@ long int test_parse_long(const char *arg, int base)
 	return val;
 }
 
-int test_parse_retsym(int vfsapi, const char *retsym, int *retval)
+int test_parse_retsym(const char *retsym, int *retval)
 {
-	const struct retval *retvals = get_retvals(vfsapi);
 	int ret = -1;
 	int i = 0;
 
-	while (retvals[i].name != NULL) {
-		const char *name = retvals[i].name;
+	while (errno_retvals[i].name != NULL) {
+		const char *name = errno_retvals[i].name;
 
-		if (!strcasecmp(name, retsym) ||
-		    (vfsapi &&
-		     !strncmp(name, VFSAPI_PREFIX, VFSAPI_PREFIX_LEN) &&
-		     !strcasecmp(name + VFSAPI_PREFIX_LEN, retsym))) {
+		if (!strcasecmp(name, retsym)) {
 			ret = 0;
-			*retval = retvals[i].val;
+			*retval = errno_retvals[i].val;
 			break;
 		}
 
@@ -228,7 +190,7 @@ int test_parse_retsym(int vfsapi, const char *retsym, int *retval)
 	return ret;
 }
 
-static void read_retfile(int vfsapi, int *retval, unsigned int *flags)
+static void read_retfile(int *retval, unsigned int *flags)
 {
 	FILE *file;
 	char retsym[MAX_RETVAL_NAME_LEN + 1];
@@ -249,7 +211,7 @@ static void read_retfile(int vfsapi, int *retval, unsigned int *flags)
 		if (c != NULL)
 			*c = '\0';
 
-		if (test_parse_retsym(vfsapi, retsym, retval) < 0) {
+		if (test_parse_retsym(retsym, retval) < 0) {
 			warnx("invalid symbol in retval file: %s: %s",
 			      optval_retfile, retsym);
 		}
@@ -308,7 +270,6 @@ void test_parse_opts(int argc, char *const argv[], unsigned int opt_flags,
 		     int min_args, int max_args, char *args[],
 		     const char *args_usage)
 {
-	int vfsapi = (opt_flags & TEST_OPT_VFSAPI) ? 1 : 0;
 	struct option *long_opts;
 	int num_args;
 	int arg_idx = 0;
@@ -316,7 +277,6 @@ void test_parse_opts(int argc, char *const argv[], unsigned int opt_flags,
 	int val;
 
 	opt_flags |= TEST_OPT_HELP;
-	opt_flags &= ~TEST_OPT_VFSAPI;		// exclude VFS API option
 
 	long_opts = get_long_opts(opt_flags);
 
@@ -332,8 +292,7 @@ void test_parse_opts(int argc, char *const argv[], unsigned int opt_flags,
 			exit_usage(0, argv[0], long_opts, args_usage);
 
 		case TEST_OPT_NUM_RETVAL:
-			if (test_parse_retsym(vfsapi, optarg,
-					      &optval_retval) < 0)
+			if (test_parse_retsym(optarg, &optval_retval) < 0)
 				test_exit_error(argv[0],
 						"invalid retval symbol: %s",
 						optarg);
@@ -399,12 +358,9 @@ void test_parse_mount_opts(int argc, char *const argv[],
 
 unsigned int test_get_opts(unsigned int opt_flags, ...)
 {
-	int vfsapi = (opt_flags & TEST_OPT_VFSAPI) ? 1 : 0;
 	unsigned int opt_flag = TEST_OPT_HELP;
 	unsigned int ret_flags = TEST_OPT_NONE;
 	va_list ap;
-
-	opt_flags &= ~TEST_OPT_VFSAPI;		// exclude VFS API option
 
 	va_start(ap, opt_flags);
 
@@ -433,7 +389,7 @@ unsigned int test_get_opts(unsigned int opt_flags, ...)
 					*f |= TEST_VAL_SET;
 				} else if ((opt_set_flags & TEST_OPT_RETFILE)
 					   != TEST_OPT_NONE) {
-					read_retfile(vfsapi, i, f);
+					read_retfile(i, f);
 					ret_flags |= opt_flag;
 				}
 				break;
@@ -489,30 +445,6 @@ void *test_stop_mount(struct projfs *fs)
 {
 	return projfs_stop(fs);
 }
-
-#ifdef PROJFS_VFSAPI
-void test_start_vfsapi_mount(const char *storageRootFullPath,
-			     const char *virtualizationRootFullPath,
-			     PrjFS_Callbacks callbacks,
-			     unsigned int poolThreadCount,
-			     PrjFS_MountHandle** mountHandle)
-{
-	PrjFS_Result ret;
-
-	ret = PrjFS_StartVirtualizationInstance(storageRootFullPath,
-						virtualizationRootFullPath,
-						callbacks, poolThreadCount,
-						mountHandle);
-
-	if (ret != PrjFS_Result_Success)
-		errx(EXIT_FAILURE, "unable to start filesystem: %d", ret);
-}
-
-void test_stop_vfsapi_mount(PrjFS_MountHandle* mountHandle)
-{
-	PrjFS_StopVirtualizationInstance(mountHandle);
-}
-#endif /* PROJFS_VFSAPI */
 
 static void signal_handler(int sig)
 {

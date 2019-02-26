@@ -22,9 +22,6 @@
 #include <getopt.h>
 
 #include "../include/projfs.h"
-#ifdef PROJFS_VFSAPI
-#include "../include/projfs_vfsapi.h"
-#endif /* PROJFS_VFSAPI */
 
 #define TEST_OPT_NUM_HELP	0
 #define TEST_OPT_NUM_RETVAL	1
@@ -39,7 +36,6 @@
 #define TEST_OPT_LOCKFILE	(0x0001 << TEST_OPT_NUM_LOCKFILE)
 
 #define TEST_OPT_NONE		0x0000
-#define TEST_OPT_VFSAPI		0x8000		// not a command-line option
 
 #define TEST_VAL_UNSET		0x0000
 #define TEST_VAL_SET		0x0001
@@ -52,7 +48,7 @@ void test_exit_error(const char *argv0, const char *fmt, ...);
 
 long int test_parse_long(const char *arg, int base);
 
-int test_parse_retsym(int vfsapi, const char *retsym, int *retval);
+int test_parse_retsym(const char *retsym, int *retval);
 
 void test_parse_opts(int argc, char *const argv[], unsigned int opt_flags,
 		     int min_args, int max_args, char *args[],
@@ -69,16 +65,6 @@ struct projfs *test_start_mount(const char *lowerdir, const char *mountdir,
 				size_t handlers_size, void *user_data);
 
 void *test_stop_mount(struct projfs *fs);
-
-#ifdef PROJFS_VFSAPI
-void test_start_vfsapi_mount(const char *storageRootFullPath,
-			     const char *virtualizationRootFullPath,
-			     PrjFS_Callbacks callbacks,
-			     unsigned int poolThreadCount,
-			     PrjFS_MountHandle** mountHandle);
-
-void test_stop_vfsapi_mount(PrjFS_MountHandle* handle);
-#endif /* PROJFS_VFSAPI */
 
 void test_wait_signal(void);
 
