@@ -19,11 +19,46 @@
    see <http://www.gnu.org/licenses/>.
 */
 
+#include <ctype.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 #include "test_common.h"
+
+static void print_filename(const char *name)
+{
+	char c = *name;
+
+	putchar('"');
+	while (c != '\0') {
+		switch (c) {
+		case '"':
+		case '\'':
+		case '\\':
+			printf("\\%c", (int)c);
+			break;
+
+		case '\t':
+			printf("\\t");
+			break;
+
+		case '\n':
+			printf("\\n");
+			break;
+
+		default:
+			if (isprint(c))
+				putchar(c);
+			else
+				printf("\\%03o", ((unsigned int)c) & 0377);
+			break;
+		}
+
+		c = *(++name);
+	}
+	putchar('"');
+}
 
 static void print_projlist(const char *argv0,
 			   struct test_projlist_entry *entry)
@@ -40,26 +75,29 @@ static void print_projlist(const char *argv0,
 		else {
 			test_exit_error(argv0, "unexpected projection list "
 					       "entry type: 0%06o, %s",
-					(unsigned int) (entry->mode & S_IFMT),
+					(unsigned int)(entry->mode & S_IFMT),
 					entry->name);
 		}
 
-		printf("%c\t%s", c, entry->name);
+		printf("%c\t", c);
+		print_filename(entry->name);
 
 		if (S_ISDIR(entry->mode) || S_ISREG(entry->mode)) {
 			printf("\t0%04o",
-			       (unsigned int) (entry->mode & ~S_IFMT));
+			       (unsigned int)(entry->mode & ~S_IFMT));
 		}
 
 		if (S_ISREG(entry->mode))
-			printf("\t%jd", (intmax_t) entry->size);
+			printf("\t%jd", (intmax_t)entry->size);
 		else if (S_ISLNK(entry->mode))
 			printf("\t\t");
 
-		if (S_ISLNK(entry->mode) || S_ISREG(entry->mode))
-			printf("\t%s", entry->lnk_or_src);
+		if (S_ISLNK(entry->mode) || S_ISREG(entry->mode)) {
+			putchar('\t');
+			print_filename(entry->lnk_or_src);
+		}
 
-		printf("\n");
+		putchar('\n');
 
 		entry = entry->next;
 	}

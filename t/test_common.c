@@ -44,7 +44,11 @@
 
 #define MAX_RETVAL_NAME_LEN 40
 
-#define MAX_PROJLIST_PATH_LEN NAME_MAX		// sufficient for testing
+/* For our test-only purposes, we can just limit paths to NAME_MAX, and then
+ * pad our maximum allowed length of projection list entries a bit to account
+ * for everything else (i.e., "type name [mode] [size] [source/link]").
+ */
+#define MAX_PROJLIST_PATH_LEN NAME_MAX
 #define MAX_PROJLIST_ENTRY_LEN (MAX_PROJLIST_PATH_LEN * 2 + 100)
 
 #define isquote(c) ((c) == '"' || (c) == '\'')
@@ -244,6 +248,9 @@ out:
 	return;
 }
 
+/* We assume our locale has been set appropriately; e.g., LC_ALL=C
+ * is set by test-lib.sh.
+ */
 static inline const char *skip_blanks(const char *s)
 {
 	while(*s != '\0' && isblank(*s))
@@ -251,6 +258,10 @@ static inline const char *skip_blanks(const char *s)
 	return s;
 }
 
+/* We implement minimal quoting and escaping, just sufficient for our test
+ * purposes.  Specifically, in single- or double-quoted strings, we support
+ * the escape sequences \" \' \\ \n and \t with their usual meanings.
+ */
 static int parse_projlist_path(const char *s, int ispath, char **path)
 {
 	char buf[MAX_PROJLIST_PATH_LEN + 1];
@@ -287,7 +298,6 @@ static int parse_projlist_path(const char *s, int ispath, char **path)
 					c = '\t';
 					break;
 
-				case ' ':
 				case '"':
 				case '\'':
 				case '\\':

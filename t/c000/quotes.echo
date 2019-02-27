@@ -1,0 +1,5 @@
+d	"x\tx\nx\"x\'x\\x"	00755
+f	"x\tx\nx\"x\'x\\x"	00644	10	"x\tx\nx\"x\'x\\x"
+l	"x\tx\nx\"x\'x\\x"			"x\tx\nx\"x\'x\\x"
+d	"x\001x\015x\177x\377x"	00755
+d	"x\001x\015x x\177x\377x"	00755
