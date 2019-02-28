@@ -1529,7 +1529,7 @@ int projfs_write_file_contents(int fd, const void *bytes, unsigned int count)
 		ssize_t res = write(fd, bytes, count);
 		if (res == -1)
 			return errno;
-		bytes = (void *)(((uintptr_t)bytes) + res);
+		bytes = (char *)bytes + res;
 		count -= res;
 	}
 

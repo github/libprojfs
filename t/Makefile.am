@@ -75,9 +75,8 @@ prove: clean-mounts $(check_PROGRAMS)
 		then \
 			prove_dir=""; \
 		fi && \
-		PROJFS_SKIP_TESTS="$(SKIP_TESTS) $$PROJFS_SKIP_TESTS" \
-			$(PROVE) --exec $(SHELL) \
-				$(PROJFS_PROVE_OPTS) $$prove_dir; \
+		$(PROVE) --exec $(SHELL) \
+			$(PROJFS_PROVE_OPTS) $$prove_dir; \
 		./clean_test_dirs.sh; \
 	else \
 		echo "No 'prove' TAP harness available." && exit 1; \
