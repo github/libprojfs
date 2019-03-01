@@ -1,4 +1,4 @@
-!i/bin/sh
+#!/bin/sh
 #
 # Copyright (C) 2018-2019 GitHub, Inc.
 #
@@ -40,7 +40,10 @@ test_expect_success 'check missing projection list options' '
 
 test_expect_success 'check empty projection lists' '
 	"$ECHO_PROJLIST" --projlist "" >empty.out &&
+	"$ECHO_PROJLIST" --projlist "$(printf \\n)" >>empty.out &&
 	touch empty.list &&
+	"$ECHO_PROJLIST" --projlist-file empty.list >>empty.out &&
+	printf "   #ignore\n\t\n##\n" > empty.list &&
 	"$ECHO_PROJLIST" --projlist-file empty.list >>empty.out &&
 	test_cmp empty.out "$EXPECT_DIR/empty.msg"
 '
@@ -77,28 +80,43 @@ test_expect_success 'check projection list name parsing' '
 	echo "f $dq_esc_ok 0644 10 $sq_esc_ok" >>quotes.list &&
 	echo "l $sq_esc_ok $dq_esc_ok" >>quotes.list &&
 	printf "d x\001x\rx\177x\377x 0755\n" >>quotes.list &&
-	printf "d \"x\001x\rx x\177x\377x\" 0755" >>quotes.list &&
+	printf "d \"x\001x\rx x\177x\377x\" 0755\n" >>quotes.list &&
 	"$ECHO_PROJLIST" --projlist-file quotes.list >quotes.out &&
 	test_cmp quotes.out "$EXPECT_DIR/quotes.echo" &&
 	test_must_fail "$ECHO_PROJLIST" --projlist "d $sq_esc_notok 0755" &&
 	test_must_fail "$ECHO_PROJLIST" --projlist "d $dq_esc_notok 0755"
 '
 
+# 2*NAME_MAX + 93*"x" + "d " + " 0775" == MAX_PROJLIST_ENTRY_LEN
+max_line="d $max_name$max_name$(printf %093d | tr 0 x) 0755"
+
 test_expect_success NAME_MAX 'check projection list name maximum length' '
 	echo $max_name > foo &&
 	"$ECHO_PROJLIST" --projlist "l $max_name $max_name" &&
-	test_must_fail "$ECHO_PROJLIST" --projlist "l x$max_name x" &&
-	test_must_fail "$ECHO_PROJLIST" --projlist "l x x$max_name" &&
-	test_must_fail "$ECHO_PROJLIST" --projlist "l x$max_name x$max_name" \
-		2>name.err &&
-	grep "invalid entry name (too long)" name.err
+	test_must_fail "$ECHO_PROJLIST" --projlist "l x$max_name x" 2>&1 | \
+		grep "invalid entry name (too long)" &&
+	echo "f x 0644 0 x$max_name" > long.list &&
+	test_must_fail "$ECHO_PROJLIST" --projlist-file long.list 2>&1 | \
+		grep "invalid entry source path (too long)" &&
+	test_must_fail "$ECHO_PROJLIST" --projlist "l x x$max_name" 2>&1 | \
+		grep "invalid entry target path (too long)" &&
+	echo "l x$max_name x$max_name" > long.list &&
+	test_must_fail "$ECHO_PROJLIST" --projlist-file long.list 2>&1 | \
+		grep "invalid entry name (too long)" &&
+	test_must_fail "$ECHO_PROJLIST" --projlist "$max_line" 2>&1 | \
+		grep "invalid entry name (too long)"
 '
 
-max_line="l $max_name$max_name $max_name$max_name"
+long_line="l $max_name$max_name $max_name$max_name"
 
 test_expect_success NAME_MAX 'check projection list entry maximum length' '
-	test_must_fail "$ECHO_PROJLIST" --projlist "$max_line" 2>line.err &&
-	grep "invalid entry (line too long)" line.err
+	test_must_fail "$ECHO_PROJLIST" --projlist "x$max_line" 2>&1 | \
+		grep "invalid entry (line too long)" &&
+	test_must_fail "$ECHO_PROJLIST" --projlist "$long_line" 2>&1 | \
+		grep "invalid entry (line too long)" &&
+	echo "$long_line" > long.list &&
+	test_must_fail "$ECHO_PROJLIST" --projlist-file long.list 2>&1 | \
+		grep "invalid entry (line too long)"
 '
 
 test_expect_success 'check projection list mode parsing' '
@@ -125,9 +143,6 @@ test_expect_success 'check invalid directory projection lists' '
 	test_must_fail "$ECHO_PROJLIST" --projlist "d d1/d2 0755"
 '
 
-# DEBUG: segfault on "d x$max_name$max_name 0755"
-# DEBUG: allow null lines (whitespace only) and fix printf with \n above
-# TODO: test comment lines
 # TODO: valid/invalid file projection lists: size (dec, hex, octal)
 # TODO: valid/invalid link projection lists
 

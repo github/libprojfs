@@ -248,6 +248,21 @@ out:
 	return;
 }
 
+static void append_projlist_entry(struct test_projlist_entry *entry,
+				  struct test_projlist_entry **first_entry,
+				  struct test_projlist_entry **last_entry)
+{
+	if (entry == NULL)
+		return;
+
+	if (*first_entry == NULL)
+		*first_entry = entry;
+
+	if (*last_entry != NULL)
+		(*last_entry)->next = entry;
+	*last_entry = entry;
+}
+
 /* We assume our locale has been set appropriately; e.g., LC_ALL=C
  * is set by test-lib.sh.
  */
@@ -276,7 +291,7 @@ static int parse_projlist_path(const char *s, int ispath, char **path)
 	}
 
 	c = *e;
-	while (c != '\0') {
+	while (c != '\0' && len < sizeof(buf)) {
 		if (q != '\0') {
 			if (c == q) {
 				++e;
@@ -318,12 +333,13 @@ static int parse_projlist_path(const char *s, int ispath, char **path)
 		buf[len++] = c;
 		c = *(++e);
 	}
-	buf[len] = '\0';
 
 	if (len == 0)
 		return -EINVAL;
-	else if (len > NAME_MAX)
+	else if (len > MAX_PROJLIST_PATH_LEN)
 		return -ENAMETOOLONG;
+
+	buf[len] = '\0';
 
 	*path = strdup(buf);
 	if (*path == NULL)
@@ -343,16 +359,18 @@ static void warn_projlist_path(int err, const char *field, const char *buf)
 	}
 }
 
-static struct test_projlist_entry *parse_projlist_entry(const char *buf)
+static int parse_projlist_entry(const char *buf,
+				struct test_projlist_entry **first_entry,
+				struct test_projlist_entry **last_entry)
 {
 	struct test_projlist_entry entry = { 0 };
-	struct test_projlist_entry *ret;
+	struct test_projlist_entry *new_entry;
 	const char *s = buf;
 	int len;
 
 	s = skip_blanks(s);
 	if (*s == '\0' || *s == '#')
-		return NULL;
+		return 0;
 
 	if (isblank(*(s + 1))) {
 		switch (*s) {
@@ -374,19 +392,19 @@ static struct test_projlist_entry *parse_projlist_entry(const char *buf)
 	}
 	if (entry.mode == 0) {
 		warnx("invalid type flag in projection list: %s", buf);
-		return NULL;
+		return -1;
 	}
 
 	s = skip_blanks(++s);
 	if (*s == '\0') {
 		warnx("missing entry name in projection list: %s", buf);
-		return NULL;
+		return -1;
 	}
 
 	len = parse_projlist_path(s, 0, &entry.name);
 	if (len < 0) {
 		warn_projlist_path(-len, "name", buf);
-		return NULL;
+		return -1;
 	}
 	s += len;
 
@@ -474,36 +492,24 @@ static struct test_projlist_entry *parse_projlist_entry(const char *buf)
 		goto out_link;
 	}
 
-	ret = malloc(sizeof(entry));
-	if (ret == NULL) {
+	new_entry = malloc(sizeof(entry));
+	if (new_entry == NULL) {
 		warn("unable to allocate projection list entry");
 		goto out_link;
 	}
-	memcpy(ret, &entry, sizeof(entry));
+	memcpy(new_entry, &entry, sizeof(entry));
 
-	return ret;
+	append_projlist_entry(new_entry, first_entry, last_entry);
+
+	return 0;
 
 out_link:
 	if (entry.lnk_or_src != NULL)
 		free(entry.lnk_or_src);
 out_name:
 	free(entry.name);
-	return NULL;
-}
 
-static void append_projlist_entry(struct test_projlist_entry *entry,
-				  struct test_projlist_entry **first_entry,
-				  struct test_projlist_entry **last_entry)
-{
-	if (entry == NULL)
-		return;
-
-	if (*first_entry == NULL)
-		*first_entry = entry;
-
-	if (*last_entry != NULL)
-		(*last_entry)->next = entry;
-	*last_entry = entry;
+	return -1;
 }
 
 static int parse_projlist(const char *list,
@@ -514,7 +520,6 @@ static int parse_projlist(const char *list,
 	int ret = 0;
 
 	while (*list != '\0') {
-		struct test_projlist_entry *entry;
 		const char *c;
 		size_t len;
 
@@ -532,25 +537,19 @@ static int parse_projlist(const char *list,
 			warnx("invalid entry (line too long) in "
 			      "projection list: %s", list);
 			ret = -1;
-			goto out;
+			break;
 		}
 
 		memcpy(buf, list, len);
 		buf[len] = '\0';
 
-		entry = parse_projlist_entry(buf);
-		if (entry == NULL) {
-			warnx("invalid entry in projection list: %s", buf);
-			ret = -1;
-			goto out;
-		}
-
-		append_projlist_entry(entry, &first_entry, &last_entry);
+		ret = parse_projlist_entry(buf, &first_entry, &last_entry);
+		if (ret < 0)
+			break;
 
 		list = c;
 	}
 
-out:
 	if (ret == 0)
 		*projlist = first_entry;
 
@@ -568,20 +567,21 @@ static void read_projfile(struct test_projlist_entry **projlist,
 
 	file = fopen(optval_projfile, "r");
 	if (file == NULL) {
-		if (errno != ENOENT)
+		if (errno != ENOENT) {
 			warn("unable to open projection list file: %s",
 			     optval_projfile);
+		}
 		goto out;
 	}
 
 	errno = 0;
 	while (fgets(buf, sizeof(buf), file) != NULL) {
-		struct test_projlist_entry *entry;
 		char *c;
 
 		c = strchr(buf, '\n');
-		if (c != NULL)
+		if (c != NULL) {
 			*c = '\0';
+		}
 		else if (!feof(file)) {
 			warnx("invalid entry (line too long) in "
 			      "projection list file: %s: %s",
@@ -589,30 +589,27 @@ static void read_projfile(struct test_projlist_entry **projlist,
 			goto out_close;
 		}
 
-		entry = parse_projlist_entry(buf);
-		if (entry == NULL) {
-			warnx("invalid entry in projection list file: %s: %s",
-			      optval_projfile, buf);
+		if (parse_projlist_entry(buf, &first_entry, &last_entry) < 0)
 			goto out_close;
-		}
-
-		append_projlist_entry(entry, &first_entry, &last_entry);
 	}
 
-	if (errno > 0)
+	if (errno > 0) {
 		warn("unable to read projection list file: %s",
 		     optval_projfile);
-	else if (last_entry == NULL)
+	}
+	else if (last_entry == NULL) {
 		*flags = TEST_FILE_EXIST;
+	}
 	else {
 		*projlist = first_entry;
 		*flags = TEST_VAL_SET | TEST_FILE_EXIST | TEST_FILE_VALID;
 	}
 
 out_close:
-	if (fclose(file) != 0)
+	if (fclose(file) != 0) {
 		warn("unable to close projection list file: %s",
 		     optval_projfile);
+	}
 
 out:
 	return;
