@@ -1,0 +1,5 @@
+l 'x\tx\nx\"x\'x\\x' "x\tx\nx\"x\'x\\x"
+d 'x\tx\nx\"x\'x\\x' 0755
+f "x\tx\nx\"x\'x\\x" 0644 10 'x\tx\nx\"x\'x\\x'
+d xxxxÿx 0755
+d "xxx xxÿx" 0755
