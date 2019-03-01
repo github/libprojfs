@@ -84,3 +84,4 @@ test_expect_success 'check all event error messages' '
 
 test_done
 
+# vim: set ft=sh:

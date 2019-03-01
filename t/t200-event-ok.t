@@ -104,3 +104,4 @@ test_expect_success 'check no event error messages' '
 
 test_done
 
+# vim: set ft=sh:

@@ -59,3 +59,4 @@ projfs_stop || exit 1
 
 test_done
 
+# vim: set ft=sh:
