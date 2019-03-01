@@ -24,7 +24,7 @@ events are received and handled correctly.
 . ./test-lib.sh
 . "$TEST_DIRECTORY"/test-lib-event.sh
 
-projfs_start test_projfs_handlers source target --retval-file retval || exit 1
+projfs_start test_handlers source target --retval-file retval || exit 1
 touch retval
 
 projfs_event_printf notify create_dir d1
@@ -95,11 +95,11 @@ rm retval
 projfs_stop || exit 1
 
 test_expect_success 'check all event notifications' '
-	test_cmp test_projfs_handlers.log "$EVENT_LOG"
+	test_cmp test_handlers.log "$EVENT_LOG"
 '
 
 test_expect_success 'check no event error messages' '
-	test_must_be_empty test_projfs_handlers.err
+	test_must_be_empty test_handlers.err
 '
 
 test_done

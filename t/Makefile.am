@@ -27,13 +27,13 @@ test_common = test_common.c \
 	      $(top_srcdir)/include/projfs_notify.h
 
 check_PROGRAMS = get_strerror \
-		 test_projfs_handlers \
-		 test_projfs_simple \
+		 test_handlers \
+		 test_simple \
 		 wait_mount
 
 get_strerror_SOURCES = get_strerror.c $(test_common)
-test_projfs_handlers_SOURCES = test_projfs_handlers.c $(test_common)
-test_projfs_simple_SOURCES = test_projfs_simple.c $(test_common)
+test_handlers_SOURCES = test_handlers.c $(test_common)
+test_simple_SOURCES = test_simple.c $(test_common)
 wait_mount_SOURCES = wait_mount.c $(test_common)
 
 TESTS = t000-mirror-read.t \

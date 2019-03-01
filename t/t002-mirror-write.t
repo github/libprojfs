@@ -23,7 +23,7 @@ Check that the basic filesystem file-write operations
 
 . ./test-lib.sh
 
-projfs_start test_projfs_simple source target || exit 1
+projfs_start test_simple source target || exit 1
 
 EXPECT_DIR="$TEST_DIRECTORY/$(basename "$0" .t | sed 's/-.*//')"
 

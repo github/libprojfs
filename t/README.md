@@ -376,7 +376,7 @@ This test harness library does the following things:
 
 In most cases, tests should then call the `projfs_start` function
 to execute a test mount helper program such as
-[`test_projfs_handlers.c`](test_projfs_handlers.c).
+[`test_handlers.c`](test_handlers.c).
 
 The mount helper normally takes at least two arguments; these should
 be directory names which will be used to create a temporary source
@@ -391,7 +391,7 @@ loaded:
 ``` shell
 . ./test-lib.sh
 
-projfs_start test_projfs_handlers source target || exit 1
+projfs_start test_handlers source target || exit 1
 ```
 
 The mount helper program's ID will be recorded so it can be stopped

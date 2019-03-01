@@ -22,7 +22,7 @@ Check that links function as expected.
 
 . ./test-lib.sh
 
-projfs_start test_projfs_simple source target || exit 1
+projfs_start test_simple source target || exit 1
 
 test_expect_success 'create links' '
 	echo text > target/file &&

@@ -84,7 +84,7 @@ export SHELL_PATH
 
 ################################################################
 # It appears that people try to run tests without building...
-if ! test -x "$TEST_DIRECTORY"/test_projfs_simple
+if ! test -x "$TEST_DIRECTORY"/test_simple
 then
 	case " $* " in
 	*' --clean '*|*' --clean-all '*)
@@ -821,7 +821,9 @@ then
 	# override all projfs executables in TEST_DIRECTORY/..
 	PROJFS_VALGRIND=$TEST_DIRECTORY/valgrind
 	$MKDIR_P "$PROJFS_VALGRIND"/bin
-	for file in $PROJFS_BUILD_DIR/t/test_projfs_* \
+	# TODO: which executables need to be overridden?
+	for file in $PROJFS_BUILD_DIR/t/test_handlers \
+		    $PROJFS_BUILD_DIR/t/test_simple \
 		    $PROJFS_BUILD_DIR/t/wait_mount
 	do
 		make_valgrind_symlink $file

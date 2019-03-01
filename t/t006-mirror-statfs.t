@@ -22,7 +22,7 @@ Check that the filesystem stat function works as expected.
 
 . ./test-lib.sh
 
-projfs_start test_projfs_simple source target || exit 1
+projfs_start test_simple source target || exit 1
 
 test_expect_success 'check statfs type' '
 	test "$(stat -f -c %T target)" = fuseblk
