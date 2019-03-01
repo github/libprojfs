@@ -70,7 +70,7 @@ static const struct option all_long_opts[] = {
 	{ "retval", required_argument, NULL, TEST_OPT_NUM_RETVAL },
 	{ "retval-file", required_argument, NULL, TEST_OPT_NUM_RETFILE },
 	{ "timeout", required_argument, NULL, TEST_OPT_NUM_TIMEOUT },
-	{ "lock-file", required_argument, NULL, TEST_OPT_NUM_LOCKFILE },
+	{ "lock-file", required_argument, NULL, TEST_OPT_NUM_LOCKFILE }
 };
 
 struct opt_usage {
@@ -83,7 +83,7 @@ static const struct opt_usage all_opts_usage[] = {
 	{ "allow|deny|null|<error>", 1 },
 	{ "<retval-file>", 1 },
 	{ "<max-seconds>", 1 },
-	{ "<lock-file>", 1 },
+	{ "<lock-file>", 1 }
 };
 
 /* option values */
