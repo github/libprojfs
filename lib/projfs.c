@@ -1198,7 +1198,7 @@ static int test_sparse_support(int lowerdir_fd)
 	int fd, res;
 
 	fd = openat(lowerdir_fd, SPARSE_TEST_FILENAME,
-		    (O_CREAT | O_TRUNC | O_RDWR), 0600);
+		    O_CREAT | O_TRUNC | O_RDWR, 0600);
 	if (fd == -1)
 		return -1;
 
