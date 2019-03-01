@@ -559,9 +559,8 @@ naming scheme for Linux kernel filesystem modules (e.g., `ecryptfs.ko`,
 projects or Web sites.
 
 Again, to conform to Unix practice, the user-space library which communicates
-with the kernel module will be installed as `libprojfs.so`, and most of its
-global symbol names will start with `projfs_` unless they are required to align
-with the `PrjFS_` naming of the VFSForGit API.
+with the kernel module will be installed as `libprojfs.so`, and its
+global symbol names will start with `projfs_`.
 
 The command-line process used to create the virtualized git working tree should
 almost certainly not be called `gvfs`, as it is now in the Windows and macOS

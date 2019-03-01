@@ -57,9 +57,6 @@ AS_IF([test ":$enable_fuse_debug" = ":yes"],
   [AC_DEFINE(PROJFS_FUSE_DEBUG, 1, [Enable FUSE library debugging output])]
 )dnl
 
-libprojfs_export_regex='projfs'
-AC_SUBST([libprojfs_export_regex])
-
 AC_CHECK_PROGS([DIFF], [diff])
 AC_ARG_VAR([DIFF], [File comparison tool])
 
