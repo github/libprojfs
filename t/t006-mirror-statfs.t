@@ -29,8 +29,8 @@ test_expect_success 'check statfs type' '
 '
 
 test_expect_success 'check statfs data' '
-	stat -f -c "%b %c" source > stat.source &&
-	stat -f -c "%b %c" target > stat.target &&
+	stat -f -c "%b %c" source >stat.source &&
+	stat -f -c "%b %c" target >stat.target &&
 	test_cmp stat.source stat.target
 '
 

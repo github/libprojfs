@@ -32,7 +32,7 @@ test_expect_success 'check for multiple groups owned by the user' '
 '
 
 test_expect_success 'create source tree' '
-	echo hello > source/xyz &&
+	echo hello >source/xyz &&
 	chmod 0600 source/xyz &&
 	ln -s xyz source/symlink
 '

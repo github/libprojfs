@@ -26,7 +26,7 @@ projfs_start test_simple source target || exit 1
 
 test_expect_success 'create source tree' '
 	mkdir source/dir &&
-	echo file > source/file &&
+	echo file >source/file &&
 	mkfifo source/fifo &&
 	ln -s file source/link
 '

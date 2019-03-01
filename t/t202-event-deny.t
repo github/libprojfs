@@ -25,7 +25,7 @@ denial responses from event handlers.
 . "$TEST_DIRECTORY"/test-lib-event.sh
 
 projfs_start test_handlers source target --retval-file retval || exit 1
-echo deny > retval
+echo deny >retval
 
 projfs_event_printf notify create_dir d1
 test_expect_success 'test event handler on directory creation' '

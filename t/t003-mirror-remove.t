@@ -31,10 +31,10 @@ test_expect_success 'create source tree' '
 	mkdir -p source/d1 &&
 	mkdir -p source/d1/d2 &&
 	mkdir -p source/d3 &&
-	echo file1 > source/f1.txt &&
-	echo file2 > source/f2.txt &&
-	echo file1 > source/d1/f1.txt &&
-	echo file2 > source/d1/d2/f2.txt
+	echo file1 >source/f1.txt &&
+	echo file2 >source/f2.txt &&
+	echo file1 >source/d1/f1.txt &&
+	echo file2 >source/d1/d2/f2.txt
 '
 
 test_expect_success 'remove target tree components' '

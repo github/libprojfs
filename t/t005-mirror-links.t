@@ -25,7 +25,7 @@ Check that links function as expected.
 projfs_start test_simple source target || exit 1
 
 test_expect_success 'create links' '
-	echo text > target/file &&
+	echo text >target/file &&
 	ln target/file target/link &&
 	ls -li target &&
 	ln -s file target/symlink

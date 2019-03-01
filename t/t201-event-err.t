@@ -25,7 +25,7 @@ events respond to handler errors.
 . "$TEST_DIRECTORY"/test-lib-event.sh
 
 projfs_start test_handlers source target --retval-file retval || exit 1
-echo ENOMEM > retval
+echo ENOMEM >retval
 
 # TODO: we expect mkdir to create a dir despite the handler error and
 #	regardless of mkdir's failure exit code

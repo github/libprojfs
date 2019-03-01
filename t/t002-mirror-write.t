@@ -30,16 +30,16 @@ EXPECT_DIR="$TEST_DIRECTORY/$(basename "$0" .t | sed 's/-.*//')"
 test_expect_success 'create source tree' '
 	mkdir -p source/d1 &&
 	mkdir -p source/d1/d2 &&
-	echo file1 > source/f1.txt &&
-	echo file1 > source/d1/f1.txt
+	echo file1 >source/f1.txt &&
+	echo file1 >source/d1/f1.txt
 '
 
 test_expect_success 'create target tree' '
-	echo file2 > target/f2.txt &&
-	echo file2 > target/d1/f2.txt &&
+	echo file2 >target/f2.txt &&
+	echo file2 >target/d1/f2.txt &&
 	cp target/f2.txt target/d1/d2 &&
-	echo file1-NEW > target/f1.txt &&
-	echo file1-NEW > target/d1/f1.txt
+	echo file1-NEW >target/f1.txt &&
+	echo file1-NEW >target/d1/f1.txt
 '
 
 test_expect_success 'check source tree' '
