@@ -44,12 +44,10 @@
 
 #define MAX_RETVAL_NAME_LEN 40
 
-/* For our test-only purposes, we can just limit paths to NAME_MAX, and then
- * pad our maximum allowed length of projection list entries a bit to account
- * for everything else (i.e., "type name [mode] [size] [source/link]").
+/* Pad the maximum allowed length of projection list entries to account for
+ * all possible fields (i.e., "type name [mode] [size] [source/link]").
  */
-#define MAX_PROJLIST_PATH_LEN NAME_MAX
-#define MAX_PROJLIST_ENTRY_LEN (MAX_PROJLIST_PATH_LEN * 2 + 100)
+#define MAX_PROJLIST_ENTRY_LEN (TEST_PATH_MAX * 2 + 100)
 
 #define isquote(c) ((c) == '"' || (c) == '\'')
 
@@ -279,7 +277,7 @@ static inline const char *skip_blanks(const char *s)
  */
 static int parse_projlist_path(const char *s, int ispath, char **path)
 {
-	char buf[MAX_PROJLIST_PATH_LEN + 1];
+	char buf[TEST_PATH_MAX + 1];
 	const char *e = s;
 	char q = '\0';
 	char c;
@@ -336,7 +334,7 @@ static int parse_projlist_path(const char *s, int ispath, char **path)
 
 	if (len == 0)
 		return -EINVAL;
-	else if (len > MAX_PROJLIST_PATH_LEN)
+	else if (len > TEST_PATH_MAX)
 		return -ENAMETOOLONG;
 
 	buf[len] = '\0';
@@ -841,9 +839,17 @@ unsigned int test_get_opts(unsigned int opt_flags, ...)
 	return ret_flags;
 }
 
-void test_free_opts(void)
+void test_free_opts(unsigned int opt_flags, ...)
 {
-	struct test_projlist_entry *next_entry, *entry = optval_projlist;
+	struct test_projlist_entry *next_entry, *entry;
+	va_list ap;
+
+	va_start(ap, opt_flags);
+
+	if ((opt_flags & TEST_OPT_PROJFILE) == TEST_OPT_NONE)
+		return;
+
+	entry = va_arg(ap, struct test_projlist_entry *);
 
 	while (entry != NULL) {
 		next_entry = entry->next;
@@ -877,7 +883,12 @@ struct projfs *test_start_mount(const char *lowerdir, const char *mountdir,
 
 void *test_stop_mount(struct projfs *fs)
 {
-	return projfs_stop(fs);
+	void *user_data = projfs_stop(fs);
+
+	if ((opt_set_flags & TEST_OPT_PROJFILE) != TEST_OPT_NONE)
+		test_free_opts(opt_set_flags, optval_projlist);
+
+	return user_data;
 }
 
 static void signal_handler(int sig)

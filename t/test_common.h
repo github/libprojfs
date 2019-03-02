@@ -20,6 +20,7 @@
 */
 
 #include <getopt.h>
+#include <limits.h>		// for NAME_MAX
 
 #include "../include/projfs.h"
 
@@ -48,6 +49,8 @@
 #define TEST_FILE_EXIST		0x0002
 #define TEST_FILE_VALID		0x0004
 
+#define TEST_PATH_MAX NAME_MAX			// sufficient for testing
+
 struct test_projlist_entry {
 	char *name;
 	mode_t mode;
@@ -73,7 +76,7 @@ void test_parse_mount_opts(int argc, char *const argv[],
 
 unsigned int test_get_opts(unsigned int opt_flags, ...);
 
-void test_free_opts(void);
+void test_free_opts(unsigned int opt_flags, ...);
 
 struct projfs *test_start_mount(const char *lowerdir, const char *mountdir,
 				const struct projfs_handlers *handlers,
