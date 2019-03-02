@@ -42,8 +42,9 @@ static int get_curr_time(time_t *sec)
 	if (gettimeofday(&tv, NULL) < 0) {
 		warn("unable to get current time");
 		ret = -1;
-	} else
+	} else {
 		*sec = tv.tv_sec;
+	}
 
 	return ret;
 }
@@ -70,8 +71,9 @@ static int wait_for_mount(dev_t prior_dev, const char *mountdir,
 				     mountdir);
 				warn_sec = wait;
 			}
-		} else if (prior_dev != mnt.st_dev)
+		} else if (prior_dev != mnt.st_dev) {
 			break;
+		}
 
 		nanosleep(&wait_req, NULL);
 
@@ -109,9 +111,10 @@ int main(int argc, char *const argv[])
 
 	opt_flags = test_get_opts(TEST_OPT_TIMEOUT, &timeout);
 	if (opt_flags != TEST_OPT_NONE) {
-		if (timeout > MOUNT_WAIT_SEC_MAX)
+		if (timeout > MOUNT_WAIT_SEC_MAX) {
 			test_exit_error(argv[0], "invalid timeout: %li",
 					timeout);
+		}
 		max_wait = timeout;
 	}
 

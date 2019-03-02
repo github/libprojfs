@@ -197,9 +197,10 @@ static void read_retfile(int *retval, unsigned int *flags)
 
 	file = fopen(optval_retfile, "r");
 	if (file == NULL) {
-		if (errno != ENOENT)
+		if (errno != ENOENT) {
 			warn("unable to open retval file: %s",
 			     optval_retfile);
+		}
 		goto out;
 	}
 
@@ -217,11 +218,11 @@ static void read_retfile(int *retval, unsigned int *flags)
 		}
 
 		*flags = TEST_VAL_SET | TEST_FILE_EXIST | TEST_FILE_VALID;
-	}
-	else if (errno > 0)
+	} else if (errno > 0) {
 		warn("unable to read retval file: %s", optval_retfile);
-	else
+	} else {
 		*flags = TEST_FILE_EXIST;
+	}
 
 	if (fclose(file) != 0)
 		warn("unable to close retval file: %s", optval_retfile);
@@ -255,9 +256,10 @@ static struct option *get_long_opts(unsigned int opt_flags)
 	while (opt_flags > 0) {
 		unsigned int opt_flag = (0x0001 << opt_num);
 
-		if ((opt_flags & opt_flag) > 0)
+		if ((opt_flags & opt_flag) > 0) {
 			memcpy(&long_opts[opt_idx++], &all_long_opts[opt_num],
 			       sizeof(struct option));
+		}
 
 		opt_flags &= ~opt_flag;
 		++opt_num;
@@ -292,10 +294,11 @@ void test_parse_opts(int argc, char *const argv[], unsigned int opt_flags,
 			exit_usage(0, argv[0], long_opts, args_usage);
 
 		case TEST_OPT_NUM_RETVAL:
-			if (test_parse_retsym(optarg, &optval_retval) < 0)
+			if (test_parse_retsym(optarg, &optval_retval) < 0) {
 				test_exit_error(argv[0],
 						"invalid retval symbol: %s",
 						optarg);
+			}
 			opt_set_flags |= TEST_OPT_RETVAL;
 			break;
 
@@ -306,10 +309,11 @@ void test_parse_opts(int argc, char *const argv[], unsigned int opt_flags,
 
 		case TEST_OPT_NUM_TIMEOUT:
 			optval_timeout = test_parse_long(optarg, 10);
-			if (errno > 0 || optval_timeout < 0)
+			if (errno > 0 || optval_timeout < 0) {
 				test_exit_error(argv[0],
 						"invalid timeout: %s",
 						optarg);
+			}
 			opt_set_flags |= TEST_OPT_TIMEOUT;
 			break;
 
@@ -319,10 +323,11 @@ void test_parse_opts(int argc, char *const argv[], unsigned int opt_flags,
 			break;
 
 		case '?':
-			if (optopt > 0)
+			if (optopt > 0) {
 				test_exit_error(argv[0],
 						"invalid option: -%c",
 						optopt);
+			}
 			test_exit_error(argv[0], "invalid option: %s",
 					argv[optind - 1]);
 
@@ -330,8 +335,7 @@ void test_parse_opts(int argc, char *const argv[], unsigned int opt_flags,
 			test_exit_error(argv[0], "unknown getopt code: %d",
 					val);
 		}
-	}
-	while (!err);
+	} while (!err);
 
 	num_args = argc - optind;
 	if (err || num_args < min_args || num_args > max_args)
@@ -458,8 +462,7 @@ void test_wait_signal(void)
 	if (tty == 1) {
 		printf("hit Enter to stop: ");
 		getchar();
-	}
-	else if (errno == EINVAL || errno == ENOTTY) {
+	} else if (errno == EINVAL || errno == ENOTTY) {
 		struct sigaction sa;
 
 		memset(&sa, 0, sizeof(struct sigaction));
@@ -472,8 +475,8 @@ void test_wait_signal(void)
 			warn("unable to set signal handler");
 		else
 			pause();
-	}
-	else
+	} else {
 		warn("unable to check stdin");
+	}
 }
 

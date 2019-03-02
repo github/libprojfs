@@ -100,9 +100,9 @@ static int projfs_fuse_send_event(projfs_handler_t handler,
 		                "pid %d\n",
 		        strerror(-err), mask >> 32, mask & 0xFFFFFFFF,
 		        event.pid);
-	}
-	else if (!fd && perm)
+	} else if (!fd && perm) {
 		err = (err == PROJFS_ALLOW) ? 0 : -EPERM;
+	}
 
 	return err;
 }
@@ -149,8 +149,7 @@ static int projfs_fuse_perm_event(uint64_t mask,
 		handler, mask, path + 1, target_path, 0, 1);
 }
 
-struct node_userdata
-{
+struct node_userdata {
 	int fd;
 
 	uint8_t proj_flag; // USER_PROJECTION_EMPTY
@@ -345,8 +344,9 @@ static int projfs_fuse_proj_file(const char *op, const char *path)
 		 * on disk so we have nothing to do */
 		res = 0;
 		goto out;
-	} else if (res != 0)
+	} else if (res != 0) {
 		goto out;
+	}
 
 	if (!user.proj_flag)
 		goto out_finalize;
@@ -382,9 +382,9 @@ static int projfs_op_getattr(char const *path, struct stat *attr,
                              struct fuse_file_info *fi)
 {
 	int res;
-	if (fi)
+	if (fi) {
 		res = fstat(fi->fh, attr);
-	else {
+	} else {
 		res = projfs_fuse_proj_dir("getattr", lowerpath(path), 1);
 		if (res)
 			return -res;
@@ -800,9 +800,9 @@ static int projfs_op_chmod(char const *path, mode_t mode,
                            struct fuse_file_info *fi)
 {
 	int res;
-	if (fi)
+	if (fi) {
 		res = fchmod(fi->fh, mode);
-	else {
+	} else {
 		res = projfs_fuse_proj_dir("chmod", lowerpath(path), 1);
 		if (res)
 			return -res;
@@ -815,9 +815,9 @@ static int projfs_op_chown(char const *path, uid_t uid, gid_t gid,
                            struct fuse_file_info *fi)
 {
 	int res;
-	if (fi)
+	if (fi) {
 		res = fchown(fi->fh, uid, gid);
-	else {
+	} else {
 		res = projfs_fuse_proj_dir("chown", lowerpath(path), 1);
 		if (res)
 			return -res;
@@ -832,9 +832,9 @@ static int projfs_op_truncate(char const *path, off_t off,
                               struct fuse_file_info *fi)
 {
 	int res, err = 0;
-	if (fi)
+	if (fi) {
 		res = ftruncate(fi->fh, off);
-	else {
+	} else {
 		int fd;
 
 		res = projfs_fuse_proj_dir("truncate", lowerpath(path), 1);
@@ -865,9 +865,9 @@ static int projfs_op_utimens(char const *path, const struct timespec tv[2],
                              struct fuse_file_info *fi)
 {
 	int res;
-	if (fi)
+	if (fi) {
 		res = futimens(fi->fh, tv);
-	else {
+	} else {
 		res = projfs_fuse_proj_dir("utimens", lowerpath(path), 1);
 		if (res)
 			return -res;
@@ -1175,11 +1175,10 @@ static int check_dir_empty(const char *path)
 			return -1;
 		}
 
-		if (strcmp(e->d_name, ".") == 0 ||
-				strcmp(e->d_name, "..") == 0)
-			; /* ignore */
-		else
+		if (strcmp(e->d_name, ".") != 0 &&
+		    strcmp(e->d_name, "..") != 0) {
 			is_empty = 0;
+		}
 	}
 }
 
@@ -1304,11 +1303,12 @@ static void *projfs_loop(void *data)
 			fs->lowerdir, SPARSE_TEST_FILENAME, strerror(errno));
 		res = 5;
 		goto out_close;
-	} else if (res == 0)
+	} else if (res == 0) {
 		fprintf(stderr, "projfs: sparse files may not be supported by "
 		                "lower filesystem: %s\n", fs->lowerdir);
-	else if (res == 1)
+	} else if (res == 1) {
 		res = 0;
+	}
 
 	fuse = fuse_new(&args, &projfs_ops, sizeof(projfs_ops), fs);
 	if (fuse == NULL) {
@@ -1349,9 +1349,10 @@ out_session:
 	projfs_set_session(fs, NULL);
 	fuse_session_destroy(se);
 out_close:
-	if (close(fs->lowerdir_fd) == -1)
+	if (close(fs->lowerdir_fd) == -1) {
 		fprintf(stderr, "projfs: failed to close lowerdir: %s: %s\n",
 			fs->lowerdir, strerror(errno));
+	}
 	fs->lowerdir_fd = 0;
 out:
 	fs->error = res;
@@ -1412,9 +1413,8 @@ void *projfs_stop(struct projfs *fs)
 	stat(fs->mountdir, &buf);
 
 	// TODO: use pthread_tryjoin_np() in a loop if avail (AC_CHECK_FUNCS)
-	if (fs->thread_id) {
+	if (fs->thread_id)
 		pthread_join(fs->thread_id, NULL);
-	}
 
 	if (fs->error > 0) {
 		// TODO: translate projfs_loop() codes into messages
@@ -1443,8 +1443,9 @@ static int check_safe_rel_path(const char *path)
 	while ((s = strstr(s, "..")) != NULL) {
 		t = s + 2;
 		if ((*t == '\0' || *t == '/') &&
-		    (s == path || *(s - 1) == '/'))
+		    (s == path || *(s - 1) == '/')) {
 			return 0;
+		}
 		s += 2;
 	}
 
