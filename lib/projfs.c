@@ -249,8 +249,9 @@ static int projfs_fuse_proj_locked(uint64_t event_mask,
 				   struct node_userdata *user,
 				   const char *path)
 {
-	int res = projfs_fuse_proj_event(event_mask, path, user->fd);
+	int res;
 
+	res = projfs_fuse_proj_event(event_mask, path, user->fd);
 	if (res < 0)
 		return -res;
 
@@ -386,7 +387,9 @@ static int projfs_op_getattr(char const *path, struct stat *attr,
 
 static int projfs_op_readlink(char const *path, char *buf, size_t size)
 {
-	int res = projfs_fuse_proj_dir("readlink", lowerpath(path), 1);
+	int res;
+
+	res = projfs_fuse_proj_dir("readlink", lowerpath(path), 1);
 	if (res)
 		return -res;
 	res = readlinkat(lowerdir_fd(), lowerpath(path), buf, size - 1);
@@ -475,7 +478,9 @@ static int projfs_op_mknod(char const *path, mode_t mode, dev_t rdev)
 
 static int projfs_op_symlink(char const *link, char const *path)
 {
-	int res =  projfs_fuse_proj_dir("symlink", lowerpath(path), 1);
+	int res;
+
+	res = projfs_fuse_proj_dir("symlink", lowerpath(path), 1);
 	if (res)
 		return -res;
 	res = symlinkat(link, lowerdir_fd(), lowerpath(path));
@@ -554,10 +559,11 @@ static int projfs_op_read_buf(char const *path, struct fuse_bufvec **bufp,
 			      size_t size, off_t off,
 			      struct fuse_file_info *fi)
 {
-	struct fuse_bufvec *src = malloc(sizeof(*src));
+	struct fuse_bufvec *src;
 
 	(void)path;
 
+	src = malloc(sizeof(*src));
 	if (!src)
 		return -errno;
 
@@ -590,13 +596,16 @@ static int projfs_op_release(char const *path, struct fuse_file_info *fi)
 	int res = close(fi->fh);
 
 	(void)path;
+
 	// return value is ignored by libfuse, but be consistent anyway
 	return res == -1 ? -errno : 0;
 }
 
 static int projfs_op_unlink(char const *path)
 {
-	int res = projfs_fuse_perm_event(PROJFS_DELETE_SELF, path, NULL);
+	int res;
+
+	res = projfs_fuse_perm_event(PROJFS_DELETE_SELF, path, NULL);
 	if (res < 0)
 		return res;
 	res = projfs_fuse_proj_dir("unlink", lowerpath(path), 1);
@@ -609,7 +618,9 @@ static int projfs_op_unlink(char const *path)
 
 static int projfs_op_mkdir(char const *path, mode_t mode)
 {
-	int res = projfs_fuse_proj_dir("mkdir", lowerpath(path), 1);
+	int res;
+
+	res = projfs_fuse_proj_dir("mkdir", lowerpath(path), 1);
 	if (res)
 		return -res;
 	res = mkdirat(lowerdir_fd(), lowerpath(path), mode);
@@ -623,8 +634,10 @@ static int projfs_op_mkdir(char const *path, mode_t mode)
 
 static int projfs_op_rmdir(char const *path)
 {
-	int res = projfs_fuse_perm_event(PROJFS_DELETE_SELF | PROJFS_ONDIR,
-					 path, NULL);
+	int res;
+
+	res = projfs_fuse_perm_event(PROJFS_DELETE_SELF | PROJFS_ONDIR,
+				     path, NULL);
 	if (res < 0)
 		return res;
 	res = projfs_fuse_proj_dir("rmdir", lowerpath(path), 1);
@@ -963,7 +976,9 @@ out:
 
 static int projfs_op_access(char const *path, int mode)
 {
-	int res = projfs_fuse_proj_dir("access", lowerpath(path), 1);
+	int res;
+
+	res = projfs_fuse_proj_dir("access", lowerpath(path), 1);
 	if (res)
 		return -res;
 	res = faccessat(lowerdir_fd(), lowerpath(path), mode,
@@ -1132,7 +1147,9 @@ static int check_dir_empty(const char *path)
 {
 	int err, is_empty = 1;
 	struct dirent *e;
-	DIR *d = opendir(path);
+	DIR *d;
+
+	d = opendir(path);
 	if (!d)
 		return -1;
 
