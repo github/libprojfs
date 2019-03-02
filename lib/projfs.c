@@ -373,6 +373,7 @@ static int projfs_op_getattr(char const *path, struct stat *attr,
 			     struct fuse_file_info *fi)
 {
 	int res;
+
 	if (fi) {
 		res = fstat(fi->fh, attr);
 	} else {
@@ -550,6 +551,7 @@ static int projfs_op_statfs(char const *path, struct statvfs *buf)
 	int res;
 
 	(void)path;
+
 	// TODO: should we return our own filesystem's global info?
 	res = fstatvfs(lowerdir_fd(), buf);
 	return res == -1 ? -errno : 0;
@@ -584,6 +586,7 @@ static int projfs_op_write_buf(char const *path, struct fuse_bufvec *src,
 	struct fuse_bufvec buf = FUSE_BUFVEC_INIT(fuse_buf_size(src));
 
 	(void)path;
+
 	buf.buf[0].flags = FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK;
 	buf.buf[0].fd = fi->fh;
 	buf.buf[0].pos = off;
@@ -779,6 +782,7 @@ static int projfs_op_releasedir(char const *path, struct fuse_file_info *fi)
 	int res = closedir(d->dir);
 
 	(void)path;
+
 	free(d);
 	// return value is ignored by libfuse, but be consistent anyway
 	return res == -1 ? -errno : 0;
@@ -788,6 +792,7 @@ static int projfs_op_chmod(char const *path, mode_t mode,
 			   struct fuse_file_info *fi)
 {
 	int res;
+
 	if (fi) {
 		res = fchmod(fi->fh, mode);
 	} else {
@@ -803,6 +808,7 @@ static int projfs_op_chown(char const *path, uid_t uid, gid_t gid,
 			   struct fuse_file_info *fi)
 {
 	int res;
+
 	if (fi) {
 		res = fchown(fi->fh, uid, gid);
 	} else {
@@ -820,6 +826,7 @@ static int projfs_op_truncate(char const *path, off_t off,
 			      struct fuse_file_info *fi)
 {
 	int res, err = 0;
+
 	if (fi) {
 		res = ftruncate(fi->fh, off);
 	} else {
@@ -852,6 +859,7 @@ static int projfs_op_utimens(char const *path, const struct timespec tv[2],
 			     struct fuse_file_info *fi)
 {
 	int res;
+
 	if (fi) {
 		res = futimens(fi->fh, tv);
 	} else {
@@ -991,6 +999,7 @@ static int projfs_op_flock(char const *path, struct fuse_file_info *fi, int op)
 	int res = flock(fi->fh, op);
 
 	(void)path;
+
 	return res == -1 ? -errno : 0;
 }
 
@@ -998,6 +1007,7 @@ static int projfs_op_fallocate(char const *path, int mode, off_t off,
 			       off_t len, struct fuse_file_info *fi)
 {
 	(void)path;
+
 	if (mode)
 		return -EOPNOTSUPP;
 	return -posix_fallocate(fi->fh, off, len);
