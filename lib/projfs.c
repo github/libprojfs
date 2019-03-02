@@ -342,7 +342,7 @@ static int projfs_fuse_proj_file(const char *op, const char *path)
 	if (!user.proj_flag)
 		goto out_finalize;
 
-	/* `path` relative to lowerdir exists and is a placeholder -- hydrate it */
+	// path relative to lowerdir exists and is a placeholder -- hydrate it
 	res = projfs_fuse_proj_locked(PROJFS_CREATE_SELF, &user, path);
 
 out_finalize:
