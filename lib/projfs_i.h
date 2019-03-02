@@ -38,18 +38,5 @@ struct projfs {
 /** Private event handler type */
 typedef int (*projfs_handler_t)(struct projfs_event *);
 
-/**
- * Create a new directory with the given projection flag.
- *
- * @param[in] fs Projected filesystem handle.
- * @param[in] path Relative path of new directory under projfs mount point.
- * @param[in] mode File mode with which to create the new directory.
- * @param[in] proj_flag True if directory is projected; false otherwise.
- * @return Zero on success or an \p errno(3) code on failure.
- */
-int _projfs_make_dir(struct projfs *fs, const char *path, mode_t mode,
-                     uint8_t proj_flag);
-
-
 #endif /* PROJFS_I_H */
 

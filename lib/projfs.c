@@ -1434,10 +1434,28 @@ static int check_safe_rel_path(const char *path)
 
 int projfs_create_proj_dir(struct projfs *fs, const char *path)
 {
+	int fd;
+	char v = 1;
+	int res, err;
+
 	if (!check_safe_rel_path(path))
 		return EINVAL;
 
-	return _projfs_make_dir(fs, path, PROJ_DIR_MODE, 1);
+	res = mkdirat(fs->lowerdir_fd, path, PROJ_DIR_MODE);
+	if (res == -1)
+		return errno;
+
+	fd = openat(lowerdir_fd(), path, O_RDONLY);
+	if (fd == -1)
+		return errno;
+
+	res = fsetxattr(fd, USER_PROJECTION_EMPTY, &v, 1, 0);
+	err = errno;
+	close(fd);
+	if (res == -1)
+		return err;
+
+	return 0;
 }
 
 int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
@@ -1492,34 +1510,6 @@ int projfs_create_proj_symlink(struct projfs *fs, const char *path,
 	if (res == -1)
 		return errno;
 
-	return 0;
-}
-
-int _projfs_make_dir(struct projfs *fs, const char *path, mode_t mode,
-                     uint8_t proj_flag)
-{
-	int res;
-
-	(void)fs;
-
-	res = mkdirat(fs->lowerdir_fd, path, mode);
-	if (res == -1)
-		return errno;
-	if (proj_flag) {
-		char v = 1;
-		int err;
-		int fd;
-
-		fd = openat(lowerdir_fd(), path, O_RDONLY);
-		if (fd == -1)
-			return errno;
-
-		res = fsetxattr(fd, USER_PROJECTION_EMPTY, &v, 1, 0);
-		err = errno;
-		close(fd);
-		if (res == -1)
-			return err;
-	}
 	return 0;
 }
 
