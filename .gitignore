@@ -35,5 +35,7 @@
 *.lo
 *.log
 *.o
+*.orig
+*~
 Makefile
 Makefile.in
