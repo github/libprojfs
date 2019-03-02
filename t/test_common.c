@@ -384,41 +384,41 @@ unsigned int test_get_opts(unsigned int opt_flags, ...)
 		ret_flags |= ret_flag;
 
 		switch (opt_flag) {
-			case TEST_OPT_RETVAL:
-				i = va_arg(ap, int*);
-				f = va_arg(ap, unsigned int*);
-				*f = TEST_VAL_UNSET | TEST_FILE_NONE;
-				if (ret_flag != TEST_OPT_NONE) {
-					*i = optval_retval;
-					*f |= TEST_VAL_SET;
-				} else if ((opt_set_flags & TEST_OPT_RETFILE)
-					   != TEST_OPT_NONE) {
-					read_retfile(i, f);
-					ret_flags |= opt_flag;
-				}
-				break;
+		case TEST_OPT_RETVAL:
+			i = va_arg(ap, int*);
+			f = va_arg(ap, unsigned int*);
+			*f = TEST_VAL_UNSET | TEST_FILE_NONE;
+			if (ret_flag != TEST_OPT_NONE) {
+				*i = optval_retval;
+				*f |= TEST_VAL_SET;
+			} else if ((opt_set_flags & TEST_OPT_RETFILE)
+				   != TEST_OPT_NONE) {
+				read_retfile(i, f);
+				ret_flags |= opt_flag;
+			}
+			break;
 
-			case TEST_OPT_RETFILE:
-				s = va_arg(ap, const char**);
-				if (ret_flag != TEST_OPT_NONE)
-					*s = optval_retfile;
-				break;
+		case TEST_OPT_RETFILE:
+			s = va_arg(ap, const char**);
+			if (ret_flag != TEST_OPT_NONE)
+				*s = optval_retfile;
+			break;
 
-			case TEST_OPT_TIMEOUT:
-				l = va_arg(ap, long int*);
-				if (ret_flag != TEST_OPT_NONE)
-					*l = optval_timeout;
-				break;
+		case TEST_OPT_TIMEOUT:
+			l = va_arg(ap, long int*);
+			if (ret_flag != TEST_OPT_NONE)
+				*l = optval_timeout;
+			break;
 
-			case TEST_OPT_LOCKFILE:
-				s = va_arg(ap, const char**);
-				if (ret_flag != TEST_OPT_NONE)
-					*s = optval_lockfile;
-				break;
+		case TEST_OPT_LOCKFILE:
+			s = va_arg(ap, const char**);
+			if (ret_flag != TEST_OPT_NONE)
+				*s = optval_lockfile;
+			break;
 
-			default:
-				errx(EXIT_FAILURE,
-				     "unknown option flag: %u", opt_flag);
+		default:
+			errx(EXIT_FAILURE,
+			     "unknown option flag: %u", opt_flag);
 		}
 	}
 
