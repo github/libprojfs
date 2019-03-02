@@ -568,7 +568,7 @@ static int projfs_op_read_buf(char const *path, struct fuse_bufvec **bufp,
 {
 	struct fuse_bufvec *src = malloc(sizeof(*src));
 
-	(void) path;
+	(void)path;
 
 	if (!src)
 		return -errno;

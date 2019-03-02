@@ -66,7 +66,7 @@ struct projfs_handlers {
 	 * @note When event->mask contains PROJFS_ONDIR, the file
 	 *       descriptor in event->fd will be NULL.
 	 */
-	int (*handle_proj_event) (struct projfs_event *event);
+	int (*handle_proj_event)(struct projfs_event *event);
 
 	/**
 	 * Handle notification of a file or directory event.
@@ -76,7 +76,7 @@ struct projfs_handlers {
 	 * @note If event->target_path is non-NULL, the event was a
 	 *       rename(2) or link(2) filesystem operation.
 	 */
-	int (*handle_notify_event) (struct projfs_event *event);
+	int (*handle_notify_event)(struct projfs_event *event);
 
 	/**
 	 * Handle permission request for file or directory event.
@@ -88,7 +88,7 @@ struct projfs_handlers {
 	 * @note If event->target_path is non-NULL, the event is a
 	 *       rename(2) or link(2) filesystem operation.
 	 */
-	int (*handle_perm_event) (struct projfs_event *event);
+	int (*handle_perm_event)(struct projfs_event *event);
 };
 
 /**

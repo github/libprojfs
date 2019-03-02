@@ -385,8 +385,8 @@ unsigned int test_get_opts(unsigned int opt_flags, ...)
 
 		switch (opt_flag) {
 		case TEST_OPT_RETVAL:
-			i = va_arg(ap, int*);
-			f = va_arg(ap, unsigned int*);
+			i = va_arg(ap, int *);
+			f = va_arg(ap, unsigned int *);
 			*f = TEST_VAL_UNSET | TEST_FILE_NONE;
 			if (ret_flag != TEST_OPT_NONE) {
 				*i = optval_retval;
@@ -399,19 +399,19 @@ unsigned int test_get_opts(unsigned int opt_flags, ...)
 			break;
 
 		case TEST_OPT_RETFILE:
-			s = va_arg(ap, const char**);
+			s = va_arg(ap, const char **);
 			if (ret_flag != TEST_OPT_NONE)
 				*s = optval_retfile;
 			break;
 
 		case TEST_OPT_TIMEOUT:
-			l = va_arg(ap, long int*);
+			l = va_arg(ap, long int *);
 			if (ret_flag != TEST_OPT_NONE)
 				*l = optval_timeout;
 			break;
 
 		case TEST_OPT_LOCKFILE:
-			s = va_arg(ap, const char**);
+			s = va_arg(ap, const char **);
 			if (ret_flag != TEST_OPT_NONE)
 				*s = optval_lockfile;
 			break;
@@ -452,7 +452,7 @@ void *test_stop_mount(struct projfs *fs)
 
 static void signal_handler(int sig)
 {
-	(void) sig;
+	(void)sig;
 }
 
 void test_wait_signal(void)
