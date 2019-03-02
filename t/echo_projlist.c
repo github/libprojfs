@@ -110,10 +110,10 @@ int main(int argc, char *const argv[])
 	struct test_projlist_entry *projlist = NULL;
 	const char *projfile = NULL;
 
-	test_parse_opts(argc, argv, (TEST_OPT_PROJLIST | TEST_OPT_PROJFILE),
+	test_parse_opts(argc, argv, TEST_OPT_PROJLIST | TEST_OPT_PROJFILE,
 			0, 0, NULL, "");
 
-	opt_flags = test_get_opts((TEST_OPT_PROJLIST | TEST_OPT_PROJFILE),
+	opt_flags = test_get_opts(TEST_OPT_PROJLIST | TEST_OPT_PROJFILE,
 				  &projlist, &projlist_flags, &projfile);
 
 	if (opt_flags == TEST_OPT_NONE)
@@ -135,7 +135,8 @@ int main(int argc, char *const argv[])
 		printf("empty projection list file\n");
 	}
 	else if ((opt_flags & TEST_OPT_PROJFILE) != TEST_OPT_NONE) {
-		test_exit_error(argv[0], "missing projection list file: %s",
+		test_exit_error(argv[0], "missing or broken "
+					 "projection list file: %s",
 				projfile);
 	}
 	else {
