@@ -74,11 +74,11 @@ static struct projfs *projfs_context_fs(void)
  * @return 0 or a negative errno
  */
 static int projfs_fuse_send_event(projfs_handler_t handler,
-                                  uint64_t mask,
-                                  const char *path,
-                                  const char *target_path,
-                                  int fd,
-                                  int perm)
+				  uint64_t mask,
+				  const char *path,
+				  const char *target_path,
+				  int fd,
+				  int perm)
 {
 	struct projfs_event event;
 	int err;
@@ -96,10 +96,10 @@ static int projfs_fuse_send_event(projfs_handler_t handler,
 	err = handler(&event);
 	if (err < 0) {
 		fprintf(stderr, "projfs: event handler failed: %s; "
-		                "event mask 0x%04" PRIx64 "-%08" PRIx64 ", "
-		                "pid %d\n",
-		        strerror(-err), mask >> 32, mask & 0xFFFFFFFF,
-		        event.pid);
+				"event mask 0x%04" PRIx64 "-%08" PRIx64 ", "
+				"pid %d\n",
+			strerror(-err), mask >> 32, mask & 0xFFFFFFFF,
+			event.pid);
 	} else if (!fd && perm) {
 		err = (err == PROJFS_ALLOW) ? 0 : -EPERM;
 	}
@@ -111,8 +111,8 @@ static int projfs_fuse_send_event(projfs_handler_t handler,
  * @return 0 or a negative errno
  */
 static int projfs_fuse_proj_event(uint64_t mask,
-                                  const char *path,
-                                  int fd)
+				  const char *path,
+				  int fd)
 {
 	projfs_handler_t handler =
 		projfs_context_fs()->handlers.handle_proj_event;
@@ -125,8 +125,8 @@ static int projfs_fuse_proj_event(uint64_t mask,
  * @return 0 or a negative errno
  */
 static int projfs_fuse_notify_event(uint64_t mask,
-                                    const char *path,
-                                    const char *target_path)
+				    const char *path,
+				    const char *target_path)
 {
 	projfs_handler_t handler =
 		projfs_context_fs()->handlers.handle_notify_event;
@@ -139,8 +139,8 @@ static int projfs_fuse_notify_event(uint64_t mask,
  * @return 0 or a negative errno
  */
 static int projfs_fuse_perm_event(uint64_t mask,
-                                  const char *path,
-                                  const char *target_path)
+				  const char *path,
+				  const char *target_path)
 {
 	projfs_handler_t handler =
 		projfs_context_fs()->handlers.handle_perm_event;
@@ -378,7 +378,7 @@ static inline const char *lowerpath(const char *path)
 // filesystem ops
 
 static int projfs_op_getattr(char const *path, struct stat *attr,
-                             struct fuse_file_info *fi)
+			     struct fuse_file_info *fi)
 {
 	int res;
 	if (fi) {
@@ -428,12 +428,12 @@ static int projfs_op_link(char const *src, char const *dst)
 		return -res;
 
 	res = linkat(lowerdir_fd, lowerpath(src),
-	             lowerdir_fd, lowerpath(dst), 0);
+		     lowerdir_fd, lowerpath(dst), 0);
 	return res == -1 ? -errno : 0;
 }
 
 static void *projfs_op_init(struct fuse_conn_info *conn,
-                            struct fuse_config *cfg)
+			    struct fuse_config *cfg)
 {
 	(void)conn;
 
@@ -454,7 +454,7 @@ static int projfs_op_flush(char const *path, struct fuse_file_info *fi)
 }
 
 static int projfs_op_fsync(char const *path, int datasync,
-                           struct fuse_file_info *fi)
+			   struct fuse_file_info *fi)
 {
 	int res;
 
@@ -492,7 +492,7 @@ static int projfs_op_symlink(char const *link, char const *path)
 }
 
 static int projfs_op_create(char const *path, mode_t mode,
-                            struct fuse_file_info *fi)
+			    struct fuse_file_info *fi)
 {
 	/* FUSE sets fi.flags = O_CREAT | O_EXCL | O_WRONLY in fuse_lib_mknod,
 	 * untouched in fuse_lib_create where it comes straight from
@@ -655,7 +655,7 @@ static int projfs_op_rmdir(char const *path)
 }
 
 static int projfs_op_rename(char const *src, char const *dst,
-                            unsigned int flags)
+			    unsigned int flags)
 {
 	uint64_t mask = PROJFS_MOVE_SELF;
 
@@ -732,9 +732,9 @@ out:
 }
 
 static int projfs_op_readdir(char const *path, void *buf,
-                             fuse_fill_dir_t filler, off_t off,
-                             struct fuse_file_info *fi,
-                             enum fuse_readdir_flags flags)
+			     fuse_fill_dir_t filler, off_t off,
+			     struct fuse_file_info *fi,
+			     enum fuse_readdir_flags flags)
 {
 	int err = 0;
 	struct projfs_dir *d = (struct projfs_dir *)fi->fh;
@@ -796,7 +796,7 @@ static int projfs_op_releasedir(char const *path, struct fuse_file_info *fi)
 }
 
 static int projfs_op_chmod(char const *path, mode_t mode,
-                           struct fuse_file_info *fi)
+			   struct fuse_file_info *fi)
 {
 	int res;
 	if (fi) {
@@ -811,7 +811,7 @@ static int projfs_op_chmod(char const *path, mode_t mode,
 }
 
 static int projfs_op_chown(char const *path, uid_t uid, gid_t gid,
-                           struct fuse_file_info *fi)
+			   struct fuse_file_info *fi)
 {
 	int res;
 	if (fi) {
@@ -828,7 +828,7 @@ static int projfs_op_chown(char const *path, uid_t uid, gid_t gid,
 }
 
 static int projfs_op_truncate(char const *path, off_t off,
-                              struct fuse_file_info *fi)
+			      struct fuse_file_info *fi)
 {
 	int res, err = 0;
 	if (fi) {
@@ -861,7 +861,7 @@ out:
 }
 
 static int projfs_op_utimens(char const *path, const struct timespec tv[2],
-                             struct fuse_file_info *fi)
+			     struct fuse_file_info *fi)
 {
 	int res;
 	if (fi) {
@@ -877,7 +877,7 @@ static int projfs_op_utimens(char const *path, const struct timespec tv[2],
 }
 
 static int projfs_op_setxattr(char const *path, char const *name,
-                              char const *value, size_t size, int flags)
+			      char const *value, size_t size, int flags)
 {
 	int res = -1;
 	int err = 0;
@@ -905,7 +905,7 @@ out:
 }
 
 static int projfs_op_getxattr(char const *path, char const *name,
-                              char *value, size_t size)
+			      char *value, size_t size)
 {
 	ssize_t res = -1;
 	int err = 0;
@@ -1005,7 +1005,7 @@ static int projfs_op_flock(char const *path, struct fuse_file_info *fi, int op)
 }
 
 static int projfs_op_fallocate(char const *path, int mode, off_t off,
-                               off_t len, struct fuse_file_info *fi)
+			       off_t len, struct fuse_file_info *fi)
 {
 	(void)path;
 	if (mode)
@@ -1264,7 +1264,7 @@ static void *projfs_loop(void *data)
 	if (fgetxattr(fs->lowerdir_fd, USER_PROJECTION_EMPTY, NULL, 0) == -1 &&
 			errno == ENOTSUP) {
 		fprintf(stderr, "projfs: xattr support check on lowerdir "
-		                "failed: %s: %s\n",
+				"failed: %s: %s\n",
 			fs->lowerdir, strerror(errno));
 		res = 2;
 		goto out_close;
@@ -1276,7 +1276,7 @@ static void *projfs_loop(void *data)
 	res = check_dir_empty(fs->lowerdir);
 	if (res == -1) {
 		fprintf(stderr, "projfs: could not check if lowerdir "
-		                "is empty: %s: %s\n",
+				"is empty: %s: %s\n",
 			fs->lowerdir, strerror(errno));
 		res = 3;
 		goto out_close;
@@ -1303,7 +1303,7 @@ static void *projfs_loop(void *data)
 		goto out_close;
 	} else if (res == 0) {
 		fprintf(stderr, "projfs: sparse files may not be supported by "
-		                "lower filesystem: %s\n", fs->lowerdir);
+				"lower filesystem: %s\n", fs->lowerdir);
 	} else if (res == 1) {
 		res = 0;
 	}
@@ -1383,7 +1383,7 @@ int projfs_start(struct projfs *fs)
 
 	if (res != 0) {
 		fprintf(stderr, "projfs: error creating thread: %s\n",
-		        strerror(res));
+			strerror(res));
 		return -1;
 	}
 
@@ -1417,7 +1417,7 @@ void *projfs_stop(struct projfs *fs)
 	if (fs->error > 0) {
 		// TODO: translate projfs_loop() codes into messages
 		fprintf(stderr, "projfs: error from event loop: %d\n",
-		        fs->error);
+			fs->error);
 	}
 
 	pthread_mutex_destroy(&fs->mutex);
@@ -1472,7 +1472,7 @@ int projfs_create_proj_dir(struct projfs *fs, const char *path, mode_t mode)
 }
 
 int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
-                            mode_t mode)
+			    mode_t mode)
 {
 	int fd, res;
 
