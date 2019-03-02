@@ -329,14 +329,14 @@ static int projfs_fuse_proj_file(const char *op, const char *path)
 		/* tried to project a directory as a file, ignore
 		 * XXX should we just always project dirs as dirs and files as
 		 * files? */
-		goto out;
+		return res;
 	} else if (res == ELOOP) {
 		/* tried to project a symlink. it already exists as a symlink
 		 * on disk so we have nothing to do */
 		res = 0;
-		goto out;
+		return res;
 	} else if (res != 0) {
-		goto out;
+		return res;
 	}
 
 	if (!user.proj_flag)
@@ -348,7 +348,6 @@ static int projfs_fuse_proj_file(const char *op, const char *path)
 out_finalize:
 	finalize_userdata(&user);
 
-out:
 	return res;
 }
 
@@ -1077,13 +1076,13 @@ struct projfs *projfs_new(const char *lowerdir, const char *mountdir,
 	// TODO: prevent failure with relative lowerdir
 	if (lowerdir == NULL) {
 		fprintf(stderr, "projfs: no lowerdir specified\n");
-		goto out;
+		return NULL;
 	}
 
 	// TODO: debug failure to exit when given a relative mountdir
 	if (mountdir == NULL) {
 		fprintf(stderr, "projfs: no mountdir specified\n");
-		goto out;
+		return NULL;
 	}
 
 	if (sizeof(struct projfs_handlers) < handlers_size) {
@@ -1095,7 +1094,7 @@ struct projfs *projfs_new(const char *lowerdir, const char *mountdir,
 	fs = calloc(1, sizeof(struct projfs));
 	if (fs == NULL) {
 		fprintf(stderr, "projfs: failed to allocate projfs object\n");
-		goto out;
+		return NULL;
 	}
 
 	fs->lowerdir = strdup(lowerdir);
@@ -1132,7 +1131,7 @@ out_lower:
 	free(fs->lowerdir);
 out_handle:
 	free(fs);
-out:
+
 	return NULL;
 }
 

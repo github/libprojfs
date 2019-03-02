@@ -199,7 +199,7 @@ static void read_retfile(int *retval, unsigned int *flags)
 			warn("unable to open retval file: %s",
 			     optval_retfile);
 		}
-		goto out;
+		return;
 	}
 
 	errno = 0;
@@ -225,7 +225,6 @@ static void read_retfile(int *retval, unsigned int *flags)
 	if (fclose(file) != 0)
 		warn("unable to close retval file: %s", optval_retfile);
 
-out:
 	return;
 }
 

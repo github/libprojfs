@@ -61,7 +61,7 @@ static int wait_for_mount(dev_t prior_dev, const char *mountdir,
 
 	ret = get_curr_time(&start);
 	if (ret < 0)
-		goto out;
+		return ret;
 
 	do {
 		if (stat(mountdir, &mnt) != 0) {
@@ -90,7 +90,6 @@ static int wait_for_mount(dev_t prior_dev, const char *mountdir,
 		}
 	} while (1);
 
-out:
 	return ret;
 }
 
