@@ -29,4 +29,3 @@ libprojfs_la_SOURCES = projfs.c \
 		       $(top_srcdir)/include/projfs_notify.h
 
 libprojfs_la_LDFLAGS = -version-number 0:0:0 -export-symbols-regex "^projfs"
-

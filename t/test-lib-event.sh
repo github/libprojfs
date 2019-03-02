@@ -81,4 +81,3 @@ projfs_event_exec () {
 	projfs_log_exec "$EVENT_LOG" "$event_msg_head" "$event_err" \
 		"$event_err_msg" "$@"
 }
-

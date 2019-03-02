@@ -145,4 +145,3 @@ AC_SEARCH_LIBS([fuse_loop_mt_31], [fuse3], [],
 AC_CONFIG_FILES([Makefile include/Makefile lib/Makefile t/Makefile
                  config.sh projfs.pc])
 AC_OUTPUT
-

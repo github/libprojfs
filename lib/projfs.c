@@ -151,7 +151,6 @@ static int projfs_fuse_perm_event(uint64_t mask,
 
 struct node_userdata {
 	int fd;
-
 	uint8_t proj_flag; // USER_PROJECTION_EMPTY
 };
 
@@ -877,7 +876,6 @@ static int projfs_op_utimens(char const *path, const struct timespec tv[2],
 	return res == -1 ? -errno : 0;
 }
 
-
 static int projfs_op_setxattr(char const *path, char const *name,
                               char const *value, size_t size, int flags)
 {
@@ -1506,7 +1504,7 @@ int projfs_create_proj_symlink(struct projfs *fs, const char *path,
 
 	if (!check_safe_rel_path(path))
 		return EINVAL;
-	
+
 	res = symlinkat(target, fs->lowerdir_fd, path);
 	if (res == -1)
 		return errno;

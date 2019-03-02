@@ -67,4 +67,3 @@ struct projfs *test_start_mount(const char *lowerdir, const char *mountdir,
 void *test_stop_mount(struct projfs *fs);
 
 void test_wait_signal(void);
-

@@ -940,4 +940,3 @@ test_lazy_prereq SANITY '
 	BUG "cannot clean SANETESTD"
 	return $status
 '
-

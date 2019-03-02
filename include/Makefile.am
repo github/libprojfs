@@ -21,4 +21,3 @@
 projfsincludedir=@includedir@/projfs
 
 projfsinclude_HEADERS = projfs.h projfs_notify.h
-

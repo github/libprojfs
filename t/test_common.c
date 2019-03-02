@@ -479,4 +479,3 @@ void test_wait_signal(void)
 		warn("unable to check stdin");
 	}
 }
-
