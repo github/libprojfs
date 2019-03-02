@@ -34,10 +34,11 @@ static int test_handle_event(struct projfs_event *event, const char *desc,
 	const char *retfile, *lockfile = NULL;
 	int ret, timeout = 0, fd = 0, res;
 
-	opt_flags = test_get_opts(TEST_OPT_RETVAL | TEST_OPT_RETFILE |
-				  TEST_OPT_TIMEOUT | TEST_OPT_LOCKFILE,
-				  &ret, &ret_flags, &retfile, &timeout,
-				  &lockfile);
+	opt_flags =
+		test_get_opts(TEST_OPT_RETVAL | TEST_OPT_RETFILE |
+				      TEST_OPT_TIMEOUT | TEST_OPT_LOCKFILE,
+			      &ret, &ret_flags, &retfile, &timeout,
+			      &lockfile);
 
 	if ((opt_flags & TEST_OPT_RETFILE) == TEST_OPT_NONE ||
 	    (ret_flags & TEST_FILE_EXIST) != TEST_FILE_NONE) {
@@ -109,7 +110,7 @@ int main(int argc, char *const argv[])
 
 	test_parse_mount_opts(argc, argv,
 			      TEST_OPT_RETVAL | TEST_OPT_RETFILE |
-			      TEST_OPT_TIMEOUT | TEST_OPT_LOCKFILE,
+				      TEST_OPT_TIMEOUT | TEST_OPT_LOCKFILE,
 			      &lower_path, &mount_path);
 
 	handlers.handle_proj_event = &test_proj_event;

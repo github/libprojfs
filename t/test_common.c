@@ -132,9 +132,7 @@ static void exit_usage(int err, const char *argv0, struct option *long_opts,
 		++long_opts;
 	}
 
-	fprintf(file, "%s%s\n",
-		(*args_usage == '\0' ? "" : " "),
-		args_usage);
+	fprintf(file, "%s%s\n", (*args_usage == '\0' ? "" : " "), args_usage);
 
 	exit(err ? EXIT_FAILURE : EXIT_SUCCESS);
 }
@@ -391,8 +389,8 @@ unsigned int test_get_opts(unsigned int opt_flags, ...)
 			if (ret_flag != TEST_OPT_NONE) {
 				*i = optval_retval;
 				*f |= TEST_VAL_SET;
-			} else if ((opt_set_flags & TEST_OPT_RETFILE)
-				   != TEST_OPT_NONE) {
+			} else if ((opt_set_flags & TEST_OPT_RETFILE) !=
+				   TEST_OPT_NONE) {
 				read_retfile(i, f);
 				ret_flags |= opt_flag;
 			}

@@ -112,8 +112,7 @@ static int projfs_fuse_proj_event(uint64_t mask, const char *path, int fd)
 	projfs_handler_t handler =
 		projfs_context_fs()->handlers.handle_proj_event;
 
-	return projfs_fuse_send_event(
-		handler, mask, path, NULL, fd, 0);
+	return projfs_fuse_send_event(handler, mask, path, NULL, fd, 0);
 }
 
 /**
@@ -125,8 +124,8 @@ static int projfs_fuse_notify_event(uint64_t mask, const char *path,
 	projfs_handler_t handler =
 		projfs_context_fs()->handlers.handle_notify_event;
 
-	return projfs_fuse_send_event(
-		handler, mask, path + 1, target_path, 0, 0);
+	return projfs_fuse_send_event(handler, mask,
+				      path + 1, target_path, 0, 0);
 }
 
 /**
@@ -138,8 +137,8 @@ static int projfs_fuse_perm_event(uint64_t mask, const char *path,
 	projfs_handler_t handler =
 		projfs_context_fs()->handlers.handle_perm_event;
 
-	return projfs_fuse_send_event(
-		handler, mask, path + 1, target_path, 0, 1);
+	return projfs_fuse_send_event(handler, mask,
+				      path + 1, target_path, 0, 1);
 }
 
 struct node_userdata {
@@ -298,8 +297,8 @@ static int projfs_fuse_proj_dir(const char *op, const char *path, int parent)
 
 	/* pass mapped path (i.e. containing directory we want to project) to
 	 * provider */
-	res = projfs_fuse_proj_locked(
-		PROJFS_CREATE_SELF | PROJFS_ONDIR, &user, target_path);
+	res = projfs_fuse_proj_locked(PROJFS_CREATE_SELF | PROJFS_ONDIR,
+				      &user, target_path);
 
 out_finalize:
 	finalize_userdata(&user);
@@ -509,10 +508,7 @@ static int projfs_op_create(char const *path, mode_t mode,
 		return -errno;
 	fi->fh = fd;
 
-	res = projfs_fuse_notify_event(
-		PROJFS_CREATE_SELF,
-		path,
-		NULL);
+	res = projfs_fuse_notify_event(PROJFS_CREATE_SELF, path, NULL);
 	return res;
 }
 
@@ -600,10 +596,7 @@ static int projfs_op_release(char const *path, struct fuse_file_info *fi)
 
 static int projfs_op_unlink(char const *path)
 {
-	int res = projfs_fuse_perm_event(
-		PROJFS_DELETE_SELF,
-		path,
-		NULL);
+	int res = projfs_fuse_perm_event(PROJFS_DELETE_SELF, path, NULL);
 	if (res < 0)
 		return res;
 	res = projfs_fuse_proj_dir("unlink", lowerpath(path), 1);
@@ -623,19 +616,15 @@ static int projfs_op_mkdir(char const *path, mode_t mode)
 	if (res == -1)
 		return -errno;
 
-	res = projfs_fuse_notify_event(
-		PROJFS_CREATE_SELF | PROJFS_ONDIR,
-		path,
-		NULL);
+	res = projfs_fuse_notify_event(PROJFS_CREATE_SELF | PROJFS_ONDIR,
+				       path, NULL);
 	return res;
 }
 
 static int projfs_op_rmdir(char const *path)
 {
-	int res = projfs_fuse_perm_event(
-		PROJFS_DELETE_SELF | PROJFS_ONDIR,
-		path,
-		NULL);
+	int res = projfs_fuse_perm_event(PROJFS_DELETE_SELF | PROJFS_ONDIR,
+					 path, NULL);
 	if (res < 0)
 		return res;
 	res = projfs_fuse_proj_dir("rmdir", lowerpath(path), 1);
@@ -664,13 +653,9 @@ static int projfs_op_rename(char const *src, char const *dst,
 		return -res;
 
 	// TODO: for non Linux, use renameat(); fail if flags != 0
-	res = syscall(
-		SYS_renameat2,
-		lowerdir_fd(),
-		lowerpath(src),
-		lowerdir_fd(),
-		lowerpath(dst),
-		flags);
+	res = syscall(SYS_renameat2,
+		      lowerdir_fd(), lowerpath(src),
+		      lowerdir_fd(), lowerpath(dst), flags);
 	if (res == -1)
 		return -errno;
 
@@ -753,9 +738,8 @@ static int projfs_op_readdir(char const *path, void *buf,
 		}
 
 		if (flags & FUSE_READDIR_PLUS) {
-			int res = fstatat(
-					dirfd(d->dir), d->ent->d_name, &attr,
-					AT_SYMLINK_NOFOLLOW);
+			int res = fstatat(dirfd(d->dir), d->ent->d_name,
+					  &attr, AT_SYMLINK_NOFOLLOW);
 			// TODO: break and report errors from fstatat()?
 			if (res != -1)
 				filled = FUSE_FILL_DIR_PLUS;
@@ -835,8 +819,7 @@ static int projfs_op_truncate(char const *path, off_t off,
 		if (res)
 			return -res;
 
-		fd = openat(lowerdir_fd(), lowerpath(path),
-				O_WRONLY);
+		fd = openat(lowerdir_fd(), lowerpath(path), O_WRONLY);
 		if (fd == -1) {
 			res = -1;
 			goto out;
@@ -1253,8 +1236,9 @@ static void *projfs_loop(void *data)
 		goto out;
 	}
 
-	if (fgetxattr(fs->lowerdir_fd, USER_PROJECTION_EMPTY, NULL, 0) == -1 &&
-			errno == ENOTSUP) {
+	if (fgetxattr(fs->lowerdir_fd, USER_PROJECTION_EMPTY, NULL, 0) ==
+		    -1 &&
+	    errno == ENOTSUP) {
 		fprintf(stderr, "projfs: xattr support check on lowerdir "
 				"failed: %s: %s\n",
 			fs->lowerdir, strerror(errno));
@@ -1295,7 +1279,8 @@ static void *projfs_loop(void *data)
 		goto out_close;
 	} else if (res == 0) {
 		fprintf(stderr, "projfs: sparse files may not be supported by "
-				"lower filesystem: %s\n", fs->lowerdir);
+				"lower filesystem: %s\n",
+			fs->lowerdir);
 	} else if (res == 1) {
 		res = 0;
 	}
