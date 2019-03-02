@@ -37,7 +37,6 @@
 #include <unistd.h>
 
 #include "projfs.h"
-#include "projfs_i.h"
 
 #include <fuse3/fuse.h>
 
@@ -46,6 +45,20 @@
 
 // TODO: make this value configurable
 #define PROJ_WAIT_MSEC 5000
+
+struct projfs {
+	char *lowerdir;
+	char *mountdir;
+	struct projfs_handlers handlers;
+	void *user_data;
+	pthread_mutex_t mutex;
+	struct fuse_session *session;
+	int lowerdir_fd;
+	pthread_t thread_id;
+	int error;
+};
+
+typedef int (*projfs_handler_t)(struct projfs_event *);
 
 struct projfs_dir {
 	DIR *dir;
