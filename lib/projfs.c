@@ -73,12 +73,9 @@ static struct projfs *projfs_context_fs(void)
 /**
  * @return 0 or a negative errno
  */
-static int projfs_fuse_send_event(projfs_handler_t handler,
-				  uint64_t mask,
-				  const char *path,
-				  const char *target_path,
-				  int fd,
-				  int perm)
+static int projfs_fuse_send_event(projfs_handler_t handler, uint64_t mask,
+				  const char *path, const char *target_path,
+				  int fd, int perm)
 {
 	struct projfs_event event;
 	int err;
@@ -110,9 +107,7 @@ static int projfs_fuse_send_event(projfs_handler_t handler,
 /**
  * @return 0 or a negative errno
  */
-static int projfs_fuse_proj_event(uint64_t mask,
-				  const char *path,
-				  int fd)
+static int projfs_fuse_proj_event(uint64_t mask, const char *path, int fd)
 {
 	projfs_handler_t handler =
 		projfs_context_fs()->handlers.handle_proj_event;
@@ -124,8 +119,7 @@ static int projfs_fuse_proj_event(uint64_t mask,
 /**
  * @return 0 or a negative errno
  */
-static int projfs_fuse_notify_event(uint64_t mask,
-				    const char *path,
+static int projfs_fuse_notify_event(uint64_t mask, const char *path,
 				    const char *target_path)
 {
 	projfs_handler_t handler =
@@ -138,8 +132,7 @@ static int projfs_fuse_notify_event(uint64_t mask,
 /**
  * @return 0 or a negative errno
  */
-static int projfs_fuse_perm_event(uint64_t mask,
-				  const char *path,
+static int projfs_fuse_perm_event(uint64_t mask, const char *path,
 				  const char *target_path)
 {
 	projfs_handler_t handler =
@@ -185,8 +178,7 @@ static char *get_path_parent(char const *path)
  *             this mode
  * @return 0 or an errno
  */
-static int get_path_userdata(struct node_userdata *user,
-			     const char *path,
+static int get_path_userdata(struct node_userdata *user, const char *path,
 			     mode_t mode)
 {
 	ssize_t sz;
@@ -1068,8 +1060,8 @@ static void projfs_set_session(struct projfs *fs, struct fuse_session *se)
 }
 
 struct projfs *projfs_new(const char *lowerdir, const char *mountdir,
-		const struct projfs_handlers *handlers,
-		size_t handlers_size, void *user_data)
+			  const struct projfs_handlers *handlers,
+			  size_t handlers_size, void *user_data)
 {
 	struct projfs *fs;
 	size_t len;
