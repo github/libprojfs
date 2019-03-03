@@ -41,7 +41,6 @@
 #include <fuse3/fuse.h>
 
 #define lowerdir_fd() (projfs_context_fs()->lowerdir_fd)
-#define PROJ_DIR_MODE 0777
 
 // TODO: make this value configurable
 #define PROJ_WAIT_MSEC 5000
@@ -1445,7 +1444,7 @@ static int check_safe_rel_path(const char *path)
 	return 1;
 }
 
-int projfs_create_proj_dir(struct projfs *fs, const char *path)
+int projfs_create_proj_dir(struct projfs *fs, const char *path, mode_t mode)
 {
 	int fd;
 	char v = 1;
@@ -1454,7 +1453,7 @@ int projfs_create_proj_dir(struct projfs *fs, const char *path)
 	if (!check_safe_rel_path(path))
 		return EINVAL;
 
-	res = mkdirat(fs->lowerdir_fd, path, PROJ_DIR_MODE);
+	res = mkdirat(fs->lowerdir_fd, path, mode);
 	if (res == -1)
 		return errno;
 

@@ -124,9 +124,10 @@ void *projfs_stop(struct projfs *fs);
  *
  * @param[in] fs Projected filesystem handle.
  * @param[in] path Relative path of new directory under projfs mount point.
+ * @param[in] mode File mode with which to create the new projected directory.
  * @return Zero on success or an \p errno(3) code on failure.
  */
-int projfs_create_proj_dir(struct projfs *fs, const char *path);
+int projfs_create_proj_dir(struct projfs *fs, const char *path, mode_t mode);
 
 /**
  * Create a file whose contents will be projected until written.
