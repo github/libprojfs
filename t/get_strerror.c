@@ -32,7 +32,7 @@ int main(int argc, char *const argv[])
 
 	test_parse_opts(argc, argv, TEST_OPT_NONE, 1, 1, &errsym, "<errsym>");
 
-	if (test_parse_retsym(0, errsym, &errval) < 0 || errval > 0)
+	if (test_parse_retsym(errsym, &errval) < 0 || errval > 0)
 		test_exit_error(argv[0], "invalid errno symbol: %s", errsym);
 
 	printf("%s\n", strerror(-errval));

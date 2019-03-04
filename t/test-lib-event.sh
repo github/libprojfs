@@ -21,8 +21,6 @@ EVENT_ERR="expect.event.err"
 event_msg_notify="test event notification for"
 event_msg_perm="test permission request for"
 
-event_msg_vfs="TestNotifyOperation for"
-
 event_delete_dir="0x0000-40000400"
 event_rename_dir="0x0000-40000800"
 event_create_dir="0x0001-40000000"
@@ -31,17 +29,8 @@ event_delete_file="0x0000-00000400"
 event_rename_file="0x0000-00000800"
 event_create_file="0x0001-00000000"
 
-event_vfs_create_dir="1, 0x00000004"
-event_vfs_delete_dir="1, 0x00000010"
-event_vfs_rename_dir="1, 0x00000080"
-
-event_vfs_create_file="0, 0x00000004"
-event_vfs_delete_file="0, 0x00000010"
-event_vfs_rename_file="0, 0x00000080"
-
-# Format into "$event_msg_head", "$event_msg_tail", and "$event_err_msg"
-# log and error messages matching those output by the test mount helper
-# programs.
+# Format into "$event_msg_head" and "$event_err_msg" log and error messages
+# matching those output by the test mount helper programs.
 # If an error is expected, "$1" should be "error" and "$2" should contain
 # the errno name, e.g., "ENOMEM".  The next arguments (starting at either
 # "$3" or "$1", depending on whether an error is expected or not) should be
@@ -62,25 +51,12 @@ projfs_event_printf () {
 	eval msg=\$event_msg_"$1"
 	eval code=\$event_"$2"
 
-	if test ":$1" = ":vfs"
+	event_msg_head="  $msg $3"
+	if test ":$4" != ":"
 	then
-		eval vfs_code=\$event_vfs_"$2"
-		event_msg_head="  $msg $3"
-		if test ":$4" != ":"
-		then
-			event_msg_head="$event_msg_head, $4"
-		fi
-		event_msg_head="$event_msg_head: "
-		event_msg_tail=", $vfs_code"
-	else
-		event_msg_head="  $msg $3"
-		if test ":$4" != ":"
-		then
-			event_msg_head="$event_msg_head, $4"
-		fi
-		event_msg_head="$event_msg_head: $code, "
-		event_msg_tail=""
+		event_msg_head="$event_msg_head, $4"
 	fi
+	event_msg_head="$event_msg_head: $code, "
 
 	if test ":$err" != ":"
 	then
@@ -96,17 +72,13 @@ projfs_event_printf () {
 # Requires that projfs_event_printf has been called first to format the
 # expected messages (without the pid) and flag whether an error is expected.
 projfs_event_exec () {
-	if test ":$event_msg_tail" != ":"
-	then
-		event_msg_tail=", $1$event_msg_tail"; # prepend cmd for VFS
-	fi &&
 	if test ":$event_err_msg" = ":"
 	then
 		event_err=""
 	else
 		event_err="$EVENT_ERR"
 	fi &&
-	projfs_log_exec "$EVENT_LOG" "$event_msg_head" "$event_msg_tail" \
-		"$event_err" "$event_err_msg" "$@"
+	projfs_log_exec "$EVENT_LOG" "$event_msg_head" "$event_err" \
+		"$event_err_msg" "$@"
 }
 

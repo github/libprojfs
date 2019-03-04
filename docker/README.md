@@ -109,7 +109,7 @@ and build artifacts are preserved.
 
 The `projfs` component will mount the root of this repository at `/data/projfs` in the container. `./projfs develop
 autogen` will run `/data/projfs/autogen.sh` in the container, with the output files being placed on the Docker host.
-`./projfs develop configure` will then run `configure --enable-vfs-api`, and
+`./projfs develop configure` will then run `configure`, and
 `./projfs develop make` will run `make`, with all build artifacts again placed on the Docker host. (You'll have a
 bunch of ELF objects which you won't be able to do anything with on macOS.)
 

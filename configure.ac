@@ -57,22 +57,6 @@ AS_IF([test ":$enable_fuse_debug" = ":yes"],
   [AC_DEFINE(PROJFS_FUSE_DEBUG, 1, [Enable FUSE library debugging output])]
 )dnl
 
-libprojfs_export_regex='projfs'
-
-AC_ARG_ENABLE([vfs_api],
-  [AS_HELP_STRING([--enable-vfs-api],
-    [Enable .NET VFSForGit API])]
-)dnl
-
-AS_IF([test ":$enable_vfs_api" = ":yes"],
-  [AC_DEFINE(PROJFS_VFSAPI, 1, [Enable .NET VFSForGit API])
-   libprojfs_export_regex='(projfs|PrjFS)'
-  ]dnl
-)dnl
-
-AM_CONDITIONAL([ENABLE_VFSAPI], [test ":$enable_vfs_api" = ":yes"])
-AC_SUBST([libprojfs_export_regex])
-
 AC_CHECK_PROGS([DIFF], [diff])
 AC_ARG_VAR([DIFF], [File comparison tool])
 
@@ -126,11 +110,6 @@ AC_SUBST([pkgconfigdir])
 AC_TYPE_PID_T
 AC_TYPE_SIZE_T
 AC_TYPE_UINT64_T
-
-# TODO: for VFS API but can't be conditional; remove if VFS API migrated
-#       to VFSForGit project
-AC_HEADER_STDBOOL
-AC_TYPE_UINT16_T
 
 AC_CHECK_HEADER([pthread.h], [],
   [AC_MSG_ERROR([POSIX threads header file not found])]dnl

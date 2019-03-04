@@ -121,14 +121,6 @@ criteria).
 For more details on the planned development phases, see our
 [design document][design-process].
 
-The VFSForGit API, which is currently supported through the use of
-the `--enable-vfs-api` configuration option to libprojfs, may at some
-point refactored out of this library entirely and handled exclusively
-within the [ProjFS.Linux][projfs-linux] code in the VFSForGit project.
-
-However, for the moment it has proven efficient to keep the VFS API
-within this library while libprojfs undergoes rapid early development.
-
 ## Authors
 
 The libprojfs library is currently maintained and developed by
@@ -155,7 +147,6 @@ You can also contact the GitHub project team at
 [fuse-mod]: https://www.kernel.org/doc/Documentation/filesystems/fuse.txt
 [inotify]: https://github.com/torvalds/linux/blob/master/include/uapi/linux/inotify.h
 [libfuse]: https://github.com/libfuse/libfuse
-[projfs-linux]: https://github.com/github/VFSForGit/tree/features/linuxprototype/ProjFS.Linux
 [winprojfs]: https://docs.microsoft.com/en-us/windows/desktop/api/_projfs/
 [vfs4git]: https://github.com/Microsoft/VFSForGit
 [vfs4git-mirror]: https://github.com/Microsoft/VFSForGit/tree/features/linuxprototype/MirrorProvider

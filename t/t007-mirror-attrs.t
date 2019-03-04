@@ -22,7 +22,7 @@ Check that chmod, chown and utimens function as expected.
 
 . ./test-lib.sh
 
-projfs_start test_projfs_simple source target || exit 1
+projfs_start test_simple source target || exit 1
 
 test_expect_success 'check for multiple groups owned by the user' '
 	ids=$(id -nG | tr " " "\\n") &&

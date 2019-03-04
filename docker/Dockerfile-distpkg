@@ -23,7 +23,7 @@ COPY . /tmp/$LIBPROJFS_REPO
 
 WORKDIR /tmp/$LIBPROJFS_REPO
 RUN ./autogen.sh
-RUN ./configure --enable-vfs-api
+RUN ./configure
 RUN make -j "$(nproc)" distclean || true
 RUN make -j "$(nproc)" dist
 
@@ -45,8 +45,7 @@ RUN \
                 --libexecdir="\${prefix}/lib/$DEB_HOST_MULTIARCH" \
                 --sysconfdir=/etc \
                 --disable-static \
-                --enable-shared \
-                --enable-vfs-api
+                --enable-shared
 RUN make -j "$(nproc)" install
 
 WORKDIR /tmp

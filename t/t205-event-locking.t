@@ -23,7 +23,7 @@ given path.
 
 . ./test-lib.sh
 
-projfs_start test_projfs_handlers source target --timeout 1 --lock-file lock || exit 1
+projfs_start test_handlers source target --timeout 1 --lock-file lock || exit 1
 
 # wait_mount will trigger a projection, so we need to reset it to empty
 setfattr -n user.projection.empty -v 0x01 source
@@ -35,7 +35,7 @@ test_expect_success 'test concurrent access does not trigger failure' '
 projfs_stop || exit 1
 
 test_expect_success 'check no event error messages' '
-	test_must_be_empty test_projfs_handlers.err
+	test_must_be_empty test_handlers.err
 '
 
 test_done

@@ -27,24 +27,14 @@ test_common = test_common.c \
 	      $(top_srcdir)/include/projfs_notify.h
 
 check_PROGRAMS = get_strerror \
-		 test_projfs_handlers \
-		 test_projfs_simple \
+		 test_handlers \
+		 test_simple \
 		 wait_mount
 
 get_strerror_SOURCES = get_strerror.c $(test_common)
-test_projfs_handlers_SOURCES = test_projfs_handlers.c $(test_common)
-test_projfs_simple_SOURCES = test_projfs_simple.c $(test_common)
+test_handlers_SOURCES = test_handlers.c $(test_common)
+test_simple_SOURCES = test_simple.c $(test_common)
 wait_mount_SOURCES = wait_mount.c $(test_common)
-
-if ENABLE_VFSAPI
-test_vfsapi_common = $(test_common) $(top_srcdir)/include/projfs_vfsapi.h
-
-check_PROGRAMS += test_vfsapi_handlers \
-		  test_vfsapi_simple
-
-test_vfsapi_handlers_SOURCES = test_vfsapi_handlers.c $(test_vfsapi_common)
-test_vfsapi_simple_SOURCES = test_vfsapi_simple.c $(test_vfsapi_common)
-endif ENABLE_VFSAPI
 
 TESTS = t000-mirror-read.t \
 	t001-mirror-mkdir.t \
@@ -60,17 +50,6 @@ TESTS = t000-mirror-read.t \
 	t203-event-null.t \
 	t204-event-allow.t \
 	t205-event-locking.t
-
-if ENABLE_VFSAPI
-TESTS += t500-vfs-mirror-basic.t \
-	 t700-vfs-event-ok.t \
-	 t701-vfs-event-err.t \
-	 t702-vfs-event-deny.t \
-	 t703-vfs-event-null.t \
-	 t704-vfs-event-allow.t
-else !ENABLE_VFSAPI
-SKIP_TESTS = t[5-9]??
-endif !ENABLE_VFSAPI
 
 EXTRA_DIST = README.md chainlint.sed clean_test_dirs.sh \
 	     test-lib.sh test-lib-event.sh test-lib-functions.sh $(TESTS)
@@ -96,9 +75,8 @@ prove: clean-mounts $(check_PROGRAMS)
 		then \
 			prove_dir=""; \
 		fi && \
-		PROJFS_SKIP_TESTS="$(SKIP_TESTS) $$PROJFS_SKIP_TESTS" \
-			$(PROVE) --exec $(SHELL) \
-				$(PROJFS_PROVE_OPTS) $$prove_dir; \
+		$(PROVE) --exec $(SHELL) \
+			$(PROJFS_PROVE_OPTS) $$prove_dir; \
 		./clean_test_dirs.sh; \
 	else \
 		echo "No 'prove' TAP harness available." && exit 1; \
