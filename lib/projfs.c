@@ -37,15 +37,27 @@
 #include <unistd.h>
 
 #include "projfs.h"
-#include "projfs_i.h"
 
 #include <fuse3/fuse.h>
 
 #define lowerdir_fd() (projfs_context_fs()->lowerdir_fd)
-#define PROJ_DIR_MODE 0777
 
 // TODO: make this value configurable
 #define PROJ_WAIT_MSEC 5000
+
+struct projfs {
+	char *lowerdir;
+	char *mountdir;
+	struct projfs_handlers handlers;
+	void *user_data;
+	pthread_mutex_t mutex;
+	struct fuse_session *session;
+	int lowerdir_fd;
+	pthread_t thread_id;
+	int error;
+};
+
+typedef int (*projfs_handler_t)(struct projfs_event *);
 
 struct projfs_dir {
 	DIR *dir;
@@ -1432,12 +1444,30 @@ static int check_safe_rel_path(const char *path)
 	return 1;
 }
 
-int projfs_create_proj_dir(struct projfs *fs, const char *path)
+int projfs_create_proj_dir(struct projfs *fs, const char *path, mode_t mode)
 {
+	int fd;
+	char v = 1;
+	int res, err;
+
 	if (!check_safe_rel_path(path))
 		return EINVAL;
 
-	return _projfs_make_dir(fs, path, PROJ_DIR_MODE, 1);
+	res = mkdirat(fs->lowerdir_fd, path, mode);
+	if (res == -1)
+		return errno;
+
+	fd = openat(lowerdir_fd(), path, O_RDONLY);
+	if (fd == -1)
+		return errno;
+
+	res = fsetxattr(fd, USER_PROJECTION_EMPTY, &v, 1, 0);
+	err = errno;
+	close(fd);
+	if (res == -1)
+		return err;
+
+	return 0;
 }
 
 int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
@@ -1492,34 +1522,6 @@ int projfs_create_proj_symlink(struct projfs *fs, const char *path,
 	if (res == -1)
 		return errno;
 
-	return 0;
-}
-
-int _projfs_make_dir(struct projfs *fs, const char *path, mode_t mode,
-                     uint8_t proj_flag)
-{
-	int res;
-
-	(void)fs;
-
-	res = mkdirat(fs->lowerdir_fd, path, mode);
-	if (res == -1)
-		return errno;
-	if (proj_flag) {
-		char v = 1;
-		int err;
-		int fd;
-
-		fd = openat(lowerdir_fd(), path, O_RDONLY);
-		if (fd == -1)
-			return errno;
-
-		res = fsetxattr(fd, USER_PROJECTION_EMPTY, &v, 1, 0);
-		err = errno;
-		close(fd);
-		if (res == -1)
-			return err;
-	}
 	return 0;
 }
 
