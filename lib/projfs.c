@@ -1143,6 +1143,15 @@ void *projfs_get_user_data(struct projfs *fs)
 	return fs->user_data;
 }
 
+static int set_xattr_empty(int fd, int excl)
+{
+	int flags = excl ? XATTR_CREATE : 0;
+
+	if (fsetxattr(fd, USER_PROJECTION_EMPTY, "y", 1, flags) == -1)
+		return errno;
+	return 0;
+}
+
 /**
  * @return 1 if dir is empty, 0 if not, -1 if an error occurred (errno set)
  */
@@ -1240,7 +1249,6 @@ static void *projfs_loop(void *data)
 	struct fuse_session *se;
 	int res = 0;
 	int err;
-	char v = 1;
 
 	// TODO: verify the way we're setting signal handlers on the underlying
 	// session works correctly when using the high-level API
@@ -1279,12 +1287,11 @@ static void *projfs_loop(void *data)
 
 	if (res == 1) {
 		/* dir is empty */
-		res = fsetxattr(
-			fs->lowerdir_fd, USER_PROJECTION_EMPTY, &v, 1, 0);
-		if (res == -1) {
+		err = set_xattr_empty(fs->lowerdir_fd, 0);
+		if (err > 0) {
 			fprintf(stderr, "projfs: could not set projection "
 					"xattr: %s: %s\n",
-				fs->lowerdir, strerror(errno));
+				fs->lowerdir, strerror(err));
 			res = 4;
 			goto out_close;
 		}
@@ -1447,34 +1454,28 @@ static int check_safe_rel_path(const char *path)
 int projfs_create_proj_dir(struct projfs *fs, const char *path, mode_t mode)
 {
 	int fd;
-	char v = 1;
-	int res, err;
+	int res;
 
 	if (!check_safe_rel_path(path))
 		return EINVAL;
 
-	res = mkdirat(fs->lowerdir_fd, path, mode);
-	if (res == -1)
+	if (mkdirat(fs->lowerdir_fd, path, mode) == -1)
 		return errno;
 
 	fd = openat(lowerdir_fd(), path, O_RDONLY);
 	if (fd == -1)
 		return errno;
 
-	res = fsetxattr(fd, USER_PROJECTION_EMPTY, &v, 1, 0);
-	err = errno;
-	close(fd);
-	if (res == -1)
-		return err;
+	res = set_xattr_empty(fd, 1);
 
-	return 0;
+	close(fd);
+	return res;
 }
 
 int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
                             mode_t mode)
 {
 	int fd, res;
-	char v = 1;
 
 	if (!check_safe_rel_path(path))
 		return EINVAL;
@@ -1483,31 +1484,18 @@ int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
 	if (fd == -1)
 		return errno;
 
-	res = ftruncate(fd, size);
-	if (res == -1) {
+	if (ftruncate(fd, size) == -1) {
 		res = errno;
-		close(fd);
-
-		/* best effort */
-		(void)unlinkat(fs->lowerdir_fd, path, 0);
-
-		return res;
+		goto out_close;
 	}
 
-	res = fsetxattr(fd, USER_PROJECTION_EMPTY, &v, 1, 0);
-	if (res == -1) {
-		res = errno;
-		close(fd);
+	res = set_xattr_empty(fd, 1);
 
-		/* best effort */
-		(void)unlinkat(fs->lowerdir_fd, path, 0);
-
-		return res;
-	}
-
+out_close:
 	close(fd);
-
-	return 0;
+	if (res > 0)
+		unlinkat(fs->lowerdir_fd, path, 0);	// best effort
+	return res;
 }
 
 int projfs_create_proj_symlink(struct projfs *fs, const char *path,
