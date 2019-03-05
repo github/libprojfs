@@ -1143,9 +1143,11 @@ void *projfs_get_user_data(struct projfs *fs)
 	return fs->user_data;
 }
 
-static int set_xattr_empty(int fd)
+static int set_xattr_empty(int fd, int excl)
 {
-	if (fsetxattr(fd, USER_PROJECTION_EMPTY, "y", 1, XATTR_CREATE) == -1)
+	int flags = excl ? XATTR_CREATE : 0;
+
+	if (fsetxattr(fd, USER_PROJECTION_EMPTY, "y", 1, flags) == -1)
 		return errno;
 	return 0;
 }
@@ -1285,7 +1287,7 @@ static void *projfs_loop(void *data)
 
 	if (res == 1) {
 		/* dir is empty */
-		err = set_xattr_empty(fs->lowerdir_fd);
+		err = set_xattr_empty(fs->lowerdir_fd, 0);
 		if (err > 0) {
 			fprintf(stderr, "projfs: could not set projection "
 					"xattr: %s: %s\n",
@@ -1464,7 +1466,7 @@ int projfs_create_proj_dir(struct projfs *fs, const char *path, mode_t mode)
 	if (fd == -1)
 		return errno;
 
-	res = set_xattr_empty(fd);
+	res = set_xattr_empty(fd, 1);
 
 	close(fd);
 	return res;
@@ -1487,7 +1489,7 @@ int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
 		goto out_close;
 	}
 
-	res = set_xattr_empty(fd);
+	res = set_xattr_empty(fd, 1);
 
 out_close:
 	close(fd);
