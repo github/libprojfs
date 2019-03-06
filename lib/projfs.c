@@ -1512,16 +1512,3 @@ int projfs_create_proj_symlink(struct projfs *fs, const char *path,
 
 	return 0;
 }
-
-int projfs_write_file_contents(int fd, const void *bytes, unsigned int count)
-{
-	while (count) {
-		ssize_t res = write(fd, bytes, count);
-		if (res == -1)
-			return errno;
-		bytes = (char *)bytes + res;
-		count -= res;
-	}
-
-	return 0;
-}
