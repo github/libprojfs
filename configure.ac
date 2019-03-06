@@ -125,6 +125,10 @@ AC_CHECK_HEADER([sys/inotify.h], [],
   [AC_MSG_ERROR([Linux inotify header file not found])]dnl
 )dnl
 
+AC_CHECK_HEADER([sys/sendfile.h], [],
+  [AC_MSG_ERROR([Linux sendfile header file not found])]dnl
+)dnl
+
 AC_CHECK_HEADER([attr/xattr.h], [],
   [AC_MSG_ERROR([Extended attributes header file not found])]dnl
 )dnl
