@@ -24,6 +24,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/sendfile.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "test_common.h"
@@ -96,11 +98,42 @@ find_projlist_entry(struct test_projlist_entry *projlist, const char *name)
 
 static int fill_proj_file(int fd, const char *src_path)
 {
+	int src_fd;
+	struct stat st;
+	off_t len;
 	int ret = 0;
 
-	// TODO: call projfs_write_file_contents(fd, *bytes, count)
-	(void)src_path;
+	src_fd = open(src_path, O_RDONLY);
+	if (src_fd == -1) {
+		fprintf(stderr, "unable to open source file: %s: %s\n",
+			src_path, strerror(errno));
+		return errno;
+	}
 
+	if (fstat(src_fd, &st) == -1) {
+		ret = errno;
+		fprintf(stderr, "unable to stat source file: %s: %s\n",
+			src_path, strerror(ret));
+		goto out_close;
+	}
+
+	len = st.st_size;
+	while (len > 0) {
+		ssize_t off;
+
+		off = sendfile(fd, src_fd, NULL, len);
+		if (off == -1) {
+			ret = errno;
+			fprintf(stderr, "unable to copy source file: %s: %s\n",
+				src_path, strerror(ret));
+			break;
+		}
+
+		len -= off;
+	}
+
+out_close:
+	close(src_fd);
 	return ret;
 }
 
@@ -150,8 +183,9 @@ static int test_proj_event(struct projfs_event *event)
 
 		ret = fill_proj_file(event->fd, entry->lnk_or_src);
 		if (ret != 0) {
-			fprintf(stderr, "unable to fill projected file: %s\n",
-				event->path);
+			fprintf(stderr, "unable to copy data into "
+					"projected file: %s, %s\n",
+				event->path, entry->lnk_or_src);
 		}
 	}
 
