@@ -57,8 +57,6 @@ struct projfs {
 	int error;
 };
 
-typedef int (*projfs_handler_t)(struct projfs_event *);
-
 struct projfs_dir {
 	DIR *dir;
 	long loc;
@@ -73,9 +71,9 @@ static struct projfs *projfs_context_fs(void)
 /**
  * @return 0 or a negative errno
  */
-static int projfs_fuse_send_event(projfs_handler_t handler, uint64_t mask,
-				  const char *path, const char *target_path,
-				  int fd, int perm)
+static int projfs_fuse_send_event(int (*handler)(struct projfs_event *),
+				  uint64_t mask, const char *path,
+				  const char *target_path, int fd, int perm)
 {
 	struct projfs_event event;
 	int err;
@@ -109,7 +107,7 @@ static int projfs_fuse_send_event(projfs_handler_t handler, uint64_t mask,
  */
 static int projfs_fuse_proj_event(uint64_t mask, const char *path, int fd)
 {
-	projfs_handler_t handler =
+	int (*handler)(struct projfs_event *) =
 		projfs_context_fs()->handlers.handle_proj_event;
 
 	return projfs_fuse_send_event(handler, mask, path, NULL, fd, 0);
@@ -121,7 +119,7 @@ static int projfs_fuse_proj_event(uint64_t mask, const char *path, int fd)
 static int projfs_fuse_notify_event(uint64_t mask, const char *path,
 				    const char *target_path)
 {
-	projfs_handler_t handler =
+	int (*handler)(struct projfs_event *) =
 		projfs_context_fs()->handlers.handle_notify_event;
 
 	return projfs_fuse_send_event(handler, mask,
@@ -134,7 +132,7 @@ static int projfs_fuse_notify_event(uint64_t mask, const char *path,
 static int projfs_fuse_perm_event(uint64_t mask, const char *path,
 				  const char *target_path)
 {
-	projfs_handler_t handler =
+	int (*handler)(struct projfs_event *) =
 		projfs_context_fs()->handlers.handle_perm_event;
 
 	return projfs_fuse_send_event(handler, mask,
