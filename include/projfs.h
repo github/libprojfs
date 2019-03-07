@@ -52,6 +52,13 @@ struct projfs_event {
 	int fd;				/* file descriptor for projection */
 };
 
+/** File projection attribute */
+struct projfs_attr {
+	const char *name;		/* alphanumeric plus internal punct */
+	void *value;			/* binary data, or NULL */
+	ssize_t size;			/* length of the value data, or -1 */
+};
+
 /**
  * Filesystem event handlers
  *
@@ -125,9 +132,13 @@ void *projfs_stop(struct projfs *fs);
  * @param[in] fs Projected filesystem handle.
  * @param[in] path Relative path of new directory under projfs mount point.
  * @param[in] mode File mode with which to create the new projected directory.
+ * @param[in] attrs Array of user-defined projection attributes to be stored
+ *                  with the new directory; may be NULL if nattrs is zero.
+ * @param[in] nattrs Number of items in the attrs array.
  * @return Zero on success or an \p errno(3) code on failure.
  */
-int projfs_create_proj_dir(struct projfs *fs, const char *path, mode_t mode);
+int projfs_create_proj_dir(struct projfs *fs, const char *path, mode_t mode,
+			   struct projfs_attr *attrs, unsigned int nattrs);
 
 /**
  * Create a file whose contents will be projected until written.
@@ -136,22 +147,72 @@ int projfs_create_proj_dir(struct projfs *fs, const char *path, mode_t mode);
  * @param[in] path Relative path of new file under projfs mount point.
  * @param[in] size File size to be projected until file is written.
  * @param[in] mode File mode with which to create the new projected file.
- *	TODO: add extra arg for private user data
+ * @param[in] attrs Array of user-defined projection attributes to be stored
+ *                  with the new file; may be NULL if nattrs is zero.
+ * @param[in] nattrs Number of items in the attrs array.
  * @return Zero on success or an \p errno(3) code on failure.
  */
 int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
-			    mode_t mode);
+			    mode_t mode, struct projfs_attr *attrs,
+			    unsigned int nattrs);
 
 /**
  * Create a symlink with the given target.
  *
  * @param[in] fs Projected filesystem handle.
- * @param[in] path Relative path of new file under projfs mount point.
+ * @param[in] path Relative path of new symlink under projfs mount point.
  * @param[in] target The target of the symlink.
  * @return Zero on success or an \p errno(3) code on failure.
  */
 int projfs_create_proj_symlink(struct projfs *fs, const char *path,
 			       const char *target);
+
+/**
+ * Read projection attributes of a file or directory.
+ *
+ * @param[in] fs Projected filesystem handle.
+ * @param[in] path Relative path of the file or directory.
+ * @param[in] attrs Array of requested projection attributes to be read;
+ *                  for each item, name must be defined, and the value and
+ *                  size fields must specify a writable buffer and its length.
+ * @param[in] nattrs Number of items in the attrs array.
+ * @return Zero on success or an \p errno(3) code on failure.
+ * @note When a requested attribute name matches a defined attribute of the
+ *       file or directory, the attribute's value will be written into the
+ *       corresponding value field and its length recorded in the size field.
+ *       If a provided value buffer is insufficient to store the full
+ *       attribute value, ERANGE will be returned.
+ *       When a requested attribute name matches no defined attributes,
+ *       the value buffer will be left unchanged, and the corresponding
+ *       size field will be set to -1.
+ */
+int projfs_get_attrs(struct projfs *fs, const char *path,
+		     struct projfs_attr *attrs, unsigned int nattrs);
+
+/**
+ * Write or remove projection attributes of a file or directory.
+ *
+ * @param[in] fs Projected filesystem handle.
+ * @param[in] path Relative path of the file or directory.
+ * @param[in] attrs Array of projection attributes to be written;
+ *                  for each item, name must be defined, and the value and
+ *                  size fields must specify the value data and its length,
+ *                  or be set to NULL and 0 to delete the attribute.
+ * @param[in] nattrs Number of items in the attrs array.
+ * @return Zero on success or an \p errno(3) code on failure.
+ * @note When a requested attribute name matches an existing attribute of the
+ *       file or directory, the supplied value will replace the prior one,
+ *       unless the supplied value is NULL or its size is 0, in which case
+ *       the attribute will be removed.
+ *       However, if the requested attribute name matches a reserved name,
+ *       EINVAL will be returned.
+ *       When a requested attribute name matches no defined attributes, and
+ *       the supplied value is non-NULL and its size non-zero, a new attribute
+ *       will be created; otherwise, the size field will be set to -1.
+ *       In all cases, the supplied value data will not be altered.
+ */
+int projfs_set_attrs(struct projfs *fs, const char *path,
+		     struct projfs_attr *attrs, unsigned int nattrs);
 
 #ifdef __cplusplus
 }

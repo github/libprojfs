@@ -1451,10 +1451,14 @@ static int check_safe_rel_path(const char *path)
 	return 1;
 }
 
-int projfs_create_proj_dir(struct projfs *fs, const char *path, mode_t mode)
+int projfs_create_proj_dir(struct projfs *fs, const char *path, mode_t mode,
+			   struct projfs_attr *attrs, unsigned int nattrs)
 {
 	int fd;
 	int res;
+
+	(void)attrs;
+	(void)nattrs;
 
 	if (!check_safe_rel_path(path))
 		return EINVAL;
@@ -1473,9 +1477,13 @@ int projfs_create_proj_dir(struct projfs *fs, const char *path, mode_t mode)
 }
 
 int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
-                            mode_t mode)
+                            mode_t mode, struct projfs_attr *attrs,
+			    unsigned int nattrs)
 {
 	int fd, res;
+
+	(void)attrs;
+	(void)nattrs;
 
 	if (!check_safe_rel_path(path))
 		return EINVAL;
