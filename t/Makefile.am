@@ -54,7 +54,8 @@ TESTS = c000-check-projlist.t \
 	t202-event-deny.t \
 	t203-event-null.t \
 	t204-event-allow.t \
-	t205-event-locking.t
+	t205-event-locking.t \
+	t600-projection-dirs.t
 
 EXTRA_DIST = README.md chainlint.sed clean_test_dirs.sh \
 	     test-lib.sh test-lib-event.sh test-lib-functions.sh $(TESTS)
