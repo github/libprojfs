@@ -1636,3 +1636,47 @@ int projfs_create_proj_symlink(struct projfs *fs, const char *path,
 
 	return 0;
 }
+
+static int iter_attrs(struct projfs *fs, const char *path,
+		      struct projfs_attr *attrs, unsigned int nattrs,
+		      unsigned int flags)
+{
+	int fd, res;
+	struct stat st;
+
+	if (!check_safe_rel_path(path) || attrs == NULL)
+		return EINVAL;
+
+	if (nattrs == 0)
+		return 0;
+
+	fd = openat(lowerdir_fd(), path, O_RDONLY);
+	if (fd == -1)
+		return errno;
+
+	if (fstat(fd, &st) == -1) {
+		res = errno;
+		goto out_close;
+	}
+
+	if (S_ISDIR(st.st_mode) || S_ISREG(st.st_mode))
+		res = iter_user_xattrs(fd, attrs, nattrs, flags);
+	else
+		res = EPERM;
+
+out_close:
+	close(fd);
+	return res;
+}
+
+int projfs_get_attrs(struct projfs *fs, const char *path,
+		     struct projfs_attr *attrs, unsigned int nattrs)
+{
+	return iter_attrs(fs, path, attrs, nattrs, PROJ_XATTR_READ);
+}
+
+int projfs_set_attrs(struct projfs *fs, const char *path,
+		     struct projfs_attr *attrs, unsigned int nattrs)
+{
+	return iter_attrs(fs, path, attrs, nattrs, PROJ_XATTR_WRITE);
+}
