@@ -149,14 +149,16 @@ static int projfs_fuse_perm_event(uint64_t mask,
 		handler, mask, path + 1, target_path, 0, 1);
 }
 
+#define PROJ_XATTR_PRE_NAME "user.projection."
+#define PROJ_XATTR_PRE_LEN 16
+#define PROJ_XATTR_EMPTY PROJ_XATTR_PRE_NAME"empty"
+
 struct node_userdata
 {
 	int fd;
 
-	uint8_t proj_flag; // USER_PROJECTION_EMPTY
+	uint8_t proj_flag;
 };
-
-#define USER_PROJECTION_EMPTY "user.projection.empty"
 
 /**
  * Return a copy of path with the last component removed (e.g. "x/y/z" will
@@ -179,7 +181,7 @@ static char *get_path_parent(char const *path)
 /**
  * Acquires a lock on path and populates the supplied node_userdata argument
  * with the open and locked fd, and proj_flag based on the
- * USER_PROJECTION_EMPTY xattr.
+ * PROJ_XATTR_EMPTY xattr.
  *
  * @param user userdata to fill out (zeroed by this function)
  * @param path path relative to lowerdir to lock and open
@@ -221,7 +223,7 @@ retry_flock:
 	}
 
 	// fill cache from xattrs
-	sz = fgetxattr(user->fd, USER_PROJECTION_EMPTY, NULL, 0);
+	sz = fgetxattr(user->fd, PROJ_XATTR_EMPTY, NULL, 0);
 	err = errno;
 	if (sz == -1 && err != ENOATTR) {
 		close(user->fd);
@@ -265,7 +267,7 @@ static int projfs_fuse_proj_locked(uint64_t event_mask,
 	if (res < 0)
 		return -res;
 
-	res = fremovexattr(user->fd, USER_PROJECTION_EMPTY);
+	res = fremovexattr(user->fd, PROJ_XATTR_EMPTY);
 	if (res == 0 || (res == -1 && errno == ENOATTR))
 		user->proj_flag = 0;
 	else
@@ -1147,7 +1149,7 @@ static int set_xattr_empty(int fd, int excl)
 {
 	int flags = excl ? XATTR_CREATE : 0;
 
-	if (fsetxattr(fd, USER_PROJECTION_EMPTY, "y", 1, flags) == -1)
+	if (fsetxattr(fd, PROJ_XATTR_EMPTY, "y", 1, flags) == -1)
 		return errno;
 	return 0;
 }
@@ -1264,7 +1266,7 @@ static void *projfs_loop(void *data)
 		goto out;
 	}
 
-	if (fgetxattr(fs->lowerdir_fd, USER_PROJECTION_EMPTY, NULL, 0) == -1 &&
+	if (fgetxattr(fs->lowerdir_fd, PROJ_XATTR_EMPTY, NULL, 0) == -1 &&
 			errno == ENOTSUP) {
 		fprintf(stderr, "projfs: xattr support check on lowerdir "
 		                "failed: %s: %s\n",
