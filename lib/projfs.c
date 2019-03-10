@@ -153,6 +153,15 @@ static int projfs_fuse_perm_event(uint64_t mask,
 #define PROJ_XATTR_PRE_LEN 16
 #define PROJ_XATTR_EMPTY PROJ_XATTR_PRE_NAME"empty"
 
+static int check_xattr_reserved(const char *name)
+{
+	if (strcmp(name, PROJ_XATTR_EMPTY) == 0)
+		return 0;
+	// add other reserved names as they are defined
+
+	return 1;
+}
+
 static int get_xattr(int fd, const char *name, void *value, ssize_t *size)
 {
 	if (fgetxattr(fd, name, value, *size) == -1) {
@@ -1489,14 +1498,66 @@ static int check_safe_rel_path(const char *path)
 	return 1;
 }
 
+#define PROJ_XATTR_READ 0x00
+#define PROJ_XATTR_WRITE 0x01
+#define PROJ_XATTR_CREATE 0x02
+
+static char *make_user_xattr_name(const char *segments, unsigned int flags)
+{
+	char *name;
+
+	name = malloc(PROJ_XATTR_PRE_LEN + strlen(segments) + 1);
+	if (name == NULL)
+		return NULL;
+
+	memcpy(name, PROJ_XATTR_PRE_NAME, PROJ_XATTR_PRE_LEN);
+	strcpy(name + PROJ_XATTR_PRE_LEN, segments);
+
+	if (flags == PROJ_XATTR_READ || check_xattr_reserved(name))
+		return name;
+
+	free(name);
+	errno = EPERM;
+	return NULL;
+}
+
+static int iter_user_xattrs(int fd, struct projfs_attr *attrs,
+			    unsigned int nattrs, unsigned int flags)
+{
+	int set_flags = (flags & PROJ_XATTR_CREATE) ? XATTR_CREATE : 0;
+	int res;
+	unsigned int i;
+
+	if (attrs == NULL)
+		return 0;
+
+	for (i = 0; i < nattrs; i++) {
+		char *name;
+		struct projfs_attr *attr = &attrs[i];
+
+		name = make_user_xattr_name(attr->name, flags);
+		if (name == NULL)
+			return errno;
+
+		if (flags & PROJ_XATTR_WRITE) {
+			res = set_xattr(fd, name, attr->value, &attr->size,
+					set_flags);
+		} else {
+			res = get_xattr(fd, name, attr->value, &attr->size);
+		}
+		if (res == -1)
+			return errno;
+
+		free(name);
+	}
+
+	return 0;
+}
+
 int projfs_create_proj_dir(struct projfs *fs, const char *path, mode_t mode,
 			   struct projfs_attr *attrs, unsigned int nattrs)
 {
-	int fd;
-	int res;
-
-	(void)attrs;
-	(void)nattrs;
+	int fd, res;
 
 	if (!check_safe_rel_path(path))
 		return EINVAL;
@@ -1508,9 +1569,15 @@ int projfs_create_proj_dir(struct projfs *fs, const char *path, mode_t mode,
 	if (fd == -1)
 		return errno;
 
-	if (set_xattr_empty(fd, XATTR_CREATE) == -1)
+	if (set_xattr_empty(fd, XATTR_CREATE) == -1) {
 		res = errno;
+		goto out_close;
+	}
 
+	res = iter_user_xattrs(fd, attrs, nattrs,
+			       PROJ_XATTR_WRITE | PROJ_XATTR_CREATE);
+
+out_close:
 	close(fd);
 	return res;
 }
@@ -1520,9 +1587,6 @@ int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
 			    unsigned int nattrs)
 {
 	int fd, res;
-
-	(void)attrs;
-	(void)nattrs;
 
 	if (!check_safe_rel_path(path))
 		return EINVAL;
@@ -1536,8 +1600,13 @@ int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
 		goto out_close;
 	}
 
-	if (set_xattr_empty(fd, XATTR_CREATE) == -1)
+	if (set_xattr_empty(fd, XATTR_CREATE) == -1) {
 		res = errno;
+		goto out_close;
+	}
+
+	res = iter_user_xattrs(fd, attrs, nattrs,
+			       PROJ_XATTR_WRITE | PROJ_XATTR_CREATE);
 
 out_close:
 	close(fd);
