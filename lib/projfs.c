@@ -70,6 +70,7 @@ static struct projfs *projfs_context_fs(void)
 	return (struct projfs *)fuse_get_context()->private_data;
 }
 
+//// TODO: merge into others below
 /**
  * @return 0 or a negative errno
  */
@@ -152,6 +153,14 @@ static int projfs_fuse_perm_event(uint64_t mask,
 #define PROJ_XATTR_PRE_NAME "user.projection."
 #define PROJ_XATTR_PRE_LEN 16
 #define PROJ_XATTR_EMPTY PROJ_XATTR_PRE_NAME"empty"
+
+static int check_xattr_prefix(const char *name)
+{
+	if (strncmp(name, PROJ_XATTR_PRE_NAME, PROJ_XATTR_PRE_LEN) == 0)
+		return 0;
+
+	return 1;
+}
 
 static int check_xattr_reserved(const char *name)
 {
@@ -943,9 +952,10 @@ static int projfs_op_setxattr(char const *path, char const *name,
 	int err = 0;
 	int fd;
 
-	path = lowerpath(path);
+	if (!check_xattr_prefix(name))
+		return -EPERM;
 
-	// TODO: filter user.projection.* attrs
+	path = lowerpath(path);
 
 	res = projfs_fuse_proj_dir("setxattr", path, 1);
 	if (res)
@@ -973,8 +983,6 @@ static int projfs_op_getxattr(char const *path, char const *name,
 
 	path = lowerpath(path);
 
-	// TODO: filter user.projection.* attrs
-
 	res = projfs_fuse_proj_dir("getxattr", path, 1);
 	if (res)
 		return -res;
@@ -1000,8 +1008,6 @@ static int projfs_op_listxattr(char const *path, char *list, size_t size)
 
 	path = lowerpath(path);
 
-	// TODO: filter user.projection.* attrs
-
 	res = projfs_fuse_proj_dir("listxattr", path, 1);
 	if (res)
 		return -res;
@@ -1025,9 +1031,10 @@ static int projfs_op_removexattr(char const *path, char const *name)
 	int err = 0;
 	int fd;
 
-	path = lowerpath(path);
+	if (!check_xattr_prefix(name))
+		return -EPERM;
 
-	// TODO: filter user.projection.* attrs
+	path = lowerpath(path);
 
 	res = projfs_fuse_proj_dir("removexattr", path, 1);
 	if (res)
