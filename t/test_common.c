@@ -70,7 +70,7 @@ static const struct option all_long_opts[] = {
 	{ "retval", required_argument, NULL, TEST_OPT_NUM_RETVAL },
 	{ "retval-file", required_argument, NULL, TEST_OPT_NUM_RETFILE },
 	{ "timeout", required_argument, NULL, TEST_OPT_NUM_TIMEOUT },
-	{ "lock-file", required_argument, NULL, TEST_OPT_NUM_LOCKFILE },
+	{ "lock-file", required_argument, NULL, TEST_OPT_NUM_LOCKFILE }
 };
 
 static const char *const all_mount_opts[] = {
@@ -90,7 +90,7 @@ static const struct opt_usage all_opts_usage[] = {
 	{ "allow|deny|null|<error>", 1 },
 	{ "<retval-file>", 1 },
 	{ "<max-seconds>", 1 },
-	{ "<lock-file>", 1 },
+	{ "<lock-file>", 1 }
 };
 
 /* option values */
@@ -212,11 +212,11 @@ static void read_retfile(int *retval, unsigned int *flags)
 
 	errno = 0;
 	if (fgets(retsym, sizeof(retsym), file) != NULL) {
-		char *c;
+		char *s;
 
-		c = strchr(retsym, '\n');
-		if (c != NULL)
-			*c = '\0';
+		s = strchr(retsym, '\n');
+		if (s != NULL)
+			*s = '\0';
 
 		if (test_parse_retsym(retsym, retval) < 0) {
 			warnx("invalid symbol in retval file: %s: %s",
@@ -254,7 +254,7 @@ static struct option *get_long_opts(unsigned int opt_flags)
 
 	long_opts = calloc(num_opts + 1, sizeof(struct option));
 	if (long_opts == NULL) {
-		fprintf(stderr, "unable to get options array: %s\n",
+		fprintf(stderr, "unable to allocate options array: %s\n",
 			strerror(errno));
 		exit(EXIT_FAILURE);
 	}
@@ -438,41 +438,41 @@ unsigned int test_get_opts(unsigned int opt_flags, ...)
 		ret_flags |= ret_flag;
 
 		switch (opt_flag) {
-			case TEST_OPT_RETVAL:
-				i = va_arg(ap, int*);
-				f = va_arg(ap, unsigned int*);
-				*f = TEST_VAL_UNSET | TEST_FILE_NONE;
-				if (ret_flag != TEST_OPT_NONE) {
-					*i = optval_retval;
-					*f |= TEST_VAL_SET;
-				} else if ((opt_set_flags & TEST_OPT_RETFILE)
-					   != TEST_OPT_NONE) {
-					read_retfile(i, f);
-					ret_flags |= opt_flag;
-				}
-				break;
+		case TEST_OPT_RETVAL:
+			i = va_arg(ap, int*);
+			f = va_arg(ap, unsigned int*);
+			*f = TEST_VAL_UNSET | TEST_FILE_NONE;
+			if (ret_flag != TEST_OPT_NONE) {
+				*i = optval_retval;
+				*f |= TEST_VAL_SET;
+			} else if ((opt_set_flags & TEST_OPT_RETFILE)
+				   != TEST_OPT_NONE) {
+				read_retfile(i, f);
+				ret_flags |= opt_flag;
+			}
+			break;
 
-			case TEST_OPT_RETFILE:
-				s = va_arg(ap, const char**);
-				if (ret_flag != TEST_OPT_NONE)
-					*s = optval_retfile;
-				break;
+		case TEST_OPT_RETFILE:
+			s = va_arg(ap, const char**);
+			if (ret_flag != TEST_OPT_NONE)
+				*s = optval_retfile;
+			break;
 
-			case TEST_OPT_TIMEOUT:
-				l = va_arg(ap, long int*);
-				if (ret_flag != TEST_OPT_NONE)
-					*l = optval_timeout;
-				break;
+		case TEST_OPT_TIMEOUT:
+			l = va_arg(ap, long int*);
+			if (ret_flag != TEST_OPT_NONE)
+				*l = optval_timeout;
+			break;
 
-			case TEST_OPT_LOCKFILE:
-				s = va_arg(ap, const char**);
-				if (ret_flag != TEST_OPT_NONE)
-					*s = optval_lockfile;
-				break;
+		case TEST_OPT_LOCKFILE:
+			s = va_arg(ap, const char**);
+			if (ret_flag != TEST_OPT_NONE)
+				*s = optval_lockfile;
+			break;
 
-			default:
-				errx(EXIT_FAILURE,
-				     "unknown option flag: %u", opt_flag);
+		default:
+			errx(EXIT_FAILURE,
+			     "unknown option flag: %u", opt_flag);
 		}
 	}
 
