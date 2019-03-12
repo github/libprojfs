@@ -178,6 +178,7 @@ static int test_proj_event(struct projfs_event *event)
 			fprintf(stderr, "no matching projection list entry "
 					"for projected file: %s\n",
 				event->path);
+			ret = ENOENT;
 			goto out_opts;
 		}
 

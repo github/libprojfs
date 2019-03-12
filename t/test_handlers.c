@@ -32,7 +32,8 @@ static int test_handle_event(struct projfs_event *event, const char *desc,
 {
 	unsigned int opt_flags, ret_flags;
 	const char *retfile, *lockfile = NULL;
-	int ret, timeout = 0, fd = 0, res;
+	int timeout = 0, fd = 0;
+	int ret;
 
 	if (proj && (event->mask & ~PROJFS_ONDIR) != PROJFS_CREATE_SELF) {
 		fprintf(stderr, "unknown projection flags\n");
@@ -58,10 +59,10 @@ static int test_handle_event(struct projfs_event *event, const char *desc,
 
 	if (lockfile) {
 		fd = open(lockfile, O_CREAT | O_EXCL | O_RDWR, 0600);
-		if (fd == -1 && errno == EEXIST)
-			return -EEXIST;
-		else if (fd == -1)
-			return -EINVAL;
+		if (fd == -1) {
+			ret = -errno;
+			goto out_opts;
+		}
 	}
 
 	if (timeout)
@@ -69,9 +70,10 @@ static int test_handle_event(struct projfs_event *event, const char *desc,
 
 	if (lockfile) {
 		close(fd);
-		res = unlink(lockfile);
-		if (res == -1)
-			return -EINVAL;
+		if (unlink(lockfile) == -1) {
+			ret = -errno;
+			goto out_opts;
+		}
 	}
 
 	if ((ret_flags & TEST_VAL_SET) == TEST_VAL_UNSET)
@@ -79,6 +81,7 @@ static int test_handle_event(struct projfs_event *event, const char *desc,
 	else if (!perm && ret > 0)
 		ret = 0;
 
+out_opts:
 	test_free_opts(opt_flags);
 
 	return ret;
