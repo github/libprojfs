@@ -72,11 +72,11 @@ is aligned closely with the Linux kernel's
 
 Please see our detailed [Build and Installation][build]
 page for step-by-step instructions on how to build and install
-libprojfs and its depedencies on Linux, and (optionally) also build and
+libprojfs and its dependencies on Linux, and (optionally) also build and
 run the VFSForGit `MirrorProvider` test utility with libprojfs.
 
 So long as libprojfs remains based on [FUSE][fuse-man], the primary
-depedency for libprojfs is the user-space [libfuse][libfuse] library,
+dependency for libprojfs is the user-space [libfuse][libfuse] library,
 as well as having the Linux [`fuse`][fuse-mod] kernel module installed.
 
 Support for [`user.*` extended attributes][xattr] must also be enabled
