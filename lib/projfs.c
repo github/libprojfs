@@ -70,6 +70,7 @@ static struct projfs *projfs_context_fs(void)
 	return (struct projfs *)fuse_get_context()->private_data;
 }
 
+//// TODO: merge into others below
 /**
  * @return 0 or a negative errno
  */
@@ -149,14 +150,81 @@ static int projfs_fuse_perm_event(uint64_t mask,
 		handler, mask, path + 1, target_path, 0, 1);
 }
 
+#define PROJ_XATTR_PRE_NAME "user.projection."
+#define PROJ_XATTR_PRE_LEN (sizeof(PROJ_XATTR_PRE_NAME) - 1)
+#define PROJ_XATTR_EMPTY PROJ_XATTR_PRE_NAME"empty"
+
+static int xattr_name_has_prefix(const char *name)
+{
+	if (strncmp(name, PROJ_XATTR_PRE_NAME, PROJ_XATTR_PRE_LEN) == 0)
+		return 1;
+
+	return 0;
+}
+
+static int xattr_name_is_reserved(const char *name)
+{
+	if (strcmp(name, PROJ_XATTR_EMPTY) == 0)
+		return 1;
+	// add other reserved names as they are defined
+
+	return 0;
+}
+
+static int get_xattr(int fd, const char *name, void *value, ssize_t *size)
+{
+	if (fgetxattr(fd, name, value, *size) == -1) {
+		if (errno != ENOATTR)
+			return -1;
+		*size = -1;
+	}
+	return 0;
+}
+
+static int set_xattr(int fd, const char *name, const void *value,
+		     ssize_t *size, int flags)
+{
+	if (value == NULL || *size == 0) {
+		if (fremovexattr(fd, name) == -1) {
+			if (errno != ENOATTR)
+				return -1;
+			*size = -1;
+		}
+		return 0;
+	}
+
+	return fsetxattr(fd, name, value, *size, flags);
+}
+
+static int get_xattr_projflag(int fd)
+{
+	ssize_t size = 0;
+
+	if (get_xattr(fd, PROJ_XATTR_EMPTY, NULL, &size) == -1)
+		return -1;
+	return (size == -1) ? 0 : 1;
+}
+
+static int set_xattr_projflag(int fd, int flags)
+{
+	ssize_t size = 1;
+
+	return set_xattr(fd, PROJ_XATTR_EMPTY, "y", &size, flags);
+}
+
+static int remove_xattr_projflag(int fd)
+{
+	ssize_t size = 0;
+
+	return set_xattr(fd, PROJ_XATTR_EMPTY, NULL, &size, 0);
+}
+
 struct node_userdata
 {
 	int fd;
 
-	uint8_t proj_flag; // USER_PROJECTION_EMPTY
+	uint8_t proj_flag;
 };
-
-#define USER_PROJECTION_EMPTY "user.projection.empty"
 
 /**
  * Return a copy of path with the last component removed (e.g. "x/y/z" will
@@ -179,7 +247,7 @@ static char *get_path_parent(char const *path)
 /**
  * Acquires a lock on path and populates the supplied node_userdata argument
  * with the open and locked fd, and proj_flag based on the
- * USER_PROJECTION_EMPTY xattr.
+ * PROJ_XATTR_EMPTY xattr.
  *
  * @param user userdata to fill out (zeroed by this function)
  * @param path path relative to lowerdir to lock and open
@@ -191,7 +259,7 @@ static int get_path_userdata(struct node_userdata *user,
 			     const char *path,
 			     mode_t mode)
 {
-	ssize_t sz;
+	int res;
 	int err, wait_ms;
 	struct timespec ts;
 
@@ -216,20 +284,21 @@ retry_flock:
 		}
 
 		err = errno;
-		close(user->fd);
-		return err;
+		goto out_close;
 	}
 
-	// fill cache from xattrs
-	sz = fgetxattr(user->fd, USER_PROJECTION_EMPTY, NULL, 0);
-	err = errno;
-	if (sz == -1 && err != ENOATTR) {
-		close(user->fd);
-		return err;
+	res = get_xattr_projflag(user->fd);
+	if (res == -1) {
+		err = errno;
+		goto out_close;
 	}
-	user->proj_flag = sz > 0;
 
+	user->proj_flag = res;
 	return 0;
+
+out_close:
+	close(user->fd);
+	return err;
 }
 
 /**
@@ -265,12 +334,10 @@ static int projfs_fuse_proj_locked(uint64_t event_mask,
 	if (res < 0)
 		return -res;
 
-	res = fremovexattr(user->fd, USER_PROJECTION_EMPTY);
-	if (res == 0 || (res == -1 && errno == ENOATTR))
-		user->proj_flag = 0;
-	else
+	if (remove_xattr_projflag(user->fd) == -1)
 		return errno;
 
+	user->proj_flag = 0;
 	return 0;
 }
 
@@ -885,9 +952,10 @@ static int projfs_op_setxattr(char const *path, char const *name,
 	int err = 0;
 	int fd;
 
-	path = lowerpath(path);
+	if (xattr_name_has_prefix(name))
+		return -EPERM;
 
-	// TODO: filter user.projection.* attrs
+	path = lowerpath(path);
 
 	res = projfs_fuse_proj_dir("setxattr", path, 1);
 	if (res)
@@ -915,8 +983,6 @@ static int projfs_op_getxattr(char const *path, char const *name,
 
 	path = lowerpath(path);
 
-	// TODO: filter user.projection.* attrs
-
 	res = projfs_fuse_proj_dir("getxattr", path, 1);
 	if (res)
 		return -res;
@@ -942,8 +1008,6 @@ static int projfs_op_listxattr(char const *path, char *list, size_t size)
 
 	path = lowerpath(path);
 
-	// TODO: filter user.projection.* attrs
-
 	res = projfs_fuse_proj_dir("listxattr", path, 1);
 	if (res)
 		return -res;
@@ -967,9 +1031,10 @@ static int projfs_op_removexattr(char const *path, char const *name)
 	int err = 0;
 	int fd;
 
-	path = lowerpath(path);
+	if (xattr_name_has_prefix(name))
+		return -EPERM;
 
-	// TODO: filter user.projection.* attrs
+	path = lowerpath(path);
 
 	res = projfs_fuse_proj_dir("removexattr", path, 1);
 	if (res)
@@ -1143,15 +1208,6 @@ void *projfs_get_user_data(struct projfs *fs)
 	return fs->user_data;
 }
 
-static int set_xattr_empty(int fd, int excl)
-{
-	int flags = excl ? XATTR_CREATE : 0;
-
-	if (fsetxattr(fd, USER_PROJECTION_EMPTY, "y", 1, flags) == -1)
-		return errno;
-	return 0;
-}
-
 /**
  * @return 1 if dir is empty, 0 if not, -1 if an error occurred (errno set)
  */
@@ -1264,8 +1320,7 @@ static void *projfs_loop(void *data)
 		goto out;
 	}
 
-	if (fgetxattr(fs->lowerdir_fd, USER_PROJECTION_EMPTY, NULL, 0) == -1 &&
-			errno == ENOTSUP) {
+	if (get_xattr_projflag(fs->lowerdir_fd) == -1 && errno == ENOTSUP) {
 		fprintf(stderr, "projfs: xattr support check on lowerdir "
 		                "failed: %s: %s\n",
 			fs->lowerdir, strerror(errno));
@@ -1287,11 +1342,10 @@ static void *projfs_loop(void *data)
 
 	if (res == 1) {
 		/* dir is empty */
-		err = set_xattr_empty(fs->lowerdir_fd, 0);
-		if (err > 0) {
+		if (set_xattr_projflag(fs->lowerdir_fd, 0) == -1) {
 			fprintf(stderr, "projfs: could not set projection "
-					"xattr: %s: %s\n",
-				fs->lowerdir, strerror(err));
+					"flag xattr: %s: %s\n",
+				fs->lowerdir, strerror(errno));
 			res = 4;
 			goto out_close;
 		}
@@ -1451,10 +1505,68 @@ static int check_safe_rel_path(const char *path)
 	return 1;
 }
 
-int projfs_create_proj_dir(struct projfs *fs, const char *path, mode_t mode)
+static char *make_user_xattr_name(const char *segments)
 {
-	int fd;
+	char *name;
+
+	name = malloc(PROJ_XATTR_PRE_LEN + strlen(segments) + 1);
+	if (name == NULL)
+		return NULL;
+
+	memcpy(name, PROJ_XATTR_PRE_NAME, PROJ_XATTR_PRE_LEN);
+	strcpy(name + PROJ_XATTR_PRE_LEN, segments);
+
+	return name;
+}
+
+#define PROJ_XATTR_READ 0x00
+#define PROJ_XATTR_WRITE 0x01
+#define PROJ_XATTR_CREATE 0x02
+
+static int iter_user_xattrs(int fd, struct projfs_attr *attrs,
+			    unsigned int nattrs, unsigned int flags)
+{
+	int set_flags = (flags & PROJ_XATTR_CREATE) ? XATTR_CREATE : 0;
 	int res;
+	unsigned int i;
+
+	if (attrs == NULL)
+		return 0;
+
+	for (i = 0; i < nattrs; i++) {
+		char *name;
+		struct projfs_attr *attr = &attrs[i];
+
+		name = make_user_xattr_name(attr->name);
+		if (name == NULL)
+			return errno;
+
+		if (flags & PROJ_XATTR_WRITE) {
+			// do not permit alteration of our reserved xattrs
+			if (xattr_name_is_reserved(name)) {
+				errno = EPERM;
+				res = -1;
+			} else {
+				res = set_xattr(fd, name,
+						attr->value, &attr->size,
+						set_flags);
+			}
+		} else {
+			res = get_xattr(fd, name, attr->value, &attr->size);
+		}
+
+		free(name);
+		if (res == -1)
+			return errno;
+	}
+
+	return 0;
+}
+
+int projfs_create_proj_dir(struct projfs *fs, const char *path, mode_t mode,
+			   struct projfs_attr *attrs, unsigned int nattrs)
+{
+	int fd, res;
 
 	if (!check_safe_rel_path(path))
 		return EINVAL;
@@ -1466,14 +1578,22 @@ int projfs_create_proj_dir(struct projfs *fs, const char *path, mode_t mode)
 	if (fd == -1)
 		return errno;
 
-	res = set_xattr_empty(fd, 1);
+	if (set_xattr_projflag(fd, XATTR_CREATE) == -1) {
+		res = errno;
+		goto out_close;
+	}
 
+	res = iter_user_xattrs(fd, attrs, nattrs,
+			       PROJ_XATTR_WRITE | PROJ_XATTR_CREATE);
+
+out_close:
 	close(fd);
 	return res;
 }
 
 int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
-                            mode_t mode)
+			    mode_t mode, struct projfs_attr *attrs,
+			    unsigned int nattrs)
 {
 	int fd, res;
 
@@ -1489,7 +1609,13 @@ int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
 		goto out_close;
 	}
 
-	res = set_xattr_empty(fd, 1);
+	if (set_xattr_projflag(fd, XATTR_CREATE) == -1) {
+		res = errno;
+		goto out_close;
+	}
+
+	res = iter_user_xattrs(fd, attrs, nattrs,
+			       PROJ_XATTR_WRITE | PROJ_XATTR_CREATE);
 
 out_close:
 	close(fd);
@@ -1511,4 +1637,48 @@ int projfs_create_proj_symlink(struct projfs *fs, const char *path,
 		return errno;
 
 	return 0;
+}
+
+static int iter_attrs(struct projfs *fs, const char *path,
+		      struct projfs_attr *attrs, unsigned int nattrs,
+		      unsigned int flags)
+{
+	int fd, res;
+	struct stat st;
+
+	if (!check_safe_rel_path(path) || attrs == NULL)
+		return EINVAL;
+
+	if (nattrs == 0)
+		return 0;
+
+	fd = openat(lowerdir_fd(), path, O_RDONLY);
+	if (fd == -1)
+		return errno;
+
+	if (fstat(fd, &st) == -1) {
+		res = errno;
+		goto out_close;
+	}
+
+	if (S_ISDIR(st.st_mode) || S_ISREG(st.st_mode))
+		res = iter_user_xattrs(fd, attrs, nattrs, flags);
+	else
+		res = EPERM;
+
+out_close:
+	close(fd);
+	return res;
+}
+
+int projfs_get_attrs(struct projfs *fs, const char *path,
+		     struct projfs_attr *attrs, unsigned int nattrs)
+{
+	return iter_attrs(fs, path, attrs, nattrs, PROJ_XATTR_READ);
+}
+
+int projfs_set_attrs(struct projfs *fs, const char *path,
+		     struct projfs_attr *attrs, unsigned int nattrs)
+{
+	return iter_attrs(fs, path, attrs, nattrs, PROJ_XATTR_WRITE);
 }
