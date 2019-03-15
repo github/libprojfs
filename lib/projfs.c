@@ -151,7 +151,7 @@ static int projfs_fuse_perm_event(uint64_t mask,
 }
 
 #define PROJ_XATTR_PRE_NAME "user.projection."
-#define PROJ_XATTR_PRE_LEN 16
+#define PROJ_XATTR_PRE_LEN (sizeof(PROJ_XATTR_PRE_NAME) - 1)
 #define PROJ_XATTR_EMPTY PROJ_XATTR_PRE_NAME"empty"
 
 static int xattr_name_has_prefix(const char *name)
@@ -196,7 +196,7 @@ static int set_xattr(int fd, const char *name, const void *value,
 	return fsetxattr(fd, name, value, *size, flags);
 }
 
-static int get_xattr_empty(int fd)
+static int get_xattr_projflag(int fd)
 {
 	ssize_t size = 0;
 
@@ -205,14 +205,14 @@ static int get_xattr_empty(int fd)
 	return (size == -1) ? 0 : 1;
 }
 
-static int set_xattr_empty(int fd, int flags)
+static int set_xattr_projflag(int fd, int flags)
 {
 	ssize_t size = 1;
 
 	return set_xattr(fd, PROJ_XATTR_EMPTY, "y", &size, flags);
 }
 
-static int remove_xattr_empty(int fd)
+static int remove_xattr_projflag(int fd)
 {
 	ssize_t size = 0;
 
@@ -287,7 +287,7 @@ retry_flock:
 		goto out_close;
 	}
 
-	res = get_xattr_empty(user->fd);
+	res = get_xattr_projflag(user->fd);
 	if (res == -1) {
 		err = errno;
 		goto out_close;
@@ -334,7 +334,7 @@ static int projfs_fuse_proj_locked(uint64_t event_mask,
 	if (res < 0)
 		return -res;
 
-	if (remove_xattr_empty(user->fd) == -1)
+	if (remove_xattr_projflag(user->fd) == -1)
 		return errno;
 
 	user->proj_flag = 0;
@@ -1320,7 +1320,7 @@ static void *projfs_loop(void *data)
 		goto out;
 	}
 
-	if (get_xattr_empty(fs->lowerdir_fd) == -1 && errno == ENOTSUP) {
+	if (get_xattr_projflag(fs->lowerdir_fd) == -1 && errno == ENOTSUP) {
 		fprintf(stderr, "projfs: xattr support check on lowerdir "
 		                "failed: %s: %s\n",
 			fs->lowerdir, strerror(errno));
@@ -1342,9 +1342,9 @@ static void *projfs_loop(void *data)
 
 	if (res == 1) {
 		/* dir is empty */
-		if (set_xattr_empty(fs->lowerdir_fd, 0) == -1) {
+		if (set_xattr_projflag(fs->lowerdir_fd, 0) == -1) {
 			fprintf(stderr, "projfs: could not set projection "
-					"xattr: %s: %s\n",
+					"flag xattr: %s: %s\n",
 				fs->lowerdir, strerror(errno));
 			res = 4;
 			goto out_close;
@@ -1578,7 +1578,7 @@ int projfs_create_proj_dir(struct projfs *fs, const char *path, mode_t mode,
 	if (fd == -1)
 		return errno;
 
-	if (set_xattr_empty(fd, XATTR_CREATE) == -1) {
+	if (set_xattr_projflag(fd, XATTR_CREATE) == -1) {
 		res = errno;
 		goto out_close;
 	}
@@ -1592,7 +1592,7 @@ out_close:
 }
 
 int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
-                            mode_t mode, struct projfs_attr *attrs,
+			    mode_t mode, struct projfs_attr *attrs,
 			    unsigned int nattrs)
 {
 	int fd, res;
@@ -1609,7 +1609,7 @@ int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
 		goto out_close;
 	}
 
-	if (set_xattr_empty(fd, XATTR_CREATE) == -1) {
+	if (set_xattr_projflag(fd, XATTR_CREATE) == -1) {
 		res = errno;
 		goto out_close;
 	}
