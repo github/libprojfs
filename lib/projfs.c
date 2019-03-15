@@ -154,21 +154,21 @@ static int projfs_fuse_perm_event(uint64_t mask,
 #define PROJ_XATTR_PRE_LEN 16
 #define PROJ_XATTR_EMPTY PROJ_XATTR_PRE_NAME"empty"
 
-static int check_xattr_prefix(const char *name)
+static int xattr_name_has_prefix(const char *name)
 {
 	if (strncmp(name, PROJ_XATTR_PRE_NAME, PROJ_XATTR_PRE_LEN) == 0)
-		return 0;
+		return 1;
 
-	return 1;
+	return 0;
 }
 
-static int check_xattr_reserved(const char *name)
+static int xattr_name_is_reserved(const char *name)
 {
 	if (strcmp(name, PROJ_XATTR_EMPTY) == 0)
-		return 0;
+		return 1;
 	// add other reserved names as they are defined
 
-	return 1;
+	return 0;
 }
 
 static int get_xattr(int fd, const char *name, void *value, ssize_t *size)
@@ -952,7 +952,7 @@ static int projfs_op_setxattr(char const *path, char const *name,
 	int err = 0;
 	int fd;
 
-	if (!check_xattr_prefix(name))
+	if (xattr_name_has_prefix(name))
 		return -EPERM;
 
 	path = lowerpath(path);
@@ -1031,7 +1031,7 @@ static int projfs_op_removexattr(char const *path, char const *name)
 	int err = 0;
 	int fd;
 
-	if (!check_xattr_prefix(name))
+	if (xattr_name_has_prefix(name))
 		return -EPERM;
 
 	path = lowerpath(path);
@@ -1543,7 +1543,7 @@ static int iter_user_xattrs(int fd, struct projfs_attr *attrs,
 
 		if (flags & PROJ_XATTR_WRITE) {
 			// do not permit alteration of our reserved xattrs
-			if (!check_xattr_reserved(name)) {
+			if (xattr_name_is_reserved(name)) {
 				errno = EPERM;
 				res = -1;
 			} else {
