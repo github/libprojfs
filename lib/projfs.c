@@ -1505,11 +1505,7 @@ static int check_safe_rel_path(const char *path)
 	return 1;
 }
 
-#define PROJ_XATTR_READ 0x00
-#define PROJ_XATTR_WRITE 0x01
-#define PROJ_XATTR_CREATE 0x02
-
-static char *make_user_xattr_name(const char *segments, unsigned int flags)
+static char *make_user_xattr_name(const char *segments)
 {
 	char *name;
 
@@ -1520,13 +1516,12 @@ static char *make_user_xattr_name(const char *segments, unsigned int flags)
 	memcpy(name, PROJ_XATTR_PRE_NAME, PROJ_XATTR_PRE_LEN);
 	strcpy(name + PROJ_XATTR_PRE_LEN, segments);
 
-	if (flags == PROJ_XATTR_READ || check_xattr_reserved(name))
-		return name;
-
-	free(name);
-	errno = EPERM;
-	return NULL;
+	return name;
 }
+
+#define PROJ_XATTR_READ 0x00
+#define PROJ_XATTR_WRITE 0x01
+#define PROJ_XATTR_CREATE 0x02
 
 static int iter_user_xattrs(int fd, struct projfs_attr *attrs,
 			    unsigned int nattrs, unsigned int flags)
@@ -1542,20 +1537,27 @@ static int iter_user_xattrs(int fd, struct projfs_attr *attrs,
 		char *name;
 		struct projfs_attr *attr = &attrs[i];
 
-		name = make_user_xattr_name(attr->name, flags);
+		name = make_user_xattr_name(attr->name);
 		if (name == NULL)
 			return errno;
 
 		if (flags & PROJ_XATTR_WRITE) {
-			res = set_xattr(fd, name, attr->value, &attr->size,
-					set_flags);
+			// do not permit alteration of our reserved xattrs
+			if (!check_xattr_reserved(name)) {
+				errno = EPERM;
+				res = -1;
+			} else {
+				res = set_xattr(fd, name,
+						attr->value, &attr->size,
+						set_flags);
+			}
 		} else {
 			res = get_xattr(fd, name, attr->value, &attr->size);
 		}
-		if (res == -1)
-			return errno;
 
 		free(name);
+		if (res == -1)
+			return errno;
 	}
 
 	return 0;
