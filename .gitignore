@@ -28,6 +28,7 @@
 !/t/test_*.h
 /t/test-mounts/
 /t/test-output/
+/t/echo_attrlist
 /t/get_strerror
 /t/wait_mount
 .deps/

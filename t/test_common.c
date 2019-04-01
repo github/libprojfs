@@ -21,9 +21,11 @@
 
 #define _GNU_SOURCE		// for basename() in <string.h>
 				// and getopt_long() in <getopt.h>
+				// and S_IS*() in <unistd.h>
 
 #include "../include/config.h"
 
+#include <ctype.h>
 #include <err.h>
 #include <errno.h>
 #include <signal.h>
@@ -40,6 +42,16 @@
 #define MOUNT_ARGS_USAGE "<lower-path> <mount-path>"
 
 #define MAX_RETVAL_NAME_LEN 40
+
+/* Limit the maximum allowed length of attribute list entries, and the
+ * maximum number of entries, because some filesystems like ext4 have
+ * their total xattr storage space limited to a single filesystem block,
+ * which may be as small as 1 kB.
+ */
+#define MAX_ATTRLIST_ENTRY_LEN 256
+#define MAX_ATTRLIST_TOTAL_LEN 1024
+
+#define isquote(c) ((c) == '"' || (c) == '\'')
 
 #define retval_entry(s) #s, -s
 
@@ -69,6 +81,8 @@ static const struct option all_long_opts[] = {
 	{ "help", no_argument, NULL, TEST_OPT_NUM_HELP },
 	{ "retval", required_argument, NULL, TEST_OPT_NUM_RETVAL },
 	{ "retval-file", required_argument, NULL, TEST_OPT_NUM_RETFILE },
+	{ "attrlist", required_argument, NULL, TEST_OPT_NUM_ATTRLIST },
+	{ "attrlist-file", required_argument, NULL, TEST_OPT_NUM_ATTRFILE },
 	{ "timeout", required_argument, NULL, TEST_OPT_NUM_TIMEOUT },
 	{ "lock-file", required_argument, NULL, TEST_OPT_NUM_LOCKFILE }
 };
@@ -89,17 +103,28 @@ static const struct opt_usage all_opts_usage[] = {
 	{ NULL, 1 },
 	{ "allow|deny|null|<error>", 1 },
 	{ "<retval-file>", 1 },
+	{ "[<name> <value>]...", 1 },
+	{ "<attrlist-file>", 1 },
 	{ "<max-seconds>", 1 },
 	{ "<lock-file>", 1 }
 };
 
-/* option values */
 static int optval_retval;
 static const char *optval_retfile;
+static struct test_list_entry *optval_attrlist;
+static const char *optval_attrfile;
 static long int optval_timeout;
 static const char *optval_lockfile;
 
 static unsigned int opt_set_flags = TEST_OPT_NONE;
+
+#define LIST_TYPE_ATTR 0
+
+#define list_name(x) (list_type_names[(x)])
+
+static const char *list_type_names[] = {
+	"attribute"
+};
 
 static const char *get_program_name(const char *program)
 {
@@ -160,6 +185,41 @@ void test_exit_error(const char *argv0, const char *fmt, ...)
 	fprintf(stderr, "\n");
 
 	exit(EXIT_FAILURE);
+}
+
+void test_print_value_quoted(const char *value, size_t size)
+{
+	char c;
+	size_t i = 0;
+
+	putchar('"');
+	while (i < size) {
+		c = *(value + i++);
+
+		switch (c) {
+		case '"':
+		case '\'':
+		case '\\':
+			printf("\\%c", (int)c);
+			break;
+
+		case '\t':
+			printf("\\t");
+			break;
+
+		case '\n':
+			printf("\\n");
+			break;
+
+		default:
+			if (isprint(c))
+				putchar(c);
+			else
+				printf("\\%03o", ((unsigned int)c) & 0377);
+			break;
+		}
+	}
+	putchar('"');
 }
 
 long int test_parse_long(const char *arg, int base)
@@ -235,6 +295,397 @@ static void read_retfile(int *retval, unsigned int *flags)
 
 out:
 	return;
+}
+
+static void append_list_entry(struct test_list_entry *entry,
+			      struct test_list_entry **first_entry,
+			      struct test_list_entry **last_entry)
+{
+	if (entry == NULL)
+		return;
+
+	if (*first_entry == NULL)
+		*first_entry = entry;
+
+	if (*last_entry != NULL)
+		(*last_entry)->next = entry;
+	*last_entry = entry;
+}
+
+struct parse_entry_cur {
+	int list_type;
+	const char *buf;
+	const char *cur;
+};
+
+static void warn_parse_entry_err(struct parse_entry_cur *cursor, int err,
+				 const char *field)
+{
+	if (err == ENOMEM) {
+		warn("unable to allocate %s list entry %s",
+		     list_name(cursor->list_type), field);
+	} else {
+		warnx("invalid entry %s %sin %s list: %s", field,
+		      (err == ENAMETOOLONG ? "(too long) " : ""),
+		      list_name(cursor->list_type), cursor->buf);
+	}
+}
+
+/* We assume our locale has been set appropriately; e.g., LC_ALL=C
+ * is set by test-lib.sh.
+ */
+static const char *skip_blanks(struct parse_entry_cur *cursor)
+{
+	const char *s = cursor->cur;
+
+	while (*s != '\0' && isblank(*s))
+		++s;
+
+	cursor->cur = s;
+	return s;
+}
+
+#define PARSE_FLAG_NONE		0x00
+#define PARSE_FLAG_ALLOW_EMPTY	0x01
+#define PARSE_FLAG_ALLOW_NULL	0x02
+#define PARSE_FLAG_ALLOW_SLASH	0x04
+
+/* We implement minimal quoting and escaping, just sufficient for our test
+ * purposes.  Specifically, in single- or double-quoted strings, we support
+ * the escape sequences \" \' \\ \n \t and \0 with their usual meanings.
+ */
+static int parse_data(struct parse_entry_cur *cursor, unsigned int flags,
+		      size_t max_len, void **data, size_t *size)
+{
+	char buf[max_len + 1];
+	const char *s = cursor->cur;
+	char q = '\0';
+	char c;
+	size_t len = 0;
+
+	if (isquote(*s)) {
+		q = *s;
+		++s;
+	}
+
+	c = *s;
+	while (c != '\0' && len < sizeof(buf)) {
+		if (q != '\0') {
+			if (c == q) {
+				q = '\0';
+				++s;
+				if (*s == '\0' || isblank(*s))
+					break;
+				else
+					return -EINVAL;
+			}
+			else if (c == '\\') {
+				++s;
+				c = *s;
+
+				switch (c) {
+				case '0':
+					if (!(flags & PARSE_FLAG_ALLOW_NULL))
+						return -EINVAL;
+					c = '\0';
+					break;
+
+				case 'n':
+					c = '\n';
+					break;
+
+				case 't':
+					c = '\t';
+					break;
+
+				case '"':
+				case '\'':
+				case '\\':
+					break;
+
+				default:
+					return -EINVAL;
+				}
+			}
+		}
+		else if (isblank(c)) {
+			break;
+		}
+
+		if (c == '/' && !(flags & PARSE_FLAG_ALLOW_SLASH))
+			return -EINVAL;
+
+		buf[len++] = c;
+		c = *(++s);
+	}
+
+	if (q != '\0')
+		return -EINVAL;
+
+	if (len == 0 && !(flags & PARSE_FLAG_ALLOW_EMPTY))
+		return -EINVAL;
+	else if (len > max_len)
+		return -ENAMETOOLONG;
+
+	buf[len] = '\0';
+
+	*data = malloc(len + 1);
+	if (*data == NULL)
+		return -errno;
+	memcpy(*data, buf, len + 1);
+	if (size != NULL)
+		*size = len;
+
+	cursor->cur = s;
+	return 0;
+}
+
+static int parse_attr_name(struct parse_entry_cur *cursor, char **name)
+{
+	int ret;
+
+	ret = parse_data(cursor, PARSE_FLAG_ALLOW_SLASH,
+			 MAX_ATTRLIST_ENTRY_LEN, (void**)name, NULL);
+	if (ret < 0) {
+		warn_parse_entry_err(cursor, -ret, "name");
+		return -1;
+	}
+	return 0;
+}
+
+static int parse_attr_value(struct parse_entry_cur *cursor, void **value,
+			    size_t *size)
+{
+	int ret;
+
+	ret = parse_data(cursor,
+			 (PARSE_FLAG_ALLOW_EMPTY | PARSE_FLAG_ALLOW_NULL
+						 | PARSE_FLAG_ALLOW_SLASH),
+			 MAX_ATTRLIST_ENTRY_LEN, value, size);
+	if (ret < 0) {
+		warn_parse_entry_err(cursor, -ret, "value");
+		return -1;
+	}
+	return 0;
+}
+
+static void free_attr(union test_entry *entry)
+{
+	struct test_attr *attr = &entry->attr;
+
+	if (attr->name != NULL)
+		free(attr->name);
+	if (attr->value != NULL)
+		free(attr->value);
+}
+
+static int parse_attr(struct parse_entry_cur *cursor, union test_entry *entry)
+{
+	struct test_attr *attr = &entry->attr;
+
+	if (parse_attr_name(cursor, &attr->name) < 0)
+		return -1;
+
+	skip_blanks(cursor);
+
+	if (parse_attr_value(cursor, &attr->value, &attr->size) < 0)
+		goto out_err;
+
+	return 0;
+
+out_err:
+	free_attr(entry);
+	return -1;
+}
+
+static int parse_list_entry(const char *buf, int type,
+			    int (*parse_entry)(struct parse_entry_cur *,
+					       union test_entry *),
+			    void (*free_entry)(union test_entry *entry),
+			    struct test_list_entry **first_entry,
+			    struct test_list_entry **last_entry)
+{
+	struct parse_entry_cur cursor = { type, buf, buf };
+	struct test_list_entry entry = { 0 };
+	struct test_list_entry *new_entry;
+	const char *s;
+
+	s = skip_blanks(&cursor);
+	if (*s == '\0' || *s == '#')
+		return 0;
+
+	if (parse_entry(&cursor, &entry.entry) < 0)
+		return -1;
+
+	s = skip_blanks(&cursor);
+	if (*s != '\0') {
+		warnx("invalid extra fields in %s list: %s",
+		      list_name(type), buf);
+		goto out_entry;
+	}
+
+	new_entry = malloc(sizeof(entry));
+	if (new_entry == NULL) {
+		warn("unable to allocate %s list entry", list_name(type));
+		goto out_entry;
+	}
+	memcpy(new_entry, &entry, sizeof(entry));
+
+	append_list_entry(new_entry, first_entry, last_entry);
+
+	return 0;
+
+out_entry:
+	free_entry(&entry.entry);
+	return -1;
+}
+
+static int parse_list(const char *list, int type, size_t max_entry_len,
+		      int (*parse_entry)(struct parse_entry_cur *,
+					 union test_entry *),
+		      void (*free_entry)(union test_entry *entry),
+		      struct test_list_entry **list_first_entry)
+{
+	char buf[max_entry_len + 1];
+	struct test_list_entry *first_entry = NULL, *last_entry = NULL;
+	int ret = 0;
+
+	while (*list != '\0') {
+		const char *s;
+		size_t len;
+
+		s = strchr(list, '\n');
+		if (s == NULL) {
+			len = strlen(list);
+			s = list + len;
+		} else {
+			len = s - list;
+			++s;
+		}
+
+		if (len > max_entry_len) {
+			warnx("invalid entry (line too long) in "
+			      "%s list: %s", list_name(type), list);
+			ret = -1;
+			break;
+		}
+
+		memcpy(buf, list, len);
+		buf[len] = '\0';
+
+		ret = parse_list_entry(buf, type, parse_entry, free_entry,
+				       &first_entry, &last_entry);
+		if (ret < 0)
+			break;
+
+		list = s;
+	}
+
+	if (ret == 0)
+		*list_first_entry = first_entry;
+
+	return ret;
+}
+
+static size_t get_attrlist_size(struct test_list_entry *entry)
+{
+	size_t size = 0;
+
+	while (entry != NULL) {
+		size += strlen(entry->entry.attr.name) +
+			entry->entry.attr.size;
+		entry = entry->next;
+	}
+
+	return size;
+}
+
+static int parse_attrlist(const char *list, struct test_list_entry **attrlist)
+{
+	int ret;
+
+	ret = parse_list(list, LIST_TYPE_ATTR, MAX_ATTRLIST_ENTRY_LEN,
+			 parse_attr, free_attr, attrlist);
+	if (ret == 0 &&
+	    get_attrlist_size(*attrlist) > MAX_ATTRLIST_TOTAL_LEN) {
+		warnx("invalid attribute list (too long): %s", list);
+		ret = -1;
+	}
+	return ret;
+}
+
+static void
+read_list_file(const char *pathname, int type, size_t max_entry_len,
+	       int (*parse_entry)(struct parse_entry_cur *,
+				  union test_entry *),
+	       void (*free_entry)(union test_entry *entry),
+	       struct test_list_entry **entrylist, unsigned int *flags)
+{
+	FILE *file;
+	char buf[max_entry_len + 2];	// include newline
+	struct test_list_entry *first_entry = NULL, *last_entry = NULL;
+
+	*entrylist = NULL;
+
+	file = fopen(pathname, "r");
+	if (file == NULL) {
+		if (errno != ENOENT) {
+			warn("unable to open %s list file: %s",
+			     list_name(type), pathname);
+		}
+		goto out;
+	}
+
+	errno = 0;
+	while (fgets(buf, sizeof(buf), file) != NULL) {
+		char *s;
+
+		s = strchr(buf, '\n');
+		if (s != NULL) {
+			*s = '\0';
+		} else if (!feof(file)) {
+			warnx("invalid entry (line too long) in "
+			      "%s list file: %s: %s",
+			      list_name(type), pathname, buf);
+			goto out_close;
+		}
+
+		if (parse_list_entry(buf, type, parse_entry, free_entry,
+				     &first_entry, &last_entry) < 0) {
+			goto out_close;
+		}
+	}
+
+	if (errno > 0) {
+		warn("unable to read %s list file: %s",
+		     list_name(type), pathname);
+	} else if (last_entry == NULL) {
+		*flags = TEST_FILE_EXIST;
+	} else {
+		*entrylist = first_entry;
+		*flags = TEST_VAL_SET | TEST_FILE_EXIST | TEST_FILE_VALID;
+	}
+
+out_close:
+	if (fclose(file) != 0) {
+		warn("unable to close %s list file: %s",
+		     list_name(type), pathname);
+	}
+out:
+	return;
+}
+
+static void read_attrfile(struct test_list_entry **attrlist,
+			  unsigned int *flags)
+{
+	*attrlist = NULL;
+	read_list_file(optval_attrfile, LIST_TYPE_ATTR, MAX_ATTRLIST_ENTRY_LEN,
+		       parse_attr, free_attr, attrlist, flags);
+	if (get_attrlist_size(*attrlist) > MAX_ATTRLIST_TOTAL_LEN) {
+		warnx("invalid attribute list file (too long): %s",
+		      optval_attrfile);
+		*attrlist = NULL;
+	}
 }
 
 static struct option *get_long_opts(unsigned int opt_flags)
@@ -350,6 +801,19 @@ void test_parse_opts(int argc, char *const argv[], unsigned int opt_flags,
 			opt_set_flags |= TEST_OPT_RETFILE;
 			break;
 
+		case TEST_OPT_NUM_ATTRLIST:
+			if (parse_attrlist(optarg, &optval_attrlist) < 0)
+				test_exit_error(argv[0],
+						"invalid attribute list: %s",
+						optarg);
+			opt_set_flags |= TEST_OPT_ATTRLIST;
+			break;
+
+		case TEST_OPT_NUM_ATTRFILE:
+			optval_attrfile = optarg;
+			opt_set_flags |= TEST_OPT_ATTRFILE;
+			break;
+
 		case TEST_OPT_NUM_TIMEOUT:
 			optval_timeout = test_parse_long(optarg, 10);
 			if (errno > 0 || optval_timeout < 0)
@@ -424,6 +888,7 @@ unsigned int test_get_opts(unsigned int opt_flags, ...)
 
 	while (opt_flags != TEST_OPT_NONE) {
 		unsigned int ret_flag;
+		struct test_list_entry **e;
 		unsigned int *f;
 		int *i;
 		long int *l;
@@ -458,6 +923,26 @@ unsigned int test_get_opts(unsigned int opt_flags, ...)
 				*s = optval_retfile;
 			break;
 
+		case TEST_OPT_ATTRLIST:
+			e = va_arg(ap, struct test_list_entry**);
+			f = va_arg(ap, unsigned int*);
+			*f = TEST_VAL_UNSET | TEST_FILE_NONE;
+			if (ret_flag != TEST_OPT_NONE) {
+				*e = optval_attrlist;
+				*f |= TEST_VAL_SET;
+			} else if ((opt_set_flags & TEST_OPT_ATTRFILE)
+				   != TEST_OPT_NONE) {
+				read_attrfile(e, f);
+				ret_flags |= opt_flag;
+			}
+			break;
+
+		case TEST_OPT_ATTRFILE:
+			s = va_arg(ap, const char**);
+			if (ret_flag != TEST_OPT_NONE)
+				*s = optval_attrfile;
+			break;
+
 		case TEST_OPT_TIMEOUT:
 			l = va_arg(ap, long int*);
 			if (ret_flag != TEST_OPT_NONE)
@@ -481,10 +966,44 @@ unsigned int test_get_opts(unsigned int opt_flags, ...)
 	return ret_flags;
 }
 
-void test_free_opts(struct test_mount_args *mount_args)
+static void test_free_opts_va(unsigned int opt_flags, va_list ap)
 {
+	struct test_list_entry *next_entry, *entry;
+
+	if ((opt_flags & TEST_OPT_ATTRFILE) != TEST_OPT_NONE) {
+		entry = va_arg(ap, struct test_list_entry *);
+
+		while (entry != NULL) {
+			next_entry = entry->next;
+
+			free_attr(&entry->entry);
+			free(entry);
+
+			entry = next_entry;
+		}
+	}
+}
+
+void test_free_opts(unsigned int opt_flags, ...)
+{
+	va_list ap;
+
+	va_start(ap, opt_flags);
+	test_free_opts_va(opt_flags, ap);
+	va_end(ap);
+}
+
+void test_free_mount_opts(struct test_mount_args *mount_args,
+			  unsigned int opt_flags, ...)
+{
+	va_list ap;
+
 	if (mount_args->argv != NULL)
 		free(mount_args->argv);
+
+	va_start(ap, opt_flags);
+	test_free_opts_va(opt_flags, ap);
+	va_end(ap);
 }
 
 struct projfs *test_start_mount(const char *lowerdir, const char *mountdir,
@@ -506,9 +1025,16 @@ struct projfs *test_start_mount(const char *lowerdir, const char *mountdir,
 	return fs;
 }
 
-void *test_stop_mount(struct projfs *fs)
+void *test_stop_mount(struct projfs *fs, struct test_mount_args *mount_args)
 {
-	return projfs_stop(fs);
+	void *user_data = projfs_stop(fs);
+
+	if ((opt_set_flags & TEST_OPT_ATTRFILE) != TEST_OPT_NONE) {
+		test_free_mount_opts(mount_args, opt_set_flags,
+				     optval_attrlist);
+	}
+
+	return user_data;
 }
 
 static void signal_handler(int sig)

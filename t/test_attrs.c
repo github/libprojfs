@@ -30,14 +30,14 @@ int main(int argc, char *const argv[])
 	struct test_mount_args mount_args;
 	struct projfs *fs;
 
-	test_parse_mount_opts(argc, argv, TEST_OPT_NONE,
+	test_parse_mount_opts(argc, argv,
+			      TEST_OPT_ATTRLIST | TEST_OPT_ATTRFILE,
 			      &lower_path, &mount_path, &mount_args);
 
-	fs = test_start_mount(lower_path, mount_path, NULL, 0, NULL,
+	fs = test_start_mount(lower_path, mount_path, NULL, 0, 0,
 			      &mount_args);
 	test_wait_signal();
 	test_stop_mount(fs, &mount_args);
 
 	exit(EXIT_SUCCESS);
 }
-
