@@ -771,34 +771,33 @@ EXEC_PID="exec.pid"
 EXEC_LOG="exec.log"
 EXEC_ERR="exec.err"
 
-# Execute a command, capturing its process ID, and then append a message
-# followed by the command's pid into a log file and an optional error log
-# file.  The log file should be given in "$1", the log message head in "$2",
-# the error log file in "$3", the error log message in "$4", and the command in
+EXEC_PID_MARK="##PID##"
+
+# Execute a command, capturing its process ID, and then append messages
+# interpolated with the command's pid into a log file and an optional error
+# file.  The log file should be given in "$1", the log messages in "$2",
+# the error file in "$3", the error messages in "$4", and the command in
 # the remaining arguments.
-# To skip logging to an error log, "$3" should be an empty string.
+# To skip logging to an error file, "$3" should be an empty string.
 # Note that command arguments with internal spaces must have single quotes
 # passed in the argument, e.g., "'foo bar'".
 # Output and errors from the command will be appended to "$EXEC_OUT" and
 # "$EXEC_ERR", respectively.
 projfs_log_exec () {
 	exec_log="$1"; shift
-	log_msg_head="$1"; shift
+	log_msgs="$1"; shift
 	exec_err="$1"; shift
-	err_msg="$1"; shift
+	err_msgs="$1"; shift
 
 	# Do not chain because we want to proceed in the case of errors
 	$SHELL_PATH -c "echo -n \$\$ >$EXEC_PID && exec $*" \
 		>>"$EXEC_LOG" 2>>"$EXEC_ERR"; ret=$?
 
-	echo -n "$log_msg_head" >>"$exec_log" &&
-	cat "$EXEC_PID" >>"$exec_log" &&
-	echo >>"$exec_log" &&
+	pid=$(cat "$EXEC_PID") &&
+	echo "$log_msgs" | sed "s/$EXEC_PID_MARK/$pid/g" >>"$exec_log" &&
 	if test ":$exec_err" != ":"
 	then
-		echo -n "$err_msg" >>"$exec_err" &&
-		cat $EXEC_PID >>"$exec_err" &&
-		echo '' >>"$exec_err"
+		echo "$err_msgs" | sed "s/$EXEC_PID_MARK/$pid/g" >> "$exec_err"
 	fi
 
 	return $ret

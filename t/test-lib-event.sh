@@ -21,6 +21,8 @@ EVENT_ERR="expect.event.err"
 event_msg_notify="test event notification for"
 event_msg_perm="test permission request for"
 
+event_msg_err="projfs: event handler failed"
+
 event_rename_dir="0x0000-400000c0"
 event_create_dir="0x0000-40000100"
 event_delete_dir="0x0001-40000000"
@@ -29,7 +31,13 @@ event_rename_file="0x0000-000000c0"
 event_create_file="0x0000-00000100"
 event_delete_file="0x0001-00000000"
 
-# Format into "$event_msg_head" and "$event_err_msg" log and error messages
+NL=$(printf "\nx")
+NL="${NL%%x}"
+
+LOG_FMT='  %s %s%s: %s, %s'
+ERR_FMT='%s: %s; event mask %s, pid %s'
+
+# Format into "$event_log_msgs" and "$event_err_msgs" log and error messages
 # matching those output by the test mount helper programs.
 # If an error is expected, "$1" should be "error" and "$2" should contain
 # the errno name, e.g., "ENOMEM".  The next arguments (starting at either
@@ -45,23 +53,29 @@ projfs_event_printf () {
 		err=$("$TEST_DIRECTORY"/get_strerror "$1"); shift
 	else
 		err=""
-		event_err_msg=""
+		err_msg=""
 	fi
 
 	eval msg=\$event_msg_"$1"
 	eval code=\$event_"$2"
 
-	event_msg_head="  $msg $3"
-	if test ":$4" != ":"
+	if test ":$4" = ":"
 	then
-		event_msg_head="$event_msg_head, $4"
+		target=""
+	else
+		target=", $4"
 	fi
-	event_msg_head="$event_msg_head: $code, "
+	log_msg=$(printf "$LOG_FMT" \
+		"$msg" "$3" "$target" "$code" "$EXEC_PID_MARK")
+
+	event_log_msgs="${event_log_msgs:+$event_log_msgs$NL}$log_msg"
 
 	if test ":$err" != ":"
 	then
-		event_err_msg="projfs: event handler failed"
-		event_err_msg="$event_err_msg: $err; event mask $code, pid "
+		err_msg=$(printf "$ERR_FMT" \
+			"$event_msg_err" "$err" "$code" "$EXEC_PID_MARK")
+
+		event_err_msgs="${event_err_msgs:+$event_err_msgs$NL}$err_msg"
 	fi
 }
 
@@ -72,13 +86,18 @@ projfs_event_printf () {
 # Requires that projfs_event_printf has been called first to format the
 # expected messages (without the pid) and flag whether an error is expected.
 projfs_event_exec () {
-	if test ":$event_err_msg" = ":"
+	if test ":$event_err_msgs" = ":"
 	then
 		event_err=""
 	else
 		event_err="$EVENT_ERR"
 	fi &&
-	projfs_log_exec "$EVENT_LOG" "$event_msg_head" "$event_err" \
-		"$event_err_msg" "$@"
+	projfs_log_exec "$EVENT_LOG" "$event_log_msgs" \
+		"$event_err" "$event_err_msgs" "$@"; ret=$?
+
+	event_log_msgs=""
+	event_err_msgs=""
+
+	return $ret
 }
 
