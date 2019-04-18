@@ -222,8 +222,7 @@ static int remove_xattr_projflag(int fd)
 struct node_userdata
 {
 	int fd;
-
-	uint8_t proj_flag;
+	int proj_flag;
 };
 
 /**
