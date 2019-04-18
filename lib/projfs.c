@@ -196,20 +196,54 @@ static int set_xattr(int fd, const char *name, const void *value,
 	return fsetxattr(fd, name, value, *size, flags);
 }
 
+#define PROJ_XATTR_FLAG_MODIFIED 0
+#define PROJ_XATTR_FLAG_UNMODIFIED 1
+#define PROJ_XATTR_FLAG_UNOPENED 2
+
+// The absence of a PROJ_XATTR_FLAG_NAME xattr indicates the MODIFIED state
+#define PROJ_XATTR_FLAG_VALUE_UNMODIFIED 'n'
+#define PROJ_XATTR_FLAG_VALUE_UNOPENED 'y'
+
 static int get_xattr_projflag(int fd)
 {
-	ssize_t size = 0;
+	char value;
+	ssize_t size = sizeof(value);
 
-	if (get_xattr(fd, PROJ_XATTR_FLAG_NAME, NULL, &size) == -1)
+	if (get_xattr(fd, PROJ_XATTR_FLAG_NAME, &value, &size) == -1)
 		return -1;
-	return (size == -1) ? 0 : 1;
+
+	if (size == -1)
+		return PROJ_XATTR_FLAG_MODIFIED;
+
+	switch (value) {
+	case PROJ_XATTR_FLAG_VALUE_UNMODIFIED:
+		return PROJ_XATTR_FLAG_UNMODIFIED;
+	case PROJ_XATTR_FLAG_VALUE_UNOPENED:
+		return PROJ_XATTR_FLAG_UNOPENED;
+	default:
+		errno = EINVAL;
+		return -1;
+	}
 }
 
-static int set_xattr_projflag(int fd, int flags)
+static int set_xattr_projflag(int fd, int state, int flags)
 {
-	ssize_t size = 1;
+	char value;
+	ssize_t size = sizeof(value);
 
-	return set_xattr(fd, PROJ_XATTR_FLAG_NAME, "y", &size, flags);
+	switch (state) {
+	case PROJ_XATTR_FLAG_UNMODIFIED:
+		value = PROJ_XATTR_FLAG_VALUE_UNMODIFIED;
+		break;
+	case PROJ_XATTR_FLAG_UNOPENED:
+		value = PROJ_XATTR_FLAG_VALUE_UNOPENED;
+		break;
+	default:
+		errno = EINVAL;
+		return -1;
+	}
+
+	return set_xattr(fd, PROJ_XATTR_FLAG_NAME, &value, &size, flags);
 }
 
 static int remove_xattr_projflag(int fd)
@@ -333,10 +367,19 @@ static int projfs_fuse_proj_locked(uint64_t event_mask,
 	if (res < 0)
 		return -res;
 
-	if (remove_xattr_projflag(user->fd) == -1)
-		return errno;
+	// directories proceed directly to modified state
+	if (event_mask & PROJFS_ONDIR) {
+		if (remove_xattr_projflag(user->fd) == -1)
+			return errno;
+		user->proj_flag = PROJ_XATTR_FLAG_MODIFIED;
+	} else {
+		if (set_xattr_projflag(user->fd, PROJ_XATTR_FLAG_UNMODIFIED,
+				       XATTR_REPLACE) == -1) {
+			return errno;
+		}
+		user->proj_flag = PROJ_XATTR_FLAG_UNMODIFIED;
+	}
 
-	user->proj_flag = 0;
 	return 0;
 }
 
@@ -369,7 +412,7 @@ static int projfs_fuse_proj_dir(const char *op, const char *path, int parent)
 	if (res != 0)
 		goto out;
 
-	if (!user.proj_flag)
+	if (user.proj_flag != PROJ_XATTR_FLAG_UNOPENED)
 		goto out_finalize;
 
 	/* pass mapped path (i.e. containing directory we want to project) to
@@ -414,7 +457,7 @@ static int projfs_fuse_proj_file(const char *op, const char *path)
 	} else if (res != 0)
 		goto out;
 
-	if (!user.proj_flag)
+	if (user.proj_flag != PROJ_XATTR_FLAG_UNOPENED)
 		goto out_finalize;
 
 	/* `path` relative to lowerdir exists and is a placeholder -- hydrate it */
@@ -1341,7 +1384,8 @@ static void *projfs_loop(void *data)
 
 	if (res == 1) {
 		/* dir is empty */
-		if (set_xattr_projflag(fs->lowerdir_fd, 0) == -1) {
+		if (set_xattr_projflag(fs->lowerdir_fd,
+				       PROJ_XATTR_FLAG_UNOPENED, 0) == -1) {
 			fprintf(stderr, "projfs: could not set projection "
 					"flag xattr: %s: %s\n",
 				fs->lowerdir, strerror(errno));
@@ -1577,7 +1621,8 @@ int projfs_create_proj_dir(struct projfs *fs, const char *path, mode_t mode,
 	if (fd == -1)
 		return errno;
 
-	if (set_xattr_projflag(fd, XATTR_CREATE) == -1) {
+	if (set_xattr_projflag(fd, PROJ_XATTR_FLAG_UNOPENED,
+			       XATTR_CREATE) == -1) {
 		res = errno;
 		goto out_close;
 	}
@@ -1608,7 +1653,8 @@ int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
 		goto out_close;
 	}
 
-	if (set_xattr_projflag(fd, XATTR_CREATE) == -1) {
+	if (set_xattr_projflag(fd, PROJ_XATTR_FLAG_UNOPENED,
+			       XATTR_CREATE) == -1) {
 		res = errno;
 		goto out_close;
 	}
