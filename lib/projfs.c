@@ -152,7 +152,7 @@ static int projfs_fuse_perm_event(uint64_t mask,
 
 #define PROJ_XATTR_PRE_NAME "user.projection."
 #define PROJ_XATTR_PRE_LEN (sizeof(PROJ_XATTR_PRE_NAME) - 1)
-#define PROJ_XATTR_EMPTY PROJ_XATTR_PRE_NAME"empty"
+#define PROJ_XATTR_FLAG_NAME PROJ_XATTR_PRE_NAME"empty"
 
 static int xattr_name_has_prefix(const char *name)
 {
@@ -164,7 +164,7 @@ static int xattr_name_has_prefix(const char *name)
 
 static int xattr_name_is_reserved(const char *name)
 {
-	if (strcmp(name, PROJ_XATTR_EMPTY) == 0)
+	if (strcmp(name, PROJ_XATTR_FLAG_NAME) == 0)
 		return 1;
 	// add other reserved names as they are defined
 
@@ -200,7 +200,7 @@ static int get_xattr_projflag(int fd)
 {
 	ssize_t size = 0;
 
-	if (get_xattr(fd, PROJ_XATTR_EMPTY, NULL, &size) == -1)
+	if (get_xattr(fd, PROJ_XATTR_FLAG_NAME, NULL, &size) == -1)
 		return -1;
 	return (size == -1) ? 0 : 1;
 }
@@ -209,14 +209,14 @@ static int set_xattr_projflag(int fd, int flags)
 {
 	ssize_t size = 1;
 
-	return set_xattr(fd, PROJ_XATTR_EMPTY, "y", &size, flags);
+	return set_xattr(fd, PROJ_XATTR_FLAG_NAME, "y", &size, flags);
 }
 
 static int remove_xattr_projflag(int fd)
 {
 	ssize_t size = 0;
 
-	return set_xattr(fd, PROJ_XATTR_EMPTY, NULL, &size, 0);
+	return set_xattr(fd, PROJ_XATTR_FLAG_NAME, NULL, &size, 0);
 }
 
 struct node_userdata
@@ -247,7 +247,7 @@ static char *get_path_parent(char const *path)
 /**
  * Acquires a lock on path and populates the supplied node_userdata argument
  * with the open and locked fd, and proj_flag based on the
- * PROJ_XATTR_EMPTY xattr.
+ * PROJ_XATTR_FLAG_NAME xattr.
  *
  * @param user userdata to fill out (zeroed by this function)
  * @param path path relative to lowerdir to lock and open
