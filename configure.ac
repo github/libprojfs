@@ -118,10 +118,10 @@ AC_SEARCH_LIBS([pthread_create], [pthread], [],
   [AC_MSG_ERROR([POSIX threads library not found])]dnl
 )dnl
 
-AC_CHECK_HEADER([sys/fanotify.h], [],
+AC_CHECK_HEADERS([sys/fanotify.h], [],
   [AC_MSG_ERROR([Linux fanotify header file not found])]dnl
 )dnl
-AC_CHECK_HEADER([sys/inotify.h], [],
+AC_CHECK_HEADERS([sys/inotify.h], [],
   [AC_MSG_ERROR([Linux inotify header file not found])]dnl
 )dnl
 
