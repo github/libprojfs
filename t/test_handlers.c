@@ -52,7 +52,7 @@ static int test_handle_event(struct projfs_event *event, const char *desc,
 	}
 
 	if (proj) {
-		if ((event->mask & ~PROJFS_ONDIR) != PROJFS_CREATE_SELF) {
+		if ((event->mask & ~PROJFS_ONDIR) != PROJFS_CREATE) {
 			fprintf(stderr, "unknown projection flags\n");
 			ret = -EINVAL;
 		}

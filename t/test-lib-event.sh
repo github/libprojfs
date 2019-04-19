@@ -21,13 +21,13 @@ EVENT_ERR="expect.event.err"
 event_msg_notify="test event notification for"
 event_msg_perm="test permission request for"
 
-event_delete_dir="0x0000-40000400"
-event_rename_dir="0x0000-40000800"
-event_create_dir="0x0001-40000000"
+event_rename_dir="0x0000-400000c0"
+event_create_dir="0x0000-40000100"
+event_delete_dir="0x0001-40000000"
 
-event_delete_file="0x0000-00000400"
-event_rename_file="0x0000-00000800"
-event_create_file="0x0001-00000000"
+event_rename_file="0x0000-000000c0"
+event_create_file="0x0000-00000100"
+event_delete_file="0x0001-00000000"
 
 # Format into "$event_msg_head" and "$event_err_msg" log and error messages
 # matching those output by the test mount helper programs.

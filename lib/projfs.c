@@ -365,7 +365,7 @@ static int projfs_fuse_proj_locked(uint64_t event_mask,
 {
 	int res = 0;
 
-	if (event_mask & PROJFS_CREATE_SELF)
+	if (event_mask & PROJFS_CREATE)
 		res = projfs_fuse_proj_event(event_mask, path, user->fd);
 	else
 		res = projfs_fuse_perm_event(event_mask, path, NULL);
@@ -424,7 +424,7 @@ static int projfs_fuse_proj_dir(const char *op, const char *path, int parent)
 	/* pass mapped path (i.e. containing directory we want to project) to
 	 * provider */
 	res = projfs_fuse_proj_locked(
-		PROJFS_CREATE_SELF | PROJFS_ONDIR, &user, target_path);
+		PROJFS_CREATE | PROJFS_ONDIR, &user, target_path);
 
 out_finalize:
 	finalize_userdata(&user);
@@ -468,7 +468,7 @@ static int projfs_fuse_proj_file(const char *op, const char *path, int state)
 	if (user.proj_flag == PROJ_XATTR_FLAG_UNOPENED &&
 	    state == PROJ_XATTR_FLAG_UNMODIFIED) {
 		// hydrate empty placeholder file
-		res = projfs_fuse_proj_locked(PROJFS_CREATE_SELF, &user, path);
+		res = projfs_fuse_proj_locked(PROJFS_CREATE, &user, path);
 	} else if (user.proj_flag == PROJ_XATTR_FLAG_UNMODIFIED &&
 		   state == PROJ_XATTR_FLAG_MODIFIED) {
 		// clear flag on modified (full) file
@@ -641,7 +641,7 @@ static int projfs_op_create(char const *path, mode_t mode,
 	fi->fh = fd;
 
 	res = projfs_fuse_notify_event(
-		PROJFS_CREATE_SELF,
+		PROJFS_CREATE,
 		lowerpath(path),
 		NULL);
 	return res;
@@ -742,7 +742,7 @@ static int projfs_op_release(char const *path, struct fuse_file_info *fi)
 static int projfs_op_unlink(char const *path)
 {
 	int res = projfs_fuse_perm_event(
-		PROJFS_DELETE_SELF,
+		PROJFS_DELETE_PERM,
 		lowerpath(path),
 		NULL);
 	if (res < 0)
@@ -765,7 +765,7 @@ static int projfs_op_mkdir(char const *path, mode_t mode)
 		return -errno;
 
 	res = projfs_fuse_notify_event(
-		PROJFS_CREATE_SELF | PROJFS_ONDIR,
+		PROJFS_CREATE | PROJFS_ONDIR,
 		lowerpath(path),
 		NULL);
 	return res;
@@ -774,7 +774,7 @@ static int projfs_op_mkdir(char const *path, mode_t mode)
 static int projfs_op_rmdir(char const *path)
 {
 	int res = projfs_fuse_perm_event(
-		PROJFS_DELETE_SELF | PROJFS_ONDIR,
+		PROJFS_DELETE_PERM | PROJFS_ONDIR,
 		lowerpath(path),
 		NULL);
 	if (res < 0)
@@ -790,7 +790,7 @@ static int projfs_op_rmdir(char const *path)
 static int projfs_op_rename(char const *src, char const *dst,
                             unsigned int flags)
 {
-	uint64_t mask = PROJFS_MOVE_SELF;
+	uint64_t mask = PROJFS_MOVE;
 
 	int res = projfs_fuse_proj_dir("rename", lowerpath(src), 1);
 	if (res)
