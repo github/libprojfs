@@ -35,7 +35,7 @@ NL=$(printf "\nx")
 NL="${NL%%x}"
 
 LOG_FMT='  %s %s%s: %s, %s'
-ERR_FMT='%s: %s; event mask %s, pid %s'
+ERR_FMT='%s: %s; event mask %s, pid %s, path %s, target path %s'
 
 # Format into "$event_log_msgs" and "$event_err_msgs" log and error messages
 # matching those output by the test mount helper programs.
@@ -73,7 +73,8 @@ projfs_event_printf () {
 	if test ":$err" != ":"
 	then
 		err_msg=$(printf "$ERR_FMT" \
-			"$event_msg_err" "$err" "$code" "$EXEC_PID_MARK")
+			"$event_msg_err" "$err" "$code" "$EXEC_PID_MARK" \
+			"$3" "$4")
 
 		event_err_msgs="${event_err_msgs:+$event_err_msgs$NL}$err_msg"
 	fi

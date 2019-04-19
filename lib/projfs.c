@@ -96,11 +96,13 @@ static int projfs_fuse_send_event(projfs_handler_t handler,
 
 	err = handler(&event);
 	if (err < 0) {
+		// TODO: replace with log output and only when log option set
 		fprintf(stderr, "projfs: event handler failed: %s; "
 		                "event mask 0x%04" PRIx64 "-%08" PRIx64 ", "
-		                "pid %d\n",
+		                "pid %d, path %s, target path %s\n",
 		        strerror(-err), mask >> 32, mask & 0xFFFFFFFF,
-		        event.pid);
+		        event.pid, path,
+			(target_path == NULL) ? "" : target_path);
 	}
 	else if (!fd && perm)
 		err = (err == PROJFS_ALLOW) ? 0 : -EPERM;
