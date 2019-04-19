@@ -305,6 +305,7 @@ static int get_path_userdata(struct node_userdata *user,
 	wait_ms = PROJ_WAIT_MSEC;
 
 retry_flock:
+	// TODO: may conflict with locks held by clients; use internal locks
 	err = flock(user->fd, LOCK_EX | LOCK_NB);
 	if (err == -1) {
 		if (errno == EWOULDBLOCK && wait_ms > 0) {
@@ -362,13 +363,18 @@ static int projfs_fuse_proj_locked(uint64_t event_mask,
 				   struct node_userdata *user,
 				   const char *path)
 {
-	int res = projfs_fuse_proj_event(event_mask, path, user->fd);
+	int res = 0;
+
+	if (event_mask & PROJFS_CREATE_SELF)
+		res = projfs_fuse_proj_event(event_mask, path, user->fd);
+	else
+		res = projfs_fuse_perm_event(event_mask, path, NULL);
 
 	if (res < 0)
 		return -res;
 
 	// directories proceed directly to modified state
-	if (event_mask & PROJFS_ONDIR) {
+	if ((event_mask & PROJFS_ONDIR) || (event_mask & PROJFS_OPEN_PERM)) {
 		if (remove_xattr_projflag(user->fd) == -1)
 			return errno;
 		user->proj_flag = PROJ_XATTR_FLAG_MODIFIED;
@@ -434,9 +440,10 @@ out:
  *
  * @param op op name (for debugging)
  * @param path the lower path (from lowerpath)
+ * @param state the projection state to apply (unmodified or modified)
  * @return 0 or an errno
  */
-static int projfs_fuse_proj_file(const char *op, const char *path)
+static int projfs_fuse_proj_file(const char *op, const char *path, int state)
 {
 	struct node_userdata user;
 	int res;
@@ -457,13 +464,17 @@ static int projfs_fuse_proj_file(const char *op, const char *path)
 	} else if (res != 0)
 		goto out;
 
-	if (user.proj_flag != PROJ_XATTR_FLAG_UNOPENED)
-		goto out_finalize;
+	// path exists relative to lowerdir
+	if (user.proj_flag == PROJ_XATTR_FLAG_UNOPENED &&
+	    state == PROJ_XATTR_FLAG_UNMODIFIED) {
+		// hydrate empty placeholder file
+		res = projfs_fuse_proj_locked(PROJFS_CREATE_SELF, &user, path);
+	} else if (user.proj_flag == PROJ_XATTR_FLAG_UNMODIFIED &&
+		   state == PROJ_XATTR_FLAG_MODIFIED) {
+		// clear flag on modified (full) file
+		res = projfs_fuse_proj_locked(PROJFS_OPEN_PERM, &user, path);
+	}
 
-	/* `path` relative to lowerdir exists and is a placeholder -- hydrate it */
-	res = projfs_fuse_proj_locked(PROJFS_CREATE_SELF, &user, path);
-
-out_finalize:
 	finalize_userdata(&user);
 
 out:
@@ -529,7 +540,8 @@ static int projfs_op_link(char const *src, char const *dst)
 	/* hydrate the source file before adding a hard link to it, otherwise
 	 * a user could access the newly created link and end up modifying the
 	 * non-hydrated placeholder */
-	res = projfs_fuse_proj_file("link", lowerpath(src));
+	res = projfs_fuse_proj_file("link", lowerpath(src),
+				    PROJ_XATTR_FLAG_UNMODIFIED);
 	if (res)
 		return -res;
 
@@ -618,7 +630,8 @@ static int projfs_op_create(char const *path, mode_t mode,
 	res = projfs_fuse_proj_dir("create", lowerpath(path), 1);
 	if (res)
 		return -res;
-	res = projfs_fuse_proj_file("create", lowerpath(path));
+	res = projfs_fuse_proj_file("create", lowerpath(path),
+				    PROJ_XATTR_FLAG_UNMODIFIED);
 	if (res && res != ENOENT)
 		return -res;
 	fd = openat(lowerdir_fd(), lowerpath(path), flags, mode);
@@ -633,6 +646,8 @@ static int projfs_op_create(char const *path, mode_t mode,
 		NULL);
 	return res;
 }
+
+#define has_write_mode(fi) ((fi)->flags & (O_WRONLY | O_RDWR))
 
 static int projfs_op_open(char const *path, struct fuse_file_info *fi)
 {
@@ -650,9 +665,17 @@ static int projfs_op_open(char const *path, struct fuse_file_info *fi)
 	 * below.
 	 * We allow hydration to fail with EISDIR in case the user is doing an
 	 * open(2) on a directory. */
-	res = projfs_fuse_proj_file("open", lowerpath(path));
+	res = projfs_fuse_proj_file("open", lowerpath(path),
+				    PROJ_XATTR_FLAG_UNMODIFIED);
 	if (res && res != ENOENT && res != EISDIR)
 		return -res;
+
+	if (has_write_mode(fi)) {
+		res = projfs_fuse_proj_file("open", lowerpath(path),
+					    PROJ_XATTR_FLAG_MODIFIED);
+		if (res && res != ENOENT && res != EISDIR)
+			return -res;
+	}
 
 	fd = openat(lowerdir_fd(), lowerpath(path), flags);
 	if (fd == -1)
@@ -772,10 +795,15 @@ static int projfs_op_rename(char const *src, char const *dst,
 	int res = projfs_fuse_proj_dir("rename", lowerpath(src), 1);
 	if (res)
 		return -res;
-	res = projfs_fuse_proj_file("rename", lowerpath(src));
+	res = projfs_fuse_proj_file("rename", lowerpath(src),
+				    PROJ_XATTR_FLAG_UNMODIFIED);
 	if (res == EISDIR)
 		mask |= PROJFS_ONDIR;
 	else if (res)
+		return -res;
+	res = projfs_fuse_proj_file("rename", lowerpath(src),
+				    PROJ_XATTR_FLAG_MODIFIED);
+	if (res && res != EISDIR)
 		return -res;
 	res = projfs_fuse_proj_dir("rename2", lowerpath(dst), 1);
 	if (res)
@@ -949,7 +977,12 @@ static int projfs_op_truncate(char const *path, off_t off,
 		res = projfs_fuse_proj_dir("truncate", lowerpath(path), 1);
 		if (res)
 			return -res;
-		res = projfs_fuse_proj_file("truncate", lowerpath(path));
+		res = projfs_fuse_proj_file("truncate", lowerpath(path),
+					    PROJ_XATTR_FLAG_UNMODIFIED);
+		if (res)
+			return -res;
+		res = projfs_fuse_proj_file("truncate", lowerpath(path),
+					    PROJ_XATTR_FLAG_MODIFIED);
 		if (res)
 			return -res;
 
