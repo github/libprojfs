@@ -91,7 +91,7 @@ static int projfs_fuse_send_event(projfs_handler_t handler,
 	event.mask = mask;
 	event.pid = fuse_get_context()->pid;
 	event.path = path;
-	event.target_path = target_path ? (target_path + 1) : NULL;
+	event.target_path = target_path;
 	event.fd = fd;
 
 	err = handler(&event);
@@ -133,7 +133,7 @@ static int projfs_fuse_notify_event(uint64_t mask,
 		projfs_context_fs()->handlers.handle_notify_event;
 
 	return projfs_fuse_send_event(
-		handler, mask, path + 1, target_path, 0, 0);
+		handler, mask, path, target_path, 0, 0);
 }
 
 /**
@@ -147,7 +147,7 @@ static int projfs_fuse_perm_event(uint64_t mask,
 		projfs_context_fs()->handlers.handle_perm_event;
 
 	return projfs_fuse_send_event(
-		handler, mask, path + 1, target_path, 0, 1);
+		handler, mask, path, target_path, 0, 1);
 }
 
 #define PROJ_XATTR_PRE_NAME "user.projection."
@@ -629,7 +629,7 @@ static int projfs_op_create(char const *path, mode_t mode,
 
 	res = projfs_fuse_notify_event(
 		PROJFS_CREATE_SELF,
-		path,
+		lowerpath(path),
 		NULL);
 	return res;
 }
@@ -720,7 +720,7 @@ static int projfs_op_unlink(char const *path)
 {
 	int res = projfs_fuse_perm_event(
 		PROJFS_DELETE_SELF,
-		path,
+		lowerpath(path),
 		NULL);
 	if (res < 0)
 		return res;
@@ -743,7 +743,7 @@ static int projfs_op_mkdir(char const *path, mode_t mode)
 
 	res = projfs_fuse_notify_event(
 		PROJFS_CREATE_SELF | PROJFS_ONDIR,
-		path,
+		lowerpath(path),
 		NULL);
 	return res;
 }
@@ -752,7 +752,7 @@ static int projfs_op_rmdir(char const *path)
 {
 	int res = projfs_fuse_perm_event(
 		PROJFS_DELETE_SELF | PROJFS_ONDIR,
-		path,
+		lowerpath(path),
 		NULL);
 	if (res < 0)
 		return res;
@@ -792,7 +792,7 @@ static int projfs_op_rename(char const *src, char const *dst,
 	if (res == -1)
 		return -errno;
 
-	res = projfs_fuse_notify_event(mask, src, dst);
+	res = projfs_fuse_notify_event(mask, lowerpath(src), lowerpath(dst));
 	return res;
 }
 
