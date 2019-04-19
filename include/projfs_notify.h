@@ -37,9 +37,9 @@ extern "C" {
 
 /** Filesystem events which may be reported */
 #define PROJFS_CLOSE_WRITE	0x00000008	/* Writable file was closed */
-#define PROJFS_OPEN		0x00000020	/* File was opened */
 #define PROJFS_DELETE_SELF	0x00000400	/* Delete permission */
 #define PROJFS_MOVE_SELF	0x00000800	/* File/dir was moved */
+#define PROJFS_OPEN_PERM	0x00010000	/* File open perm (wr only) */
 #define PROJFS_CREATE_SELF	himask(0x0001)	/* File was created */
 
 /** Filesystem event flags */
@@ -63,7 +63,7 @@ extern "C" {
 #include <sys/fanotify.h>
 
 #if (PROJFS_CLOSE_WRITE	!= FAN_CLOSE_WRITE ||	\
-     PROJFS_OPEN	!= FAN_OPEN ||		\
+     PROJFS_OPEN_PERM	!= FAN_OPEN_PERM ||	\
      PROJFS_ONDIR	!= FAN_ONDIR ||		\
      PROJFS_ALLOW	!= FAN_ALLOW ||		\
      PROJFS_DENY	!= FAN_DENY)
@@ -75,7 +75,6 @@ extern "C" {
 #include <sys/inotify.h>
 
 #if (PROJFS_CLOSE_WRITE	!= IN_CLOSE_WRITE ||	\
-     PROJFS_OPEN	!= IN_OPEN ||		\
      PROJFS_DELETE_SELF	!= IN_DELETE_SELF ||	\
      PROJFS_MOVE_SELF	!= IN_MOVE_SELF ||	\
      PROJFS_ONDIR	!= IN_ISDIR)
