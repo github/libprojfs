@@ -448,36 +448,32 @@ static int project_file(const char *op, const char *path, int proj_state)
 
 	(void)op;
 
+	/* Pass O_NOFOLLOW so we receive ELOOP if path is an existing symlink,
+	 * which we want to ignore, and request a write mode so we receive
+	 * EISDIR if path is a directory.
+	 */
 	res = acquire_proj_state_lock(&state_lock, path, O_RDWR | O_NOFOLLOW);
-	if (res == EISDIR) {
-		/* tried to project a directory as a file, ignore
-		 * XXX should we just always project dirs as dirs and files as
-		 * files? */
-		goto out;
-	} else if (res == ELOOP) {
-		/* tried to project a symlink. it already exists as a symlink
-		 * on disk so we have nothing to do */
-		res = 0;
-		goto out;
-	} else if (res != 0)
-		goto out;
+	if (res != 0) {
+		if (res == ELOOP)
+			return 0;
+		else
+			return res;
+	}
 
-	// path exists relative to lowerdir
+	// hydrate empty placeholder file
 	if (state_lock.proj_state == PROJ_STATE_EMPTY) {
-		// hydrate empty placeholder file
 		res = change_proj_state(&state_lock, path, 0,
 					PROJ_STATE_POPULATED);
 	}
 
+	// if requested, convert hydrated file to fully local, modified file
 	if (!res && state_lock.proj_state == PROJ_STATE_POPULATED &&
 	    proj_state == PROJ_STATE_MODIFIED) {
-		// convert hydrated file to fully local, modified file
 		res = change_proj_state(&state_lock, path, 0, proj_state);
 	}
 
 	release_proj_state_lock(&state_lock);
 
-out:
 	return res;
 }
 
@@ -659,13 +655,17 @@ static int projfs_op_open(char const *path, struct fuse_file_info *fi)
 	 * operation should fail for that reason (i.e. O_CREAT is not specified
 	 * and the file doesn't exist), we'll return the failure from openat(2)
 	 * below.
-	 * We allow hydration to fail with EISDIR in case the user is doing an
-	 * open(2) on a directory. */
+	 */
 	res = project_file("open", lowerpath(path),
 			   has_write_mode(fi) ? PROJ_STATE_MODIFIED
 					      : PROJ_STATE_POPULATED);
-	if (res && res != ENOENT && res != EISDIR)
-		return -res;
+	if (res) {
+		// if path was a directory, try projecting it instead
+		if (res == EISDIR)
+			res = project_dir("open", lowerpath(path), 0);
+		if (res != ENOENT)
+			return -res;
+	}
 
 	fd = openat(lowerdir_fd(), lowerpath(path), flags);
 	if (fd == -1)
