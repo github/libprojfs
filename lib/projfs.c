@@ -244,24 +244,6 @@ static int remove_xattr_projflag(int fd)
 	return set_xattr(fd, PROJ_XATTR_FLAG_NAME, NULL, &size, 0);
 }
 
-/**
- * Return a copy of path with the last component removed (e.g. "x/y/z" will
- * yield "x/y").  If path has only one component, returns ".".
- *
- * The caller is responsible for freeing the returned string.
- *
- * @param path path to get parent directory of
- * @return name of parent of path; may be NULL if strdup or strndup fails
- */
-static char *get_path_parent(char const *path)
-{
-	const char *last = strrchr(path, '/');
-	if (!last)
-		return strdup(".");
-	else
-		return strndup(path, last - path);
-}
-
 struct proj_state_lock {
 	int lock_fd;
 	int proj_state;
@@ -379,6 +361,26 @@ static int change_proj_state(uint64_t event_mask,
 	return 0;
 }
 
+static const char *dotpath = ".";
+
+/**
+ * Return a copy of path with the last component removed (e.g. "x/y/z" will
+ * yield "x/y").  If path has only one component, returns ".".
+ *
+ * The caller is responsible for freeing the returned string.
+ *
+ * @param path path to get parent directory of
+ * @return name of parent of path; may be NULL if strdup or strndup fails
+ */
+static char *get_path_parent(char const *path)
+{
+	const char *last = strrchr(path, '/');
+	if (!last)
+		return strdup(dotpath);
+	else
+		return strndup(path, last - path);
+}
+
 /**
  * Project a directory. Takes the lower path, and a flag indicating whether the
  * directory is the parent of the path, or the path itself.
@@ -471,8 +473,6 @@ static int project_file(const char *op, const char *path, int state)
 out:
 	return res;
 }
-
-static const char *dotpath = ".";
 
 /**
  * Makes a path from FUSE usable as a relative path to lowerdir_fd.  Removes
@@ -1297,7 +1297,7 @@ static int check_dir_empty(const char *path)
 			return -1;
 		}
 
-		if (strcmp(e->d_name, ".") == 0 ||
+		if (strcmp(e->d_name, dotpath) == 0 ||
 				strcmp(e->d_name, "..") == 0)
 			; /* ignore */
 		else
