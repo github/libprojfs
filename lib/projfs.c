@@ -40,6 +40,7 @@
 
 #include <fuse3/fuse.h>
 
+// NOTE: only functional within a FUSE file operation!
 #define lowerdir_fd() (projfs_context_fs()->lowerdir_fd)
 
 // TODO: make this value configurable
@@ -100,8 +101,9 @@ static int send_event(projfs_handler_t handler, uint64_t mask,
 		        event.pid, path,
 			(target_path == NULL) ? "" : target_path);
 	}
-	else if (!fd && perm)
+	else if (perm) {
 		err = (err == PROJFS_ALLOW) ? 0 : -EPERM;
+	}
 
 	return err;
 }
@@ -333,33 +335,35 @@ static void release_proj_state_lock(struct proj_state_lock *state_lock)
  * @param path the path the projection state was collected for
  * @return 0 or an errno
  */
-static int change_proj_state(uint64_t event_mask,
-			     struct proj_state_lock *state_lock,
-			     const char *path)
+static int change_proj_state(struct proj_state_lock *state_lock,
+			     const char *path, int isdir, int proj_state)
 {
-	int res = 0;
+	int res;
 
-	if (event_mask & PROJFS_CREATE)
+	if (isdir || proj_state == PROJ_STATE_POPULATED) {
+		uint64_t event_mask = PROJFS_CREATE;
+
+		if (isdir)
+			event_mask |= PROJFS_ONDIR;
 		res = send_proj_event(event_mask, path, state_lock->lock_fd);
-	else
-		res = send_perm_event(event_mask, path, NULL);
+	} else {
+		res = send_perm_event(PROJFS_OPEN_PERM, path, NULL);
+	}
 
 	if (res < 0)
 		return -res;
 
-	// directories proceed directly to modified state
-	if ((event_mask & PROJFS_ONDIR) || (event_mask & PROJFS_OPEN_PERM)) {
-		if (remove_proj_state(state_lock->lock_fd) == -1)
-			return errno;
-		state_lock->proj_state = PROJ_STATE_MODIFIED;
+	if (proj_state == PROJ_STATE_POPULATED) {
+		res = set_proj_state(state_lock->lock_fd, proj_state,
+				     XATTR_REPLACE);
 	} else {
-		if (set_proj_state(state_lock->lock_fd, PROJ_STATE_POPULATED,
-				   XATTR_REPLACE) == -1) {
-			return errno;
-		}
-		state_lock->proj_state = PROJ_STATE_POPULATED;
+		res = remove_proj_state(state_lock->lock_fd);
 	}
 
+	if (res == -1)
+		return errno;
+
+	state_lock->proj_state = proj_state;
 	return 0;
 }
 
@@ -416,10 +420,9 @@ static int project_dir(const char *op, const char *path, int parent)
 	if (state_lock.proj_state != PROJ_STATE_EMPTY)
 		goto out_release;
 
-	/* pass mapped path (i.e. containing directory we want to project) to
-	 * provider */
-	res = change_proj_state(PROJFS_CREATE | PROJFS_ONDIR, &state_lock,
-				lock_path);
+	// directories skip intermediate state; either empty or fully local
+	res = change_proj_state(&state_lock, lock_path, 1,
+				PROJ_STATE_MODIFIED);
 
 out_release:
 	release_proj_state_lock(&state_lock);
@@ -460,14 +463,16 @@ static int project_file(const char *op, const char *path, int proj_state)
 		goto out;
 
 	// path exists relative to lowerdir
-	if (state_lock.proj_state == PROJ_STATE_EMPTY &&
-	    proj_state == PROJ_STATE_POPULATED) {
+	if (state_lock.proj_state == PROJ_STATE_EMPTY) {
 		// hydrate empty placeholder file
-		res = change_proj_state(PROJFS_CREATE, &state_lock, path);
-	} else if (state_lock.proj_state == PROJ_STATE_POPULATED &&
-		   proj_state == PROJ_STATE_MODIFIED) {
-		// clear flag on modified (full) file
-		res = change_proj_state(PROJFS_OPEN_PERM, &state_lock, path);
+		res = change_proj_state(&state_lock, path, 0,
+					PROJ_STATE_POPULATED);
+	}
+
+	if (!res && state_lock.proj_state == PROJ_STATE_POPULATED &&
+	    proj_state == PROJ_STATE_MODIFIED) {
+		// convert hydrated file to fully local, modified file
+		res = change_proj_state(&state_lock, path, 0, proj_state);
 	}
 
 	release_proj_state_lock(&state_lock);
@@ -656,16 +661,11 @@ static int projfs_op_open(char const *path, struct fuse_file_info *fi)
 	 * below.
 	 * We allow hydration to fail with EISDIR in case the user is doing an
 	 * open(2) on a directory. */
-	res = project_file("open", lowerpath(path), PROJ_STATE_POPULATED);
+	res = project_file("open", lowerpath(path),
+			   has_write_mode(fi) ? PROJ_STATE_MODIFIED
+					      : PROJ_STATE_POPULATED);
 	if (res && res != ENOENT && res != EISDIR)
 		return -res;
-
-	if (has_write_mode(fi)) {
-		res = project_file("open", lowerpath(path),
-				   PROJ_STATE_MODIFIED);
-		if (res && res != ENOENT && res != EISDIR)
-			return -res;
-	}
 
 	fd = openat(lowerdir_fd(), lowerpath(path), flags);
 	if (fd == -1)
@@ -785,13 +785,11 @@ static int projfs_op_rename(char const *src, char const *dst,
 	int res = project_dir("rename", lowerpath(src), 1);
 	if (res)
 		return -res;
-	res = project_file("rename", lowerpath(src), PROJ_STATE_POPULATED);
+	// always convert to fully local file before renaming
+	res = project_file("rename", lowerpath(src), PROJ_STATE_MODIFIED);
 	if (res == EISDIR)
 		mask |= PROJFS_ONDIR;
 	else if (res)
-		return -res;
-	res = project_file("rename", lowerpath(src), PROJ_STATE_MODIFIED);
-	if (res && res != EISDIR)
 		return -res;
 	res = project_dir("rename2", lowerpath(dst), 1);
 	if (res)
@@ -965,10 +963,7 @@ static int projfs_op_truncate(char const *path, off_t off,
 		res = project_dir("truncate", lowerpath(path), 1);
 		if (res)
 			return -res;
-		res = project_file("truncate", lowerpath(path),
-				   PROJ_STATE_POPULATED);
-		if (res)
-			return -res;
+		// convert to fully local file before truncating
 		res = project_file("truncate", lowerpath(path),
 				   PROJ_STATE_MODIFIED);
 		if (res)
