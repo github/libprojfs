@@ -143,7 +143,8 @@ static int send_perm_event(uint64_t mask, const char *path,
 
 #define PROJ_XATTR_PRE_NAME "user.projection."
 #define PROJ_XATTR_PRE_LEN (sizeof(PROJ_XATTR_PRE_NAME) - 1)
-#define PROJ_XATTR_FLAG_NAME PROJ_XATTR_PRE_NAME"empty"
+
+#define PROJ_STATE_XATTR_NAME PROJ_XATTR_PRE_NAME"empty"
 
 static int xattr_name_has_prefix(const char *name)
 {
@@ -155,7 +156,7 @@ static int xattr_name_has_prefix(const char *name)
 
 static int xattr_name_is_reserved(const char *name)
 {
-	if (strcmp(name, PROJ_XATTR_FLAG_NAME) == 0)
+	if (strcmp(name, PROJ_STATE_XATTR_NAME) == 0)
 		return 1;
 	// add other reserved names as they are defined
 
@@ -187,61 +188,63 @@ static int set_xattr(int fd, const char *name, const void *value,
 	return fsetxattr(fd, name, value, *size, flags);
 }
 
-#define PROJ_XATTR_FLAG_MODIFIED 0
-#define PROJ_XATTR_FLAG_UNMODIFIED 1
-#define PROJ_XATTR_FLAG_UNOPENED 2
+enum proj_state {
+	PROJ_STATE_EMPTY = 0,	/* unopened (sparse file with metadata) */
+	PROJ_STATE_POPULATED,	/* unmodified (hydrated with data) */
+	PROJ_STATE_MODIFIED	/* no longer projected (fully local) */
+};
 
-// The absence of a PROJ_XATTR_FLAG_NAME xattr indicates the MODIFIED state
-#define PROJ_XATTR_FLAG_VALUE_UNMODIFIED 'n'
-#define PROJ_XATTR_FLAG_VALUE_UNOPENED 'y'
+#define PROJ_STATE_XATTR_VALUE_EMPTY 'y'
+#define PROJ_STATE_XATTR_VALUE_POPULATED 'n'
+/* The PROJ_STATE_XATTR_NAME xattr is removed for the MODIFIED state. */
 
-static int get_xattr_projflag(int fd)
+static int get_proj_state(int fd)
 {
 	char value;
 	ssize_t size = sizeof(value);
 
-	if (get_xattr(fd, PROJ_XATTR_FLAG_NAME, &value, &size) == -1)
+	if (get_xattr(fd, PROJ_STATE_XATTR_NAME, &value, &size) == -1)
 		return -1;
 
 	if (size == -1)
-		return PROJ_XATTR_FLAG_MODIFIED;
+		return PROJ_STATE_MODIFIED;
 
 	switch (value) {
-	case PROJ_XATTR_FLAG_VALUE_UNMODIFIED:
-		return PROJ_XATTR_FLAG_UNMODIFIED;
-	case PROJ_XATTR_FLAG_VALUE_UNOPENED:
-		return PROJ_XATTR_FLAG_UNOPENED;
+	case PROJ_STATE_XATTR_VALUE_POPULATED:
+		return PROJ_STATE_POPULATED;
+	case PROJ_STATE_XATTR_VALUE_EMPTY:
+		return PROJ_STATE_EMPTY;
 	default:
 		errno = EINVAL;
 		return -1;
 	}
 }
 
-static int set_xattr_projflag(int fd, int state, int flags)
+static int set_proj_state(int fd, int state, int flags)
 {
 	char value;
 	ssize_t size = sizeof(value);
 
 	switch (state) {
-	case PROJ_XATTR_FLAG_UNMODIFIED:
-		value = PROJ_XATTR_FLAG_VALUE_UNMODIFIED;
+	case PROJ_STATE_POPULATED:
+		value = PROJ_STATE_XATTR_VALUE_POPULATED;
 		break;
-	case PROJ_XATTR_FLAG_UNOPENED:
-		value = PROJ_XATTR_FLAG_VALUE_UNOPENED;
+	case PROJ_STATE_EMPTY:
+		value = PROJ_STATE_XATTR_VALUE_EMPTY;
 		break;
 	default:
 		errno = EINVAL;
 		return -1;
 	}
 
-	return set_xattr(fd, PROJ_XATTR_FLAG_NAME, &value, &size, flags);
+	return set_xattr(fd, PROJ_STATE_XATTR_NAME, &value, &size, flags);
 }
 
-static int remove_xattr_projflag(int fd)
+static int remove_proj_state(int fd)
 {
 	ssize_t size = 0;
 
-	return set_xattr(fd, PROJ_XATTR_FLAG_NAME, NULL, &size, 0);
+	return set_xattr(fd, PROJ_STATE_XATTR_NAME, NULL, &size, 0);
 }
 
 struct proj_state_lock {
@@ -252,7 +255,7 @@ struct proj_state_lock {
 /**
  * Acquires a lock on path and populates the supplied proj_state_lock argument
  * with the open and locked fd, and state based on the
- * PROJ_XATTR_FLAG_NAME xattr.
+ * PROJ_STATE_XATTR_NAME xattr.
  *
  * @param state_lock structure to fill out (zeroed by this function)
  * @param path path relative to lowerdir to lock and open
@@ -292,7 +295,7 @@ retry_flock:
 		goto out_close;
 	}
 
-	res = get_xattr_projflag(state_lock->lock_fd);
+	res = get_proj_state(state_lock->lock_fd);
 	if (res == -1) {
 		err = errno;
 		goto out_close;
@@ -346,16 +349,15 @@ static int change_proj_state(uint64_t event_mask,
 
 	// directories proceed directly to modified state
 	if ((event_mask & PROJFS_ONDIR) || (event_mask & PROJFS_OPEN_PERM)) {
-		if (remove_xattr_projflag(state_lock->lock_fd) == -1)
+		if (remove_proj_state(state_lock->lock_fd) == -1)
 			return errno;
-		state_lock->proj_state = PROJ_XATTR_FLAG_MODIFIED;
+		state_lock->proj_state = PROJ_STATE_MODIFIED;
 	} else {
-		if (set_xattr_projflag(state_lock->lock_fd,
-				       PROJ_XATTR_FLAG_UNMODIFIED,
-				       XATTR_REPLACE) == -1) {
+		if (set_proj_state(state_lock->lock_fd, PROJ_STATE_POPULATED,
+				   XATTR_REPLACE) == -1) {
 			return errno;
 		}
-		state_lock->proj_state = PROJ_XATTR_FLAG_UNMODIFIED;
+		state_lock->proj_state = PROJ_STATE_POPULATED;
 	}
 
 	return 0;
@@ -411,7 +413,7 @@ static int project_dir(const char *op, const char *path, int parent)
 	if (res != 0)
 		goto out;
 
-	if (state_lock.proj_state != PROJ_XATTR_FLAG_UNOPENED)
+	if (state_lock.proj_state != PROJ_STATE_EMPTY)
 		goto out_release;
 
 	/* pass mapped path (i.e. containing directory we want to project) to
@@ -433,10 +435,10 @@ out:
  *
  * @param op op name (for debugging)
  * @param path the lower path (from lowerpath)
- * @param state the projection state to apply (unmodified or modified)
+ * @param state the projection state to apply (populated or modified)
  * @return 0 or an errno
  */
-static int project_file(const char *op, const char *path, int state)
+static int project_file(const char *op, const char *path, int proj_state)
 {
 	struct proj_state_lock state_lock;
 	int res;
@@ -458,12 +460,12 @@ static int project_file(const char *op, const char *path, int state)
 		goto out;
 
 	// path exists relative to lowerdir
-	if (state_lock.proj_state == PROJ_XATTR_FLAG_UNOPENED &&
-	    state == PROJ_XATTR_FLAG_UNMODIFIED) {
+	if (state_lock.proj_state == PROJ_STATE_EMPTY &&
+	    proj_state == PROJ_STATE_POPULATED) {
 		// hydrate empty placeholder file
 		res = change_proj_state(PROJFS_CREATE, &state_lock, path);
-	} else if (state_lock.proj_state == PROJ_XATTR_FLAG_UNMODIFIED &&
-		   state == PROJ_XATTR_FLAG_MODIFIED) {
+	} else if (state_lock.proj_state == PROJ_STATE_POPULATED &&
+		   proj_state == PROJ_STATE_MODIFIED) {
 		// clear flag on modified (full) file
 		res = change_proj_state(PROJFS_OPEN_PERM, &state_lock, path);
 	}
@@ -531,8 +533,7 @@ static int projfs_op_link(char const *src, char const *dst)
 	/* hydrate the source file before adding a hard link to it, otherwise
 	 * a user could access the newly created link and end up modifying the
 	 * non-hydrated placeholder */
-	res = project_file("link", lowerpath(src),
-			   PROJ_XATTR_FLAG_UNMODIFIED);
+	res = project_file("link", lowerpath(src), PROJ_STATE_POPULATED);
 	if (res)
 		return -res;
 
@@ -621,8 +622,7 @@ static int projfs_op_create(char const *path, mode_t mode,
 	res = project_dir("create", lowerpath(path), 1);
 	if (res)
 		return -res;
-	res = project_file("create", lowerpath(path),
-			   PROJ_XATTR_FLAG_UNMODIFIED);
+	res = project_file("create", lowerpath(path), PROJ_STATE_POPULATED);
 	if (res && res != ENOENT)
 		return -res;
 	fd = openat(lowerdir_fd(), lowerpath(path), flags, mode);
@@ -656,14 +656,13 @@ static int projfs_op_open(char const *path, struct fuse_file_info *fi)
 	 * below.
 	 * We allow hydration to fail with EISDIR in case the user is doing an
 	 * open(2) on a directory. */
-	res = project_file("open", lowerpath(path),
-			   PROJ_XATTR_FLAG_UNMODIFIED);
+	res = project_file("open", lowerpath(path), PROJ_STATE_POPULATED);
 	if (res && res != ENOENT && res != EISDIR)
 		return -res;
 
 	if (has_write_mode(fi)) {
 		res = project_file("open", lowerpath(path),
-				   PROJ_XATTR_FLAG_MODIFIED);
+				   PROJ_STATE_MODIFIED);
 		if (res && res != ENOENT && res != EISDIR)
 			return -res;
 	}
@@ -786,14 +785,12 @@ static int projfs_op_rename(char const *src, char const *dst,
 	int res = project_dir("rename", lowerpath(src), 1);
 	if (res)
 		return -res;
-	res = project_file("rename", lowerpath(src),
-			   PROJ_XATTR_FLAG_UNMODIFIED);
+	res = project_file("rename", lowerpath(src), PROJ_STATE_POPULATED);
 	if (res == EISDIR)
 		mask |= PROJFS_ONDIR;
 	else if (res)
 		return -res;
-	res = project_file("rename", lowerpath(src),
-			   PROJ_XATTR_FLAG_MODIFIED);
+	res = project_file("rename", lowerpath(src), PROJ_STATE_MODIFIED);
 	if (res && res != EISDIR)
 		return -res;
 	res = project_dir("rename2", lowerpath(dst), 1);
@@ -969,11 +966,11 @@ static int projfs_op_truncate(char const *path, off_t off,
 		if (res)
 			return -res;
 		res = project_file("truncate", lowerpath(path),
-				   PROJ_XATTR_FLAG_UNMODIFIED);
+				   PROJ_STATE_POPULATED);
 		if (res)
 			return -res;
 		res = project_file("truncate", lowerpath(path),
-				   PROJ_XATTR_FLAG_MODIFIED);
+				   PROJ_STATE_MODIFIED);
 		if (res)
 			return -res;
 
@@ -1386,7 +1383,7 @@ static void *projfs_loop(void *data)
 		goto out;
 	}
 
-	if (get_xattr_projflag(fs->lowerdir_fd) == -1 && errno == ENOTSUP) {
+	if (get_proj_state(fs->lowerdir_fd) == -1 && errno == ENOTSUP) {
 		fprintf(stderr, "projfs: xattr support check on lowerdir "
 		                "failed: %s: %s\n",
 			fs->lowerdir, strerror(errno));
@@ -1408,8 +1405,8 @@ static void *projfs_loop(void *data)
 
 	if (res == 1) {
 		/* dir is empty */
-		if (set_xattr_projflag(fs->lowerdir_fd,
-				       PROJ_XATTR_FLAG_UNOPENED, 0) == -1) {
+		if (set_proj_state(fs->lowerdir_fd,
+				   PROJ_STATE_EMPTY, 0) == -1) {
 			fprintf(stderr, "projfs: could not set projection "
 					"flag xattr: %s: %s\n",
 				fs->lowerdir, strerror(errno));
@@ -1645,8 +1642,7 @@ int projfs_create_proj_dir(struct projfs *fs, const char *path, mode_t mode,
 	if (fd == -1)
 		return errno;
 
-	if (set_xattr_projflag(fd, PROJ_XATTR_FLAG_UNOPENED,
-			       XATTR_CREATE) == -1) {
+	if (set_proj_state(fd, PROJ_STATE_EMPTY, XATTR_CREATE) == -1) {
 		res = errno;
 		goto out_close;
 	}
@@ -1677,8 +1673,7 @@ int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
 		goto out_close;
 	}
 
-	if (set_xattr_projflag(fd, PROJ_XATTR_FLAG_UNOPENED,
-			       XATTR_CREATE) == -1) {
+	if (set_proj_state(fd, PROJ_STATE_EMPTY, XATTR_CREATE) == -1) {
 		res = errno;
 		goto out_close;
 	}
