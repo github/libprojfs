@@ -244,12 +244,6 @@ static int remove_xattr_projflag(int fd)
 	return set_xattr(fd, PROJ_XATTR_FLAG_NAME, NULL, &size, 0);
 }
 
-struct node_userdata
-{
-	int fd;
-	int proj_flag;
-};
-
 /**
  * Return a copy of path with the last component removed (e.g. "x/y/z" will
  * yield "x/y").  If path has only one component, returns ".".
@@ -268,35 +262,40 @@ static char *get_path_parent(char const *path)
 		return strndup(path, last - path);
 }
 
+struct proj_state_lock {
+	int lock_fd;
+	int proj_state;
+};
+
 /**
- * Acquires a lock on path and populates the supplied node_userdata argument
- * with the open and locked fd, and proj_flag based on the
+ * Acquires a lock on path and populates the supplied proj_state_lock argument
+ * with the open and locked fd, and state based on the
  * PROJ_XATTR_FLAG_NAME xattr.
  *
- * @param user userdata to fill out (zeroed by this function)
+ * @param state_lock structure to fill out (zeroed by this function)
  * @param path path relative to lowerdir to lock and open
  * @param mode filemode to open path with; the fd populated in user will have
  *             this mode
  * @return 0 or an errno
  */
-static int acquire_proj_state_lock(struct node_userdata *user,
+static int acquire_proj_state_lock(struct proj_state_lock *state_lock,
 				   const char *path, mode_t mode)
 {
 	int res;
 	int err, wait_ms;
 	struct timespec ts;
 
-	memset(user, 0, sizeof(*user));
+	memset(state_lock, 0, sizeof(*state_lock));
 
-	user->fd = openat(lowerdir_fd(), path, mode);
-	if (user->fd == -1)
+	state_lock->lock_fd = openat(lowerdir_fd(), path, mode);
+	if (state_lock->lock_fd == -1)
 		return errno;
 
 	wait_ms = PROJ_WAIT_MSEC;
 
 retry_flock:
 	// TODO: may conflict with locks held by clients; use internal locks
-	err = flock(user->fd, LOCK_EX | LOCK_NB);
+	err = flock(state_lock->lock_fd, LOCK_EX | LOCK_NB);
 	if (err == -1) {
 		if (errno == EWOULDBLOCK && wait_ms > 0) {
 			/* sleep 100ms, retry */
@@ -311,33 +310,33 @@ retry_flock:
 		goto out_close;
 	}
 
-	res = get_xattr_projflag(user->fd);
+	res = get_xattr_projflag(state_lock->lock_fd);
 	if (res == -1) {
 		err = errno;
 		goto out_close;
 	}
 
-	user->proj_flag = res;
+	state_lock->proj_state = res;
 	return 0;
 
 out_close:
-	close(user->fd);
+	close(state_lock->lock_fd);
 	return err;
 }
 
 /**
- * Closes the open fd associated with user, which in turn releases any locks
- * associated with the fd.
+ * Closes the open fd associated with state_lock, which in turn releases any
+ * locks associated with the lock_fd.
  *
- * @param user userdata to clean up
+ * @param state_lock projection state structure to clean up
  */
-static void release_proj_state_lock(struct node_userdata *user)
+static void release_proj_state_lock(struct proj_state_lock *state_lock)
 {
-	if (user->fd == -1)
+	if (state_lock->lock_fd == -1)
 		return;
 
-	close(user->fd);
-	user->fd = -1;
+	close(state_lock->lock_fd);
+	state_lock->lock_fd = -1;
 }
 
 /**
@@ -345,17 +344,18 @@ static void release_proj_state_lock(struct node_userdata *user)
  * provider succeeds, clears the projection flag on the path.
  *
  * @param event_mask the event mask passed up to the provider
- * @param user userdata collected from get_path_userdata
- * @param path the path the userdata was collected for
+ * @param state_lock projection state and lock held on inode
+ * @param path the path the projection state was collected for
  * @return 0 or an errno
  */
-static int change_proj_state(uint64_t event_mask, struct node_userdata *user,
+static int change_proj_state(uint64_t event_mask,
+			     struct proj_state_lock *state_lock,
 			     const char *path)
 {
 	int res = 0;
 
 	if (event_mask & PROJFS_CREATE)
-		res = send_proj_event(event_mask, path, user->fd);
+		res = send_proj_event(event_mask, path, state_lock->lock_fd);
 	else
 		res = send_perm_event(event_mask, path, NULL);
 
@@ -364,15 +364,16 @@ static int change_proj_state(uint64_t event_mask, struct node_userdata *user,
 
 	// directories proceed directly to modified state
 	if ((event_mask & PROJFS_ONDIR) || (event_mask & PROJFS_OPEN_PERM)) {
-		if (remove_xattr_projflag(user->fd) == -1)
+		if (remove_xattr_projflag(state_lock->lock_fd) == -1)
 			return errno;
-		user->proj_flag = PROJ_XATTR_FLAG_MODIFIED;
+		state_lock->proj_state = PROJ_XATTR_FLAG_MODIFIED;
 	} else {
-		if (set_xattr_projflag(user->fd, PROJ_XATTR_FLAG_UNMODIFIED,
+		if (set_xattr_projflag(state_lock->lock_fd,
+				       PROJ_XATTR_FLAG_UNMODIFIED,
 				       XATTR_REPLACE) == -1) {
 			return errno;
 		}
-		user->proj_flag = PROJ_XATTR_FLAG_UNMODIFIED;
+		state_lock->proj_state = PROJ_XATTR_FLAG_UNMODIFIED;
 	}
 
 	return 0;
@@ -390,7 +391,7 @@ static int change_proj_state(uint64_t event_mask, struct node_userdata *user,
  */
 static int project_dir(const char *op, const char *path, int parent)
 {
-	struct node_userdata user;
+	struct proj_state_lock state_lock;
 	int res;
 	char *lock_path;
 
@@ -403,21 +404,21 @@ static int project_dir(const char *op, const char *path, int parent)
 	if (lock_path == NULL)
 		return errno;
 
-	res = acquire_proj_state_lock(&user, lock_path,
+	res = acquire_proj_state_lock(&state_lock, lock_path,
 				      O_RDONLY | O_DIRECTORY);
 	if (res != 0)
 		goto out;
 
-	if (user.proj_flag != PROJ_XATTR_FLAG_UNOPENED)
+	if (state_lock.proj_state != PROJ_XATTR_FLAG_UNOPENED)
 		goto out_release;
 
 	/* pass mapped path (i.e. containing directory we want to project) to
 	 * provider */
-	res = change_proj_state(PROJFS_CREATE | PROJFS_ONDIR, &user,
+	res = change_proj_state(PROJFS_CREATE | PROJFS_ONDIR, &state_lock,
 				lock_path);
 
 out_release:
-	release_proj_state_lock(&user);
+	release_proj_state_lock(&state_lock);
 
 out:
 	free(lock_path);
@@ -435,12 +436,12 @@ out:
  */
 static int project_file(const char *op, const char *path, int state)
 {
-	struct node_userdata user;
+	struct proj_state_lock state_lock;
 	int res;
 
 	(void)op;
 
-	res = acquire_proj_state_lock(&user, path, O_RDWR | O_NOFOLLOW);
+	res = acquire_proj_state_lock(&state_lock, path, O_RDWR | O_NOFOLLOW);
 	if (res == EISDIR) {
 		/* tried to project a directory as a file, ignore
 		 * XXX should we just always project dirs as dirs and files as
@@ -455,17 +456,17 @@ static int project_file(const char *op, const char *path, int state)
 		goto out;
 
 	// path exists relative to lowerdir
-	if (user.proj_flag == PROJ_XATTR_FLAG_UNOPENED &&
+	if (state_lock.proj_state == PROJ_XATTR_FLAG_UNOPENED &&
 	    state == PROJ_XATTR_FLAG_UNMODIFIED) {
 		// hydrate empty placeholder file
-		res = change_proj_state(PROJFS_CREATE, &user, path);
-	} else if (user.proj_flag == PROJ_XATTR_FLAG_UNMODIFIED &&
+		res = change_proj_state(PROJFS_CREATE, &state_lock, path);
+	} else if (state_lock.proj_state == PROJ_XATTR_FLAG_UNMODIFIED &&
 		   state == PROJ_XATTR_FLAG_MODIFIED) {
 		// clear flag on modified (full) file
-		res = change_proj_state(PROJFS_OPEN_PERM, &user, path);
+		res = change_proj_state(PROJFS_OPEN_PERM, &state_lock, path);
 	}
 
-	release_proj_state_lock(&user);
+	release_proj_state_lock(&state_lock);
 
 out:
 	return res;
