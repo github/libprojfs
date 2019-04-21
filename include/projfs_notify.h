@@ -44,6 +44,7 @@ extern "C" {
 
 /** Filesystem event flags */
 #define PROJFS_ONDIR		0x40000000	/* Event occurred on dir */
+#define PROJFS_ONLINK		himask(0x1000)	/* Event occurred on link */
 
 /** Event permission handler responses */
 #define PROJFS_ALLOW		0x01

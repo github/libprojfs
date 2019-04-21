@@ -557,7 +557,12 @@ static int projfs_op_link(char const *src, char const *dst)
 
 	lowerdir_fd = get_fuse_context_lowerdir_fd();
 	res = linkat(lowerdir_fd, src, lowerdir_fd, dst, 0);
-	return res == -1 ? -errno : 0;
+	if (res == -1)
+		return -errno;
+
+	// do not report event handler errors after successful link op
+	send_notify_event(PROJFS_CREATE | PROJFS_ONLINK, src, dst);
+	return 0;
 }
 
 static void *projfs_op_init(struct fuse_conn_info *conn,
