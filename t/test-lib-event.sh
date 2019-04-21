@@ -30,6 +30,7 @@ event_delete_dir="0x0001-40000000"
 event_rename_file="0x0000-000000c0"
 event_create_file="0x0000-00000100"
 event_delete_file="0x0001-00000000"
+event_link_file="0x1000-00000100"
 
 NL=$(printf "\nx")
 NL="${NL%%x}"
