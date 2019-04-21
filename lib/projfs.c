@@ -650,8 +650,9 @@ static int projfs_op_create(char const *path, mode_t mode,
 		return -errno;
 	fi->fh = fd;
 
-	res = send_notify_event(PROJFS_CREATE, path, NULL);
-	return res;
+	// do not report event handler errors after successful open op
+	send_notify_event(PROJFS_CREATE, path, NULL);
+	return 0;
 }
 
 #define has_write_mode(fi) ((fi)->flags & (O_WRONLY | O_RDWR))
@@ -773,8 +774,9 @@ static int projfs_op_mkdir(char const *path, mode_t mode)
 	if (res == -1)
 		return -errno;
 
-	res = send_notify_event(PROJFS_CREATE | PROJFS_ONDIR, path, NULL);
-	return res;
+	// do not report event handler errors after successful mkdir op
+	send_notify_event(PROJFS_CREATE | PROJFS_ONDIR, path, NULL);
+	return 0;
 }
 
 static int projfs_op_rmdir(char const *path)
@@ -823,8 +825,9 @@ static int projfs_op_rename(char const *src, char const *dst,
 	if (res == -1)
 		return -errno;
 
-	res = send_notify_event(mask, src, dst);
-	return res;
+	// do not report event handler errors after successful rename op
+	send_notify_event(mask, src, dst);
+	return 0;
 }
 
 static int projfs_op_opendir(char const *path, struct fuse_file_info *fi)
