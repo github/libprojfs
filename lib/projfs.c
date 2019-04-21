@@ -40,9 +40,6 @@
 
 #include <fuse3/fuse.h>
 
-// NOTE: only functional within a FUSE file operation!
-#define lowerdir_fd() (projfs_context_fs()->lowerdir_fd)
-
 // TODO: make this value configurable
 #define PROJ_WAIT_MSEC 5000
 
@@ -66,9 +63,16 @@ struct projfs_dir {
 	struct dirent *ent;
 };
 
-static struct projfs *projfs_context_fs(void)
+// NOTE: only functional within a FUSE file operation!
+static inline struct projfs *get_fuse_context_projfs(void)
 {
 	return (struct projfs *)fuse_get_context()->private_data;
+}
+
+// NOTE: only functional within a FUSE file operation!
+static inline int get_fuse_context_lowerdir_fd(void)
+{
+	return get_fuse_context_projfs()->lowerdir_fd;
 }
 
 /**
@@ -84,7 +88,7 @@ static int send_event(projfs_handler_t handler, uint64_t mask,
 	if (handler == NULL)
 		return 0;
 
-	event.fs = projfs_context_fs();
+	event.fs = get_fuse_context_projfs();
 	event.mask = mask;
 	event.pid = fuse_get_context()->pid;
 	event.path = path;
@@ -114,7 +118,7 @@ static int send_event(projfs_handler_t handler, uint64_t mask,
 static int send_proj_event(uint64_t mask, const char *path, int fd)
 {
 	projfs_handler_t handler =
-		projfs_context_fs()->handlers.handle_proj_event;
+		get_fuse_context_projfs()->handlers.handle_proj_event;
 
 	return send_event(handler, mask, path, NULL, fd, 0);
 }
@@ -126,7 +130,7 @@ static int send_notify_event(uint64_t mask, const char *path,
 			     const char *target_path)
 {
 	projfs_handler_t handler =
-		projfs_context_fs()->handlers.handle_notify_event;
+		get_fuse_context_projfs()->handlers.handle_notify_event;
 
 	return send_event(handler, mask, path, target_path, 0, 0);
 }
@@ -138,7 +142,7 @@ static int send_perm_event(uint64_t mask, const char *path,
 			   const char *target_path)
 {
 	projfs_handler_t handler =
-		projfs_context_fs()->handlers.handle_perm_event;
+		get_fuse_context_projfs()->handlers.handle_perm_event;
 
 	return send_event(handler, mask, path, target_path, 0, 1);
 }
@@ -274,7 +278,8 @@ static int acquire_proj_state_lock(struct proj_state_lock *state_lock,
 
 	memset(state_lock, 0, sizeof(*state_lock));
 
-	state_lock->lock_fd = openat(lowerdir_fd(), path, mode);
+	state_lock->lock_fd = openat(get_fuse_context_lowerdir_fd(),
+				     path, mode);
 	if (state_lock->lock_fd == -1)
 		return errno;
 
@@ -388,11 +393,11 @@ static char *get_path_parent(char const *path)
 }
 
 /**
- * Project a directory. Takes the lower path, and a flag indicating whether the
+ * Project a directory. Takes the path, and a flag indicating whether the
  * directory is the parent of the path, or the path itself.
  *
  * @param op op name (for debugging)
- * @param path the lower path (from lowerpath)
+ * @param path path within lowerdir (from make_relative_path())
  * @param parent 1 if we should look at the parent directory containing path, 0
  *               if we look at path itself
  * @return 0 or an errno
@@ -481,7 +486,7 @@ static int project_file(const char *op, const char *path, int proj_state)
  * Makes a path from FUSE usable as a relative path to lowerdir_fd.  Removes
  * any leading forward slashes.  If the resulting path is empty, returns ".".
  * */
-static inline const char *lowerpath(const char *path)
+static inline const char *make_relative_path(const char *path)
 {
 	while (*path == '/')
 		++path;
@@ -496,13 +501,15 @@ static int projfs_op_getattr(char const *path, struct stat *attr,
                              struct fuse_file_info *fi)
 {
 	int res;
+
 	if (fi)
 		res = fstat(fi->fh, attr);
 	else {
-		res = project_dir("getattr", lowerpath(path), 1);
+		path = make_relative_path(path);
+		res = project_dir("getattr", path, 1);
 		if (res)
 			return -res;
-		res = fstatat(lowerdir_fd(), lowerpath(path), attr,
+		res = fstatat(get_fuse_context_lowerdir_fd(), path, attr,
 			      AT_SYMLINK_NOFOLLOW);
 	}
 	return res == -1 ? -errno : 0;
@@ -510,10 +517,13 @@ static int projfs_op_getattr(char const *path, struct stat *attr,
 
 static int projfs_op_readlink(char const *path, char *buf, size_t size)
 {
-	int res = project_dir("readlink", lowerpath(path), 1);
+	int res;
+
+	path = make_relative_path(path);
+	res = project_dir("readlink", path, 1);
 	if (res)
 		return -res;
-	res = readlinkat(lowerdir_fd(), lowerpath(path), buf, size - 1);
+	res = readlinkat(get_fuse_context_lowerdir_fd(), path, buf, size - 1);
 	if (res == -1)
 		return -errno;
 	buf[res] = 0;
@@ -522,28 +532,31 @@ static int projfs_op_readlink(char const *path, char *buf, size_t size)
 
 static int projfs_op_link(char const *src, char const *dst)
 {
-	int lowerdir_fd = lowerdir_fd();
+	int lowerdir_fd;
+	int res;
 
 	/* NOTE: We require lowerdir to be a directory, so this should
 	 *       fail when src is an empty path, as we expect.
 	 */
-	int res = project_dir("link", lowerpath(src), 1);
+	src = make_relative_path(src);
+	res = project_dir("link", src, 1);
 	if (res)
 		return -res;
 
 	/* hydrate the source file before adding a hard link to it, otherwise
 	 * a user could access the newly created link and end up modifying the
 	 * non-hydrated placeholder */
-	res = project_file("link", lowerpath(src), PROJ_STATE_POPULATED);
+	res = project_file("link", src, PROJ_STATE_POPULATED);
 	if (res)
 		return -res;
 
-	res = project_dir("link2", lowerpath(dst), 1);
+	dst = make_relative_path(dst);
+	res = project_dir("link2", dst, 1);
 	if (res)
 		return -res;
 
-	res = linkat(lowerdir_fd, lowerpath(src),
-	             lowerdir_fd, lowerpath(dst), 0);
+	lowerdir_fd = get_fuse_context_lowerdir_fd();
+	res = linkat(lowerdir_fd, src, lowerdir_fd, dst, 0);
 	return res == -1 ? -errno : 0;
 }
 
@@ -557,7 +570,7 @@ static void *projfs_op_init(struct fuse_conn_info *conn,
 	cfg->negative_timeout = 0;
 	cfg->use_ino = 1;
 
-	return projfs_context_fs();
+	return get_fuse_context_projfs();
 }
 
 static int projfs_op_flush(char const *path, struct fuse_file_info *fi)
@@ -587,11 +600,12 @@ static int projfs_op_mknod(char const *path, mode_t mode, dev_t rdev)
 
 	(void)rdev;
 
-	res = project_dir("mknod", lowerpath(path), 1);
+	path = make_relative_path(path);
+	res = project_dir("mknod", path, 1);
 	if (res)
 		return -res;
 	if (S_ISFIFO(mode))
-		res = mkfifoat(lowerdir_fd(), lowerpath(path), mode);
+		res = mkfifoat(get_fuse_context_lowerdir_fd(), path, mode);
 	else
 		return -ENOSYS;
 	return res == -1 ? -errno : 0;
@@ -599,10 +613,13 @@ static int projfs_op_mknod(char const *path, mode_t mode, dev_t rdev)
 
 static int projfs_op_symlink(char const *link, char const *path)
 {
-	int res =  project_dir("symlink", lowerpath(path), 1);
+	int res;
+
+	path = make_relative_path(path);
+	res = project_dir("symlink", path, 1);
 	if (res)
 		return -res;
-	res = symlinkat(link, lowerdir_fd(), lowerpath(path));
+	res = symlinkat(link, get_fuse_context_lowerdir_fd(), path);
 	return res == -1 ? -errno : 0;
 }
 
@@ -620,22 +637,20 @@ static int projfs_op_create(char const *path, mode_t mode,
 	int res;
 	int fd;
 
-	res = project_dir("create", lowerpath(path), 1);
+	path = make_relative_path(path);
+	res = project_dir("create", path, 1);
 	if (res)
 		return -res;
-	res = project_file("create", lowerpath(path), PROJ_STATE_POPULATED);
+	res = project_file("create", path, PROJ_STATE_POPULATED);
 	if (res && res != ENOENT)
 		return -res;
-	fd = openat(lowerdir_fd(), lowerpath(path), flags, mode);
+	fd = openat(get_fuse_context_lowerdir_fd(), path, flags, mode);
 
 	if (fd == -1)
 		return -errno;
 	fi->fh = fd;
 
-	res = send_notify_event(
-		PROJFS_CREATE,
-		lowerpath(path),
-		NULL);
+	res = send_notify_event(PROJFS_CREATE, path, NULL);
 	return res;
 }
 
@@ -647,7 +662,8 @@ static int projfs_op_open(char const *path, struct fuse_file_info *fi)
 	int res;
 	int fd;
 
-	res = project_dir("open", lowerpath(path), 1);
+	path = make_relative_path(path);
+	res = project_dir("open", path, 1);
 	if (res)
 		return -res;
 
@@ -656,18 +672,18 @@ static int projfs_op_open(char const *path, struct fuse_file_info *fi)
 	 * and the file doesn't exist), we'll return the failure from openat(2)
 	 * below.
 	 */
-	res = project_file("open", lowerpath(path),
+	res = project_file("open", path,
 			   has_write_mode(fi) ? PROJ_STATE_MODIFIED
 					      : PROJ_STATE_POPULATED);
 	if (res) {
 		// if path was a directory, try projecting it instead
 		if (res == EISDIR)
-			res = project_dir("open", lowerpath(path), 0);
+			res = project_dir("open", path, 0);
 		if (res != ENOENT)
 			return -res;
 	}
 
-	fd = openat(lowerdir_fd(), lowerpath(path), flags);
+	fd = openat(get_fuse_context_lowerdir_fd(), path, flags);
 	if (fd == -1)
 		return -errno;
 
@@ -681,7 +697,7 @@ static int projfs_op_statfs(char const *path, struct statvfs *buf)
 
 	(void)path;
 	// TODO: should we return our own filesystem's global info?
-	res = fstatvfs(lowerdir_fd(), buf);
+	res = fstatvfs(get_fuse_context_lowerdir_fd(), buf);
 	return res == -1 ? -errno : 0;
 }
 
@@ -731,49 +747,49 @@ static int projfs_op_release(char const *path, struct fuse_file_info *fi)
 
 static int projfs_op_unlink(char const *path)
 {
-	int res = send_perm_event(
-		PROJFS_DELETE_PERM,
-		lowerpath(path),
-		NULL);
+	int res;
+
+	path = make_relative_path(path);
+	res = send_perm_event(PROJFS_DELETE_PERM, path, NULL);
 	if (res < 0)
 		return res;
-	res = project_dir("unlink", lowerpath(path), 1);
+	res = project_dir("unlink", path, 1);
 	if (res)
 		return -res;
 
-	res = unlinkat(lowerdir_fd(), lowerpath(path), 0);
+	res = unlinkat(get_fuse_context_lowerdir_fd(), path, 0);
 	return res == -1 ? -errno : 0;
 }
 
 static int projfs_op_mkdir(char const *path, mode_t mode)
 {
-	int res = project_dir("mkdir", lowerpath(path), 1);
+	int res;
+
+	path = make_relative_path(path);
+	res = project_dir("mkdir", path, 1);
 	if (res)
 		return -res;
-	res = mkdirat(lowerdir_fd(), lowerpath(path), mode);
+	res = mkdirat(get_fuse_context_lowerdir_fd(), path, mode);
 	if (res == -1)
 		return -errno;
 
-	res = send_notify_event(
-		PROJFS_CREATE | PROJFS_ONDIR,
-		lowerpath(path),
-		NULL);
+	res = send_notify_event(PROJFS_CREATE | PROJFS_ONDIR, path, NULL);
 	return res;
 }
 
 static int projfs_op_rmdir(char const *path)
 {
-	int res = send_perm_event(
-		PROJFS_DELETE_PERM | PROJFS_ONDIR,
-		lowerpath(path),
-		NULL);
+	int res;
+
+	path = make_relative_path(path);
+	res = send_perm_event(PROJFS_DELETE_PERM | PROJFS_ONDIR, path, NULL);
 	if (res < 0)
 		return res;
-	res = project_dir("rmdir", lowerpath(path), 1);
+	res = project_dir("rmdir", path, 1);
 	if (res)
 		return -res;
 
-	res = unlinkat(lowerdir_fd(), lowerpath(path), AT_REMOVEDIR);
+	res = unlinkat(get_fuse_context_lowerdir_fd(), path, AT_REMOVEDIR);
 	return res == -1 ? -errno : 0;
 }
 
@@ -781,32 +797,33 @@ static int projfs_op_rename(char const *src, char const *dst,
                             unsigned int flags)
 {
 	uint64_t mask = PROJFS_MOVE;
+	int lowerdir_fd;
+	int res;
 
-	int res = project_dir("rename", lowerpath(src), 1);
+	src = make_relative_path(src);
+	res = project_dir("rename", src, 1);
 	if (res)
 		return -res;
 	// always convert to fully local file before renaming
-	res = project_file("rename", lowerpath(src), PROJ_STATE_MODIFIED);
+	res = project_file("rename", src, PROJ_STATE_MODIFIED);
 	if (res == EISDIR)
 		mask |= PROJFS_ONDIR;
 	else if (res)
 		return -res;
-	res = project_dir("rename2", lowerpath(dst), 1);
+
+	dst = make_relative_path(dst);
+	res = project_dir("rename2", dst, 1);
 	if (res)
 		return -res;
 
 	// TODO: for non Linux, use renameat(); fail if flags != 0
-	res = syscall(
-		SYS_renameat2,
-		lowerdir_fd(),
-		lowerpath(src),
-		lowerdir_fd(),
-		lowerpath(dst),
-		flags);
+	lowerdir_fd = get_fuse_context_lowerdir_fd();
+	res = syscall(SYS_renameat2, lowerdir_fd, src, lowerdir_fd, dst,
+		      flags);
 	if (res == -1)
 		return -errno;
 
-	res = send_notify_event(mask, lowerpath(src), lowerpath(dst));
+	res = send_notify_event(mask, src, dst);
 	return res;
 }
 
@@ -818,10 +835,11 @@ static int projfs_op_opendir(char const *path, struct fuse_file_info *fi)
 	int res = 0;
 	int err = 0;
 
-	res = project_dir("opendir", lowerpath(path), 1);
+	path = make_relative_path(path);
+	res = project_dir("opendir", path, 1);
 	if (res)
 		return -res;
-	res = project_dir("opendir2", lowerpath(path), 0);
+	res = project_dir("opendir2", path, 0);
 	if (res)
 		return -res;
 
@@ -831,7 +849,7 @@ static int projfs_op_opendir(char const *path, struct fuse_file_info *fi)
 		goto out;
 	}
 
-	fd = openat(lowerdir_fd(), lowerpath(path), flags);
+	fd = openat(get_fuse_context_lowerdir_fd(), path, flags);
 	if (fd == -1) {
 		res = -1;
 		goto out_free;
@@ -926,10 +944,11 @@ static int projfs_op_chmod(char const *path, mode_t mode,
 	if (fi)
 		res = fchmod(fi->fh, mode);
 	else {
-		res = project_dir("chmod", lowerpath(path), 1);
+		path = make_relative_path(path);
+		res = project_dir("chmod", path, 1);
 		if (res)
 			return -res;
-		res = fchmodat(lowerdir_fd(), lowerpath(path), mode, 0);
+		res = fchmodat(get_fuse_context_lowerdir_fd(), path, mode, 0);
 	}
 	return res == -1 ? -errno : 0;
 }
@@ -941,11 +960,12 @@ static int projfs_op_chown(char const *path, uid_t uid, gid_t gid,
 	if (fi)
 		res = fchown(fi->fh, uid, gid);
 	else {
-		res = project_dir("chown", lowerpath(path), 1);
+		path = make_relative_path(path);
+		res = project_dir("chown", path, 1);
 		if (res)
 			return -res;
 		// disallow chown() on lowerdir itself, so no AT_EMPTY_PATH
-		res = fchownat(lowerdir_fd(), lowerpath(path), uid, gid,
+		res = fchownat(get_fuse_context_lowerdir_fd(), path, uid, gid,
 			       AT_SYMLINK_NOFOLLOW);
 	}
 	return res == -1 ? -errno : 0;
@@ -960,17 +980,16 @@ static int projfs_op_truncate(char const *path, off_t off,
 	else {
 		int fd;
 
-		res = project_dir("truncate", lowerpath(path), 1);
+		path = make_relative_path(path);
+		res = project_dir("truncate", path, 1);
 		if (res)
 			return -res;
 		// convert to fully local file before truncating
-		res = project_file("truncate", lowerpath(path),
-				   PROJ_STATE_MODIFIED);
+		res = project_file("truncate", path, PROJ_STATE_MODIFIED);
 		if (res)
 			return -res;
 
-		fd = openat(lowerdir_fd(), lowerpath(path),
-				O_WRONLY);
+		fd = openat(get_fuse_context_lowerdir_fd(), path, O_WRONLY);
 		if (fd == -1) {
 			res = -1;
 			goto out;
@@ -993,10 +1012,11 @@ static int projfs_op_utimens(char const *path, const struct timespec tv[2],
 	if (fi)
 		res = futimens(fi->fh, tv);
 	else {
-		res = project_dir("utimens", lowerpath(path), 1);
+		path = make_relative_path(path);
+		res = project_dir("utimens", path, 1);
 		if (res)
 			return -res;
-		res = utimensat(lowerdir_fd(), lowerpath(path), tv,
+		res = utimensat(get_fuse_context_lowerdir_fd(), path, tv,
 				AT_SYMLINK_NOFOLLOW);
 	}
 	return res == -1 ? -errno : 0;
@@ -1013,13 +1033,13 @@ static int projfs_op_setxattr(char const *path, char const *name,
 	if (xattr_name_has_prefix(name))
 		return -EPERM;
 
-	path = lowerpath(path);
-
+	path = make_relative_path(path);
 	res = project_dir("setxattr", path, 1);
 	if (res)
 		return -res;
 
-	fd = openat(lowerdir_fd(), path, O_WRONLY | O_NONBLOCK);
+	fd = openat(get_fuse_context_lowerdir_fd(), path,
+		    O_WRONLY | O_NONBLOCK);
 	if (fd == -1)
 		goto out;
 	res = fsetxattr(fd, name, value, size, flags);
@@ -1039,13 +1059,13 @@ static int projfs_op_getxattr(char const *path, char const *name,
 	int err = 0;
 	int fd;
 
-	path = lowerpath(path);
-
+	path = make_relative_path(path);
 	res = project_dir("getxattr", path, 1);
 	if (res)
 		return -res;
 
-	fd = openat(lowerdir_fd(), path, O_RDONLY | O_NONBLOCK);
+	fd = openat(get_fuse_context_lowerdir_fd(), path,
+		    O_RDONLY | O_NONBLOCK);
 	if (fd == -1)
 		goto out;
 	res = fgetxattr(fd, name, value, size);
@@ -1064,13 +1084,13 @@ static int projfs_op_listxattr(char const *path, char *list, size_t size)
 	int err = 0;
 	int fd;
 
-	path = lowerpath(path);
-
+	path = make_relative_path(path);
 	res = project_dir("listxattr", path, 1);
 	if (res)
 		return -res;
 
-	fd = openat(lowerdir_fd(), path, O_RDONLY | O_NONBLOCK);
+	fd = openat(get_fuse_context_lowerdir_fd(), path,
+		    O_RDONLY | O_NONBLOCK);
 	if (fd == -1)
 		goto out;
 	res = flistxattr(fd, list, size);
@@ -1092,13 +1112,13 @@ static int projfs_op_removexattr(char const *path, char const *name)
 	if (xattr_name_has_prefix(name))
 		return -EPERM;
 
-	path = lowerpath(path);
-
+	path = make_relative_path(path);
 	res = project_dir("removexattr", path, 1);
 	if (res)
 		return -res;
 
-	fd = openat(lowerdir_fd(), path, O_WRONLY | O_NONBLOCK);
+	fd = openat(get_fuse_context_lowerdir_fd(), path,
+		    O_WRONLY | O_NONBLOCK);
 	if (fd == -1)
 		goto out;
 	res = fremovexattr(fd, name);
@@ -1113,10 +1133,13 @@ out:
 
 static int projfs_op_access(char const *path, int mode)
 {
-	int res = project_dir("access", lowerpath(path), 1);
+	int res;
+
+	path = make_relative_path(path);
+	res = project_dir("access", path, 1);
 	if (res)
 		return -res;
-	res = faccessat(lowerdir_fd(), lowerpath(path), mode,
+	res = faccessat(get_fuse_context_lowerdir_fd(), path, mode,
 			AT_SYMLINK_NOFOLLOW);
 	return res == -1 ? -errno : 0;
 }
