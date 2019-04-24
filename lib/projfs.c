@@ -205,7 +205,7 @@ enum proj_state {
 #define PROJ_STATE_XATTR_VALUE_POPULATED 'n'
 /* The PROJ_STATE_XATTR_NAME xattr is removed for the MODIFIED state. */
 
-static enum proj_state get_proj_state(int fd)
+static enum proj_state get_proj_state_xattr(int fd)
 {
 	char value;
 	ssize_t size = sizeof(value);
@@ -227,9 +227,10 @@ static enum proj_state get_proj_state(int fd)
 	}
 }
 
-static int set_proj_state(int fd, enum proj_state state, int flags)
+static int set_proj_state_xattr(int fd, enum proj_state state, int flags)
 {
 	char value;
+	void *valuep = &value;
 	ssize_t size = sizeof(value);
 
 	switch (state) {
@@ -239,21 +240,17 @@ static int set_proj_state(int fd, enum proj_state state, int flags)
 	case PROJ_STATE_EMPTY:
 		value = PROJ_STATE_XATTR_VALUE_EMPTY;
 		break;
+	case PROJ_STATE_MODIFIED:
+		valuep = NULL;
+		size = 0;
+		break;
 	default:
 	case PROJ_STATE_ERROR:
-	case PROJ_STATE_MODIFIED:
 		errno = EINVAL;
 		return -1;
 	}
 
-	return set_xattr(fd, PROJ_STATE_XATTR_NAME, &value, &size, flags);
-}
-
-static int remove_proj_state(int fd)
-{
-	ssize_t size = 0;
-
-	return set_xattr(fd, PROJ_STATE_XATTR_NAME, NULL, &size, 0);
+	return set_xattr(fd, PROJ_STATE_XATTR_NAME, valuep, &size, flags);
 }
 
 struct proj_state_lock {
@@ -305,7 +302,7 @@ retry_flock:
 		goto out_close;
 	}
 
-	state = get_proj_state(state_lock->lock_fd);
+	state = get_proj_state_xattr(state_lock->lock_fd);
 	if (state == PROJ_STATE_ERROR) {
 		err = errno;
 		goto out_close;
@@ -336,16 +333,17 @@ static void release_proj_state_lock(struct proj_state_lock *state_lock)
 
 /**
  * Projects a path by notifying the provider with the given event mask.  If the
- * provider succeeds, clears the projection flag on the path.
+ * provider succeeds, updates the projection state on the path.
  *
- * @param event_mask the event mask passed up to the provider
- * @param state_lock projection state and lock held on inode
- * @param path the path the projection state was collected for
+ * @param state_lock current projection state and lock held on inode
+ * @param path the path of the inode whose projection state should be updated
+ * @param isdir 1 if the path is a directory; 0 otherwise
+ * @param state projection state to which the inode should be updated
  * @return 0 or an errno
  */
-static int change_proj_state(struct proj_state_lock *state_lock,
-			     const char *path, int isdir,
-			     enum proj_state state)
+static int project_locked_path(struct proj_state_lock *state_lock,
+			       const char *path, int isdir,
+			       enum proj_state state)
 {
 	int res;
 
@@ -363,10 +361,10 @@ static int change_proj_state(struct proj_state_lock *state_lock,
 		return -res;
 
 	if (state == PROJ_STATE_POPULATED) {
-		res = set_proj_state(state_lock->lock_fd, state,
-				     XATTR_REPLACE);
+		res = set_proj_state_xattr(state_lock->lock_fd, state,
+					   XATTR_REPLACE);
 	} else {
-		res = remove_proj_state(state_lock->lock_fd);
+		res = set_proj_state_xattr(state_lock->lock_fd, state, 0);
 	}
 
 	if (res == -1)
@@ -428,8 +426,8 @@ static int project_dir(const char *op, const char *path, int parent)
 		goto out_release;
 
 	// directories skip intermediate state; either empty or fully local
-	res = change_proj_state(&state_lock, lock_path, 1,
-				PROJ_STATE_MODIFIED);
+	res = project_locked_path(&state_lock, lock_path, 1,
+				  PROJ_STATE_MODIFIED);
 
 out_release:
 	release_proj_state_lock(&state_lock);
@@ -470,14 +468,14 @@ static int project_file(const char *op, const char *path,
 
 	// hydrate empty placeholder file
 	if (state_lock.state == PROJ_STATE_EMPTY) {
-		res = change_proj_state(&state_lock, path, 0,
-					PROJ_STATE_POPULATED);
+		res = project_locked_path(&state_lock, path, 0,
+					  PROJ_STATE_POPULATED);
 	}
 
 	// if requested, convert hydrated file to fully local, modified file
 	if (res == 0 && state_lock.state == PROJ_STATE_POPULATED &&
 	    state == PROJ_STATE_MODIFIED) {
-		res = change_proj_state(&state_lock, path, 0, state);
+		res = project_locked_path(&state_lock, path, 0, state);
 	}
 
 	release_proj_state_lock(&state_lock);
@@ -1412,7 +1410,7 @@ static void *projfs_loop(void *data)
 		goto out;
 	}
 
-	if (get_proj_state(fs->lowerdir_fd) == PROJ_STATE_ERROR &&
+	if (get_proj_state_xattr(fs->lowerdir_fd) == PROJ_STATE_ERROR &&
 	    errno == ENOTSUP) {
 		fprintf(stderr, "projfs: xattr support check on lowerdir "
 		                "failed: %s: %s\n",
@@ -1435,8 +1433,8 @@ static void *projfs_loop(void *data)
 
 	if (res == 1) {
 		/* dir is empty */
-		if (set_proj_state(fs->lowerdir_fd,
-				   PROJ_STATE_EMPTY, 0) == -1) {
+		if (set_proj_state_xattr(fs->lowerdir_fd,
+					 PROJ_STATE_EMPTY, 0) == -1) {
 			fprintf(stderr, "projfs: could not set projection "
 					"flag xattr: %s: %s\n",
 				fs->lowerdir, strerror(errno));
@@ -1672,7 +1670,7 @@ int projfs_create_proj_dir(struct projfs *fs, const char *path, mode_t mode,
 	if (fd == -1)
 		return errno;
 
-	if (set_proj_state(fd, PROJ_STATE_EMPTY, XATTR_CREATE) == -1) {
+	if (set_proj_state_xattr(fd, PROJ_STATE_EMPTY, XATTR_CREATE) == -1) {
 		res = errno;
 		goto out_close;
 	}
@@ -1703,7 +1701,7 @@ int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
 		goto out_close;
 	}
 
-	if (set_proj_state(fd, PROJ_STATE_EMPTY, XATTR_CREATE) == -1) {
+	if (set_proj_state_xattr(fd, PROJ_STATE_EMPTY, XATTR_CREATE) == -1) {
 		res = errno;
 		goto out_close;
 	}
