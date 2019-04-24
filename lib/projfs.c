@@ -376,8 +376,6 @@ static int change_proj_state(struct proj_state_lock *state_lock,
 	return 0;
 }
 
-static const char *dotpath = ".";
-
 /**
  * Return a copy of path with the last component removed (e.g. "x/y/z" will
  * yield "x/y").  If path has only one component, returns ".".
@@ -391,7 +389,7 @@ static char *get_path_parent(char const *path)
 {
 	const char *last = strrchr(path, '/');
 	if (!last)
-		return strdup(dotpath);
+		return strdup(".");
 	else
 		return strndup(path, last - path);
 }
@@ -477,7 +475,7 @@ static int project_file(const char *op, const char *path,
 	}
 
 	// if requested, convert hydrated file to fully local, modified file
-	if (!res && state_lock.state == PROJ_STATE_POPULATED &&
+	if (res == 0 && state_lock.state == PROJ_STATE_POPULATED &&
 	    state == PROJ_STATE_MODIFIED) {
 		res = change_proj_state(&state_lock, path, 0, state);
 	}
@@ -496,7 +494,7 @@ static inline const char *make_relative_path(const char *path)
 	while (*path == '/')
 		++path;
 	if (*path == '\0')
-		path = dotpath;
+		path = ".";
 	return path;
 }
 
@@ -566,7 +564,7 @@ static int projfs_op_link(char const *src, char const *dst)
 		return -errno;
 
 	// do not report event handler errors after successful link op
-	send_notify_event(PROJFS_CREATE | PROJFS_ONLINK, src, dst);
+	(void)send_notify_event(PROJFS_CREATE | PROJFS_ONLINK, src, dst);
 	return 0;
 }
 
@@ -661,7 +659,7 @@ static int projfs_op_create(char const *path, mode_t mode,
 	fi->fh = fd;
 
 	// do not report event handler errors after successful open op
-	send_notify_event(PROJFS_CREATE, path, NULL);
+	(void)send_notify_event(PROJFS_CREATE, path, NULL);
 	return 0;
 }
 
@@ -785,7 +783,7 @@ static int projfs_op_mkdir(char const *path, mode_t mode)
 		return -errno;
 
 	// do not report event handler errors after successful mkdir op
-	send_notify_event(PROJFS_CREATE | PROJFS_ONDIR, path, NULL);
+	(void)send_notify_event(PROJFS_CREATE | PROJFS_ONDIR, path, NULL);
 	return 0;
 }
 
@@ -836,7 +834,7 @@ static int projfs_op_rename(char const *src, char const *dst,
 		return -errno;
 
 	// do not report event handler errors after successful rename op
-	send_notify_event(mask, src, dst);
+	(void)send_notify_event(mask, src, dst);
 	return 0;
 }
 
@@ -1325,7 +1323,7 @@ static int check_dir_empty(const char *path)
 			return -1;
 		}
 
-		if (strcmp(e->d_name, dotpath) == 0 ||
+		if (strcmp(e->d_name, ".") == 0 ||
 				strcmp(e->d_name, "..") == 0)
 			; /* ignore */
 		else
