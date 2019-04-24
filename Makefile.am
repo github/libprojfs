@@ -23,7 +23,7 @@ ACLOCAL_AMFLAGS = -I m4
 SUBDIRS = include lib
 DIST_SUBDIRS = $(SUBDIRS) t
 
-EXTRA_DIST = COPYING LICENSE.md README.md \
+EXTRA_DIST = CODE_OF_CONDUCT.md CONTRIBUTING.md COPYING NOTICE README.md \
 	     config.sh.in projfs.pc.in tap-driver.sh
 
 pkgconfigdir = @pkgconfigdir@
