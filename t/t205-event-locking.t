@@ -26,7 +26,7 @@ given path.
 projfs_start test_handlers source target --timeout 1 --lock-file lock || exit 1
 
 # wait_mount will trigger a projection, so we need to reset it to empty
-setfattr -n user.projection.empty -v 0x01 source
+setfattr -n user.projection.empty -v y source
 
 test_expect_success 'test concurrent access does not trigger failure' '
 	projfs_run_twice ls target

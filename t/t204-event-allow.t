@@ -53,6 +53,12 @@ test_expect_success 'test event handler on file rename' '
 	test_path_is_file target/f1a.txt
 '
 
+projfs_event_printf notify link_file f1a.txt l1a.txt
+test_expect_success 'test event handler on file hard link' '
+	projfs_event_exec ln target/f1a.txt target/l1a.txt &&
+	test_path_is_file target/l1a.txt
+'
+
 projfs_event_printf perm delete_file f1a.txt
 test_expect_success 'test permission request allowed on file deletion' '
 	projfs_event_exec rm target/f1a.txt &&

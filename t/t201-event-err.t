@@ -28,10 +28,10 @@ projfs_start test_handlers source target --retval-file retval || exit 1
 echo ENOMEM > retval
 
 # TODO: we expect mkdir to create a dir despite the handler error and
-#	regardless of mkdir's failure exit code
+#	to not report a failure exit code
 projfs_event_printf error ENOMEM notify create_dir d1
 test_expect_success 'test event handler error on directory creation' '
-	test_must_fail projfs_event_exec mkdir target/d1 &&
+	test_might_fail projfs_event_exec mkdir target/d1 &&
 	test_path_is_dir target/d1
 '
 
@@ -44,19 +44,27 @@ test_expect_success 'test event handler error on file creation' '
 '
 
 # TODO: we expect mv to rename a dir despite the handler error and
-#	regardless of mv's failure exit code
+#	to not report a failure exit code
 projfs_event_printf error ENOMEM notify rename_dir d1 d1a
 test_expect_success 'test event handler error on directory rename' '
-	test_must_fail projfs_event_exec mv target/d1 target/d1a &&
+	test_might_fail projfs_event_exec mv target/d1 target/d1a &&
 	test_path_is_dir target/d1a
 '
 
 # TODO: we expect mv to rename a file despite the handler error and
-#	regardless of mv's failure exit code
+#	to not report a failure exit code
 projfs_event_printf error ENOMEM notify rename_file f1.txt f1a.txt
 test_expect_success 'test event handler error on file rename' '
-	test_must_fail projfs_event_exec mv target/f1.txt target/f1a.txt &&
+	test_might_fail projfs_event_exec mv target/f1.txt target/f1a.txt &&
 	test_path_is_file target/f1a.txt
+'
+
+# TODO: we expect ln to link a file despite the handler error and
+#	to not report a failure exit code
+projfs_event_printf error ENOMEM notify link_file f1a.txt l1a.txt
+test_expect_success 'test event handler error on file hard link' '
+	test_might_fail projfs_event_exec ln target/f1a.txt target/l1a.txt &&
+	test_path_is_file target/l1a.txt
 '
 
 projfs_event_printf error ENOMEM perm delete_file f1a.txt
