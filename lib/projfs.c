@@ -36,6 +36,7 @@
 #include <attr/xattr.h>
 #include <unistd.h>
 
+#include "fdtable.h"
 #include "projfs.h"
 
 #include <fuse3/fuse.h>
@@ -52,6 +53,7 @@ struct projfs {
 	struct fuse_session *session;
 	int lowerdir_fd;
 	pthread_t thread_id;
+	struct fdtable *fdtable;
 	int error;
 };
 
@@ -78,7 +80,7 @@ static inline int get_fuse_context_lowerdir_fd(void)
 /**
  * @return 0 or a negative errno
  */
-static int send_event(projfs_handler_t handler, uint64_t mask,
+static int send_event(projfs_handler_t handler, uint64_t mask, pid_t pid,
 		      const char *path, const char *target_path,
 		      int fd, int perm)
 {
@@ -88,9 +90,12 @@ static int send_event(projfs_handler_t handler, uint64_t mask,
 	if (handler == NULL)
 		return 0;
 
+	if (pid == 0)
+		pid = fuse_get_context()->pid;
+
 	event.fs = get_fuse_context_projfs();
 	event.mask = mask;
-	event.pid = fuse_get_context()->pid;
+	event.pid = pid;
 	event.path = path;
 	event.target_path = target_path;
 	event.fd = fd;
@@ -101,9 +106,8 @@ static int send_event(projfs_handler_t handler, uint64_t mask,
 		fprintf(stderr, "projfs: event handler failed: %s; "
 		                "event mask 0x%04" PRIx64 "-%08" PRIx64 ", "
 		                "pid %d, path %s, target path %s\n",
-		        strerror(-err), mask >> 32, mask & 0xFFFFFFFF,
-		        event.pid, path,
-			(target_path == NULL) ? "" : target_path);
+		        strerror(-err), mask >> 32, mask & 0xFFFFFFFF, pid,
+		        path, (target_path == NULL) ? "" : target_path);
 	}
 	else if (perm) {
 		err = (err == PROJFS_ALLOW) ? 0 : -EPERM;
@@ -120,19 +124,19 @@ static int send_proj_event(uint64_t mask, const char *path, int fd)
 	projfs_handler_t handler =
 		get_fuse_context_projfs()->handlers.handle_proj_event;
 
-	return send_event(handler, mask, path, NULL, fd, 0);
+	return send_event(handler, mask, 0, path, NULL, fd, 0);
 }
 
 /**
  * @return 0 or a negative errno
  */
-static int send_notify_event(uint64_t mask, const char *path,
+static int send_notify_event(uint64_t mask, pid_t pid, const char *path,
 			     const char *target_path)
 {
 	projfs_handler_t handler =
 		get_fuse_context_projfs()->handlers.handle_notify_event;
 
-	return send_event(handler, mask, path, target_path, 0, 0);
+	return send_event(handler, mask, pid, path, target_path, 0, 0);
 }
 
 /**
@@ -144,7 +148,7 @@ static int send_perm_event(uint64_t mask, const char *path,
 	projfs_handler_t handler =
 		get_fuse_context_projfs()->handlers.handle_perm_event;
 
-	return send_event(handler, mask, path, target_path, 0, 1);
+	return send_event(handler, mask, 0, path, target_path, 0, 1);
 }
 
 #define PROJ_XATTR_PRE_NAME "user.projection."
@@ -562,7 +566,7 @@ static int projfs_op_link(char const *src, char const *dst)
 		return -errno;
 
 	// do not report event handler errors after successful link op
-	(void)send_notify_event(PROJFS_CREATE | PROJFS_ONLINK, src, dst);
+	(void)send_notify_event(PROJFS_CREATE | PROJFS_ONLINK, 0, src, dst);
 	return 0;
 }
 
@@ -579,11 +583,18 @@ static void *projfs_op_init(struct fuse_conn_info *conn,
 	return get_fuse_context_projfs();
 }
 
+#define has_write_mode(fi) ((fi)->flags & (O_WRONLY | O_RDWR))
+
 static int projfs_op_flush(char const *path, struct fuse_file_info *fi)
 {
 	int res = close(dup(fi->fh));
 
-	(void)path;
+	if (has_write_mode(fi)) {
+		// do not report table realloc errors after successful close op
+		(void)fdtable_replace(get_fuse_context_projfs()->fdtable,
+				      fi->fh, fuse_get_context()->pid);
+	}
+
 	return res == -1 ? -errno : 0;
 }
 
@@ -656,12 +667,16 @@ static int projfs_op_create(char const *path, mode_t mode,
 		return -errno;
 	fi->fh = fd;
 
+	if (has_write_mode(fi)) {
+		// do not report table realloc errors after successful open op
+		(void)fdtable_insert(get_fuse_context_projfs()->fdtable,
+				     fd, fuse_get_context()->pid);
+	}
+
 	// do not report event handler errors after successful open op
-	(void)send_notify_event(PROJFS_CREATE, path, NULL);
+	(void)send_notify_event(PROJFS_CREATE, 0, path, NULL);
 	return 0;
 }
-
-#define has_write_mode(fi) ((fi)->flags & (O_WRONLY | O_RDWR))
 
 static int projfs_op_open(char const *path, struct fuse_file_info *fi)
 {
@@ -693,6 +708,12 @@ static int projfs_op_open(char const *path, struct fuse_file_info *fi)
 	fd = openat(get_fuse_context_lowerdir_fd(), path, flags);
 	if (fd == -1)
 		return -errno;
+
+	if (has_write_mode(fi)) {
+		// do not report table realloc errors after successful open op
+		(void)fdtable_insert(get_fuse_context_projfs()->fdtable,
+				     fd, fuse_get_context()->pid);
+	}
 
 	fi->fh = fd;
 	return 0;
@@ -746,10 +767,24 @@ static int projfs_op_write_buf(char const *path, struct fuse_bufvec *src,
 static int projfs_op_release(char const *path, struct fuse_file_info *fi)
 {
 	int res = close(fi->fh);
+	pid_t pid = 0;
 
-	(void)path;
+	if (has_write_mode(fi)) {
+		// do not report table realloc errors after successful close op
+		(void)fdtable_remove(get_fuse_context_projfs()->fdtable,
+				     fi->fh, &pid);
+	}
+
 	// return value is ignored by libfuse, but be consistent anyway
-	return res == -1 ? -errno : 0;
+	if (res == -1)
+		return -errno;
+
+	if (has_write_mode(fi)) {
+		// do not report event handler errors after successful close op
+		(void)send_notify_event(PROJFS_CLOSE_WRITE, pid,
+					make_relative_path(path), NULL);
+	}
+	return 0;
 }
 
 static int projfs_op_unlink(char const *path)
@@ -781,7 +816,7 @@ static int projfs_op_mkdir(char const *path, mode_t mode)
 		return -errno;
 
 	// do not report event handler errors after successful mkdir op
-	(void)send_notify_event(PROJFS_CREATE | PROJFS_ONDIR, path, NULL);
+	(void)send_notify_event(PROJFS_CREATE | PROJFS_ONDIR, 0, path, NULL);
 	return 0;
 }
 
@@ -832,7 +867,7 @@ static int projfs_op_rename(char const *src, char const *dst,
 		return -errno;
 
 	// do not report event handler errors after successful rename op
-	(void)send_notify_event(mask, src, dst);
+	(void)send_notify_event(mask, 0, src, dst);
 	return 0;
 }
 
@@ -1281,8 +1316,17 @@ struct projfs *projfs_new(const char *lowerdir, const char *mountdir,
 	if (pthread_mutex_init(&fs->mutex, NULL) > 0)
 		goto out_mount;
 
+	fs->fdtable = fdtable_create();
+	if (fs->fdtable == NULL) {
+		fprintf(stderr, "projfs: failed to allocate "
+				 "file descriptor table\n");
+		goto out_mutex;
+	}
+
 	return fs;
 
+out_mutex:
+	pthread_mutex_destroy(&fs->mutex);
 out_mount:
 	free(fs->mountdir);
 out_lower:
@@ -1567,6 +1611,8 @@ void *projfs_stop(struct projfs *fs)
 		fprintf(stderr, "projfs: error from event loop: %d\n",
 		        fs->error);
 	}
+
+	fdtable_destroy(fs->fdtable);
 
 	pthread_mutex_destroy(&fs->mutex);
 

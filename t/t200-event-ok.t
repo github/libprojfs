@@ -42,12 +42,14 @@ test_expect_success 'test event handler on nested directory creation' '
 # TODO: also use 'echo ... >' to exercise open() not create()
 
 projfs_event_printf notify create_file f1.txt
+projfs_event_printf notify close_file f1.txt
 test_expect_success 'test event handler on top-level file creation' '
 	projfs_event_exec touch target/f1.txt &&
 	test_path_is_file target/f1.txt
 '
 
 projfs_event_printf notify create_file d1/d2/f2.txt
+projfs_event_printf notify close_file d1/d2/f2.txt
 test_expect_success 'test event handler on nested file creation' '
 	projfs_event_exec touch target/d1/d2/f2.txt &&
 	test_path_is_file target/d1/d2/f2.txt

@@ -27,6 +27,7 @@ event_rename_dir="0x0000-400000c0"
 event_create_dir="0x0000-40000100"
 event_delete_dir="0x0001-40000000"
 
+event_close_file="0x0000-00000008"
 event_rename_file="0x0000-000000c0"
 event_create_file="0x0000-00000100"
 event_delete_file="0x0001-00000000"
