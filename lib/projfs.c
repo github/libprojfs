@@ -587,7 +587,10 @@ static void *projfs_op_init(struct fuse_conn_info *conn,
 
 static int projfs_op_flush(char const *path, struct fuse_file_info *fi)
 {
-	int res = close(dup(fi->fh));
+	int res, err;
+
+	res = close(dup(fi->fh));
+	err = errno;		// errno may be changed by fdtable realloc
 
 	if (has_write_mode(fi)) {
 		// do not report table realloc errors after successful close op
@@ -595,7 +598,7 @@ static int projfs_op_flush(char const *path, struct fuse_file_info *fi)
 				      fi->fh, fuse_get_context()->pid);
 	}
 
-	return res == -1 ? -errno : 0;
+	return res == -1 ? -err : 0;
 }
 
 static int projfs_op_fsync(char const *path, int datasync,
@@ -766,8 +769,11 @@ static int projfs_op_write_buf(char const *path, struct fuse_bufvec *src,
 
 static int projfs_op_release(char const *path, struct fuse_file_info *fi)
 {
-	int res = close(fi->fh);
+	int res, err;
 	pid_t pid = 0;
+
+	res = close(fi->fh);
+	err = errno;		// errno may be changed by fdtable realloc
 
 	if (has_write_mode(fi)) {
 		// do not report table realloc errors after successful close op
@@ -777,7 +783,7 @@ static int projfs_op_release(char const *path, struct fuse_file_info *fi)
 
 	// return value is ignored by libfuse, but be consistent anyway
 	if (res == -1)
-		return -errno;
+		return -err;
 
 	if (has_write_mode(fi)) {
 		// do not report event handler errors after successful close op
