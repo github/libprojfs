@@ -1,0 +1,6 @@
+'x' ''
+"x" ""
+x\x "x\0x"
+'x\tx\nx\"x\'x\\x' "x\tx\nx\"x\'x\\x"
+xxxxÿx 'xxxxÿx'
+"xxx xxÿx" 'xxx xxÿx\0'
