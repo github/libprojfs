@@ -13,6 +13,7 @@
 /include/config.h.in
 /include/stamp-h*
 /install-sh
+/lib/.dirstamp
 /libtool
 /libprojfs-*.tar.*z
 /ltmain.sh

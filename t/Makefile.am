@@ -27,11 +27,14 @@ test_common = test_common.c \
 	      $(top_srcdir)/include/projfs_notify.h
 
 check_PROGRAMS = get_strerror \
+		 test_fdtable \
 		 test_handlers \
 		 test_simple \
 		 wait_mount
 
 get_strerror_SOURCES = get_strerror.c $(test_common)
+test_fdtable_SOURCES = test_fdtable.c $(test_common) \
+		       ../lib/fdtable.c ../lib/fdtable.h
 test_handlers_SOURCES = test_handlers.c $(test_common)
 test_simple_SOURCES = test_simple.c $(test_common)
 wait_mount_SOURCES = wait_mount.c $(test_common)
@@ -44,6 +47,7 @@ TESTS = t000-mirror-read.t \
 	t005-mirror-links.t \
 	t006-mirror-statfs.t \
 	t007-mirror-attrs.t \
+	t100-fdtable-fill.t \
 	t200-event-ok.t \
 	t201-event-err.t \
 	t202-event-deny.t \
