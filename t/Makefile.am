@@ -87,13 +87,14 @@ prove: clean-mounts $(check_PROGRAMS)
 	fi
 
 clean-mounts:
-	@./clean_test_dirs.sh
+	./clean_test_dirs.sh
 
 clean-mounts-output:
-	@./clean_test_dirs.sh --all
+	./clean_test_dirs.sh --all
 
 clean-prove:
-	@$(RM) $(PROVE_FILE)
+	$(RM) $(PROVE_FILE)
 
 clean-local: clean-mounts-output clean-prove
+	$(RM) ../lib/.dirstamp
 

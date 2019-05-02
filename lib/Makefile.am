@@ -31,3 +31,6 @@ libprojfs_la_SOURCES = projfs.c \
 
 libprojfs_la_LDFLAGS = -version-number 0:0:0 -export-symbols-regex "^projfs"
 
+clean-local:
+	$(RM) .dirstamp
+
