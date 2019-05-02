@@ -25,8 +25,12 @@ AM_LDFLAGS = $(WARN_LDFLAGS)
 lib_LTLIBRARIES = libprojfs.la
 
 libprojfs_la_SOURCES = projfs.c \
+		       fdtable.c fdtable.h \
 		       $(top_srcdir)/include/projfs.h \
 		       $(top_srcdir)/include/projfs_notify.h
 
 libprojfs_la_LDFLAGS = -version-number 0:0:0 -export-symbols-regex "^projfs"
+
+clean-local:
+	$(RM) .dirstamp
 

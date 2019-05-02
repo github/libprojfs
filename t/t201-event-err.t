@@ -38,6 +38,7 @@ test_expect_success 'test event handler error on directory creation' '
 # TODO: we expect touch to create a file despite the handler error and
 #	to not report a failure exit code
 projfs_event_printf error ENOMEM notify create_file f1.txt
+projfs_event_printf error ENOMEM notify close_file f1.txt
 test_expect_success 'test event handler error on file creation' '
 	test_might_fail projfs_event_exec touch target/f1.txt &&
 	test_path_is_file target/f1.txt
