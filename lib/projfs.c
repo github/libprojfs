@@ -472,8 +472,22 @@ static int project_file(const char *op, const char *path,
 
 	// hydrate empty placeholder file
 	if (state_lock.state == PROJ_STATE_EMPTY) {
+		struct stat st;
+		int reset_mtime;
+
+		reset_mtime = (fstat(state_lock.lock_fd, &st) == 0);
+
 		res = project_locked_path(&state_lock, path, 0,
 					  PROJ_STATE_POPULATED);
+
+		if (res == 0 && reset_mtime) {
+			struct timespec times[2];
+
+			times[0].tv_nsec = UTIME_OMIT;
+			memcpy(&times[1], &st.st_mtim, sizeof(times[1]));
+
+			futimens(state_lock.lock_fd, times);	// best effort
+		}
 	}
 
 	// if requested, convert hydrated file to fully local, modified file
