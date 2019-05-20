@@ -27,12 +27,14 @@ test_common = test_common.c \
 	      $(top_srcdir)/include/projfs_notify.h
 
 check_PROGRAMS = get_strerror \
+		 test_args \
 		 test_fdtable \
 		 test_handlers \
 		 test_simple \
 		 wait_mount
 
 get_strerror_SOURCES = get_strerror.c $(test_common)
+test_args_SOURCES = test_args.c $(test_common)
 test_fdtable_SOURCES = test_fdtable.c $(test_common) \
 		       ../lib/fdtable.c ../lib/fdtable.h
 test_handlers_SOURCES = test_handlers.c $(test_common)
@@ -53,7 +55,8 @@ TESTS = t000-mirror-read.t \
 	t202-event-deny.t \
 	t203-event-null.t \
 	t204-event-allow.t \
-	t205-event-locking.t
+	t205-event-locking.t \
+	t300-args-initial.t
 
 EXTRA_DIST = README.md chainlint.sed clean_test_dirs.sh \
 	     test-lib.sh test-lib-event.sh test-lib-functions.sh $(TESTS)

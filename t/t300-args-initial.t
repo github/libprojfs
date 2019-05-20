@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Copyright (C) 2018-2019 GitHub, Inc.
+# Copyright (C) 2019 GitHub, Inc.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -15,25 +15,28 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see http://www.gnu.org/licenses/ .
 
-test_description='projfs file operation locking tests
+test_description='projfs argument passthrough test
 
-Check that projfs file operation notification events are issued serially for a
-given path.
+Check that arguments are interpeted and passed through correctly.
 '
 
 . ./test-lib.sh
 
-projfs_start test_handlers source target --timeout 1 --lock-file lock || exit 1
+projfs_start test_args source target || exit 1
 
-test_expect_success 'test concurrent access does not trigger failure' '
-	projfs_run_twice ls target
+test_expect_success 'mount without args does not mark initial' '
+	test_must_fail getfattr -n user.projection.empty source
 '
 
 projfs_stop || exit 1
 
-test_expect_success 'check no event error messages' '
-	test_must_be_empty test_handlers.err
+projfs_start test_args source target -o initial || exit 1
+
+test_expect_success 'mount with initial arg does mark initial' '
+	getfattr -n user.projection.empty source
 '
+
+projfs_stop || exit 1
 
 test_done
 

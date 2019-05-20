@@ -425,12 +425,13 @@ unsigned int test_get_opts(unsigned int opt_flags, ...)
 
 struct projfs *test_start_mount(const char *lowerdir, const char *mountdir,
 				const struct projfs_handlers *handlers,
-				size_t handlers_size, void *user_data)
+				size_t handlers_size, void *user_data,
+				int argc, const char **argv)
 {
 	struct projfs *fs;
 
 	fs = projfs_new(lowerdir, mountdir, handlers, handlers_size,
-			user_data);
+			user_data, argc, argv);
 
 	if (fs == NULL)
 		errx(EXIT_FAILURE, "unable to create filesystem");

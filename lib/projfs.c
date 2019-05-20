@@ -37,6 +37,7 @@
 #include <sys/syscall.h>
 #include <attr/xattr.h>
 #include <unistd.h>
+#include <stddef.h>
 
 #include "fdtable.h"
 #include "projfs.h"
@@ -45,6 +46,17 @@
 
 // TODO: make this value configurable
 #define PROJ_WAIT_MSEC 5000
+
+struct projfs_config {
+	int initial;
+};
+
+#define PROJFS_OPT(t, p, v) { t, offsetof(struct projfs_config, p), v }
+
+static struct fuse_opt projfs_opts[] = {
+	PROJFS_OPT("initial",	initial, 1),
+	FUSE_OPT_END
+};
 
 struct projfs {
 	char *lowerdir;
@@ -57,6 +69,8 @@ struct projfs {
 	pthread_t thread_id;
 	struct fdtable *fdtable;
 	int error;
+	struct fuse_args args;
+	struct projfs_config config;
 };
 
 typedef int (*projfs_handler_t)(struct projfs_event *);
@@ -583,9 +597,11 @@ static int projfs_op_getattr(char const *path, struct stat *attr,
 		res = fstat(fi->fh, attr);
 	else {
 		path = make_relative_path(path);
-		res = project_dir("getattr", path, 1);
-		if (res)
-			return -res;
+		if (strcmp(path, ".") != 0) {
+			res = project_dir("getattr", path, 1);
+			if (res)
+				return -res;
+		}
 		res = fstatat(get_fuse_context_lowerdir_fd(), path, attr,
 			      AT_SYMLINK_NOFOLLOW);
 	}
@@ -1319,14 +1335,6 @@ static struct fuse_operations projfs_ops = {
 	// copy_file_range
 };
 
-#ifdef PROJFS_DEBUG
-#define DEBUG_ARGV "--debug",
-#define DEBUG_ARGC 1
-#else
-#define DEBUG_ARGV
-#define DEBUG_ARGC 0
-#endif
-
 static void projfs_set_session(struct projfs *fs, struct fuse_session *se)
 {
 	if (fs == NULL)
@@ -1339,10 +1347,12 @@ static void projfs_set_session(struct projfs *fs, struct fuse_session *se)
 
 struct projfs *projfs_new(const char *lowerdir, const char *mountdir,
 		const struct projfs_handlers *handlers,
-		size_t handlers_size, void *user_data)
+		size_t handlers_size, void *user_data,
+		int argc, const char **argv)
 {
 	struct projfs *fs;
 	size_t len;
+	int i;
 
 	// TODO: prevent failure with relative lowerdir
 	if (lowerdir == NULL) {
@@ -1401,7 +1411,29 @@ struct projfs *projfs_new(const char *lowerdir, const char *mountdir,
 		goto out_mutex;
 	}
 
+	if (fuse_opt_add_arg(&fs->args, "projfs") != 0) {
+		fprintf(stderr, "projfs: failed to allocate argument\n");
+		goto out_fdtable;
+	}
+
+	for (i = 0; i < argc; ++i) {
+		if (fuse_opt_add_arg(&fs->args, argv[i]) != 0) {
+			fprintf(stderr, "projfs: failed to allocate "
+					"argument\n");
+			goto out_fdtable;
+		}
+	}
+
+	if (fuse_opt_parse(&fs->args, &fs->config, projfs_opts, NULL) == -1) {
+		fprintf(stderr, "projfs: unable to parse arguments\n");
+		goto out_fdtable;
+	}
+
 	return fs;
+
+out_fdtable:
+	fuse_opt_free_args(&fs->args);
+	fdtable_destroy(fs->fdtable);
 
 out_mutex:
 	pthread_mutex_destroy(&fs->mutex);
@@ -1418,37 +1450,6 @@ out:
 void *projfs_get_user_data(struct projfs *fs)
 {
 	return fs->user_data;
-}
-
-/**
- * @return 1 if dir is empty, 0 if not, -1 if an error occurred (errno set)
- */
-static int check_dir_empty(const char *path)
-{
-	int err, is_empty = 1;
-	struct dirent *e;
-	DIR *d = opendir(path);
-	if (!d)
-		return -1;
-
-	while (1) {
-		errno = 0;
-		e = readdir(d);
-		if (e == NULL) {
-			err = errno;
-			closedir(d);
-			if (err == 0)
-				return is_empty;
-			errno = err;
-			return -1;
-		}
-
-		if (strcmp(e->d_name, ".") == 0 ||
-				strcmp(e->d_name, "..") == 0)
-			; /* ignore */
-		else
-			is_empty = 0;
-	}
 }
 
 #define SPARSE_TEST_FILENAME ".libprojfs-sparse-test"
@@ -1509,9 +1510,6 @@ close:
 static void *projfs_loop(void *data)
 {
 	struct projfs *fs = (struct projfs *)data;
-	const char *argv[] = { "projfs", DEBUG_ARGV NULL };
-	int argc = 1 + DEBUG_ARGC;
-	struct fuse_args args = FUSE_ARGS_INIT(argc, (char **)argv);
 	struct fuse_loop_config loop;
 	struct fuse *fuse;
 	struct fuse_session *se;
@@ -1541,20 +1539,20 @@ static void *projfs_loop(void *data)
 		goto out_close;
 	}
 
-	/* mark lowerdir as needing projection if it's empty (because the
-	 * provider creates it for us before we start running) -- probably want
-	 * to modify this behaviour in the future */
-	res = check_dir_empty(fs->lowerdir);
+	res = test_sparse_support(fs->lowerdir_fd);
 	if (res == -1) {
-		fprintf(stderr, "projfs: could not check if lowerdir "
-		                "is empty: %s: %s\n",
-			fs->lowerdir, strerror(errno));
+		fprintf(stderr, "projfs: unable to test sparse file support: "
+				"%s/%s: %s\n",
+			fs->lowerdir, SPARSE_TEST_FILENAME, strerror(errno));
 		res = 3;
 		goto out_close;
-	}
+	} else if (res == 0)
+		fprintf(stderr, "projfs: sparse files may not be supported by "
+		                "lower filesystem: %s\n", fs->lowerdir);
+	else if (res == 1)
+		res = 0;
 
-	if (res == 1) {
-		/* dir is empty */
+	if (fs->config.initial == 1) {
 		if (set_proj_state_xattr(fs->lowerdir_fd,
 					 PROJ_STATE_EMPTY, 0) == -1) {
 			fprintf(stderr, "projfs: could not set projection "
@@ -1565,22 +1563,9 @@ static void *projfs_loop(void *data)
 		}
 	}
 
-	res = test_sparse_support(fs->lowerdir_fd);
-	if (res == -1) {
-		fprintf(stderr, "projfs: unable to test sparse file support: "
-				"%s/%s: %s\n",
-			fs->lowerdir, SPARSE_TEST_FILENAME, strerror(errno));
-		res = 5;
-		goto out_close;
-	} else if (res == 0)
-		fprintf(stderr, "projfs: sparse files may not be supported by "
-		                "lower filesystem: %s\n", fs->lowerdir);
-	else if (res == 1)
-		res = 0;
-
-	fuse = fuse_new(&args, &projfs_ops, sizeof(projfs_ops), fs);
+	fuse = fuse_new(&fs->args, &projfs_ops, sizeof(projfs_ops), fs);
 	if (fuse == NULL) {
-		res = 6;
+		res = 5;
 		goto out_close;
 	}
 
@@ -1589,13 +1574,13 @@ static void *projfs_loop(void *data)
 
 	// TODO: defer all signal handling to user, once we remove FUSE
 	if (fuse_set_signal_handlers(se) != 0) {
-		res = 7;
+		res = 6;
 		goto out_session;
 	}
 
 	// TODO: mount with x-gvfs-hide option and maybe others for KDE, etc.
 	if (fuse_mount(fuse, fs->mountdir) != 0) {
-		res = 8;
+		res = 7;
 		goto out_signal;
 	}
 
@@ -1607,7 +1592,7 @@ static void *projfs_loop(void *data)
 	if ((err = fuse_loop_mt(fuse, &loop)) != 0) {
 		if (err > 0)
 			fprintf(stderr, "projfs: %s signal\n", strsignal(err));
-		res = 9;
+		res = 8;
 	}
 
 	fuse_session_unmount(se);
@@ -1689,6 +1674,8 @@ void *projfs_stop(struct projfs *fs)
 		fprintf(stderr, "projfs: error from event loop: %d\n",
 		        fs->error);
 	}
+
+	fuse_opt_free_args(&fs->args);
 
 	fdtable_destroy(fs->fdtable);
 
