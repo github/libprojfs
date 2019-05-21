@@ -43,7 +43,9 @@
 #include "fdtable.h"
 #include "projfs.h"
 
+#define FUSE_USE_VERSION 32
 #include <fuse3/fuse.h>
+#include <fuse3/fuse_lowlevel.h>
 
 // TODO: make this value configurable
 #define PROJ_WAIT_MSEC 5000
@@ -1965,7 +1967,7 @@ int projfs_create_proj_symlink(struct projfs *fs, const char *path,
 
 	if (!check_safe_rel_path(path))
 		return EINVAL;
-	
+
 	res = symlinkat(target, fs->lowerdir_fd, path);
 	if (res == -1)
 		return errno;
