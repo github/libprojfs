@@ -23,8 +23,10 @@
 
 #include <config.h>
 
+#include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
+#include <limits.h>
 #include <inttypes.h>
 #include <pthread.h>
 #include <signal.h>
@@ -77,6 +79,62 @@ static inline int get_fuse_context_lowerdir_fd(void)
 	return get_fuse_context_projfs()->lowerdir_fd;
 }
 
+// ceil(log10(INT_MAX)) = ceil(log10(2) * sizeof(int) * CHAR_BIT)
+//			<     (   1/3   * sizeof(int) * CHAR_BIT) + 1
+#define INT_FMT_LEN ((sizeof(int) * CHAR_BIT) / 3 + 1)
+
+#define PROC_STATUS_PATH_FMT "/proc/%d/status"
+#define MAX_PROC_STATUS_PATH_LEN \
+	(sizeof(PROC_STATUS_PATH_FMT) + INT_FMT_LEN - 3)
+
+#define PROC_STATUS_BUF_SIZE 32
+
+#define PROC_STATUS_TGID_KEY "Tgid:"
+#define PROC_STATUS_TGID_KEY_LEN (sizeof(PROC_STATUS_TGID_KEY) - 1)
+
+// NOTE: only functional within a FUSE file operation!
+static pid_t get_fuse_context_tgid(void)
+{
+	pid_t pid = fuse_get_context()->pid;
+	char path[MAX_PROC_STATUS_PATH_LEN + 1];
+	char buf[PROC_STATUS_BUF_SIZE];
+	FILE *file;
+	int found = 0;
+
+	// do not report IO or parsing errors
+	sprintf(path, PROC_STATUS_PATH_FMT, pid);
+	file = fopen(path, "r");
+	if (file == NULL)
+		return pid;		// best effort
+	while (fgets(buf, sizeof(buf), file) != NULL) {
+		if (strncmp(buf, PROC_STATUS_TGID_KEY,
+			    PROC_STATUS_TGID_KEY_LEN) == 0)
+		{
+			found = 1;
+			break;
+		}
+		while (strchr(buf, '\n') == NULL &&
+		       fgets(buf, sizeof(buf), file) != NULL);
+	}
+	fclose(file);
+
+	if (found) {
+		char *s = buf + PROC_STATUS_TGID_KEY_LEN;
+		unsigned long val = 0;
+
+		while (isblank(*s))
+			++s;
+		while (isdigit(*s) && val < INT_MAX)
+			val = val * 10 + (*s++ - '0');
+		while (isblank(*s))
+			++s;
+		if (*s == '\n' && val < INT_MAX)
+			pid = val;
+	}
+
+	return pid;
+}
+
 /**
  * @return 0 or a negative errno
  */
@@ -91,7 +149,7 @@ static int send_event(projfs_handler_t handler, uint64_t mask, pid_t pid,
 		return 0;
 
 	if (pid == 0)
-		pid = fuse_get_context()->pid;
+		pid = get_fuse_context_tgid();
 
 	event.fs = get_fuse_context_projfs();
 	event.mask = mask;
@@ -609,7 +667,7 @@ static int projfs_op_flush(char const *path, struct fuse_file_info *fi)
 	if (has_write_mode(fi)) {
 		// do not report table realloc errors after successful close op
 		(void)fdtable_replace(get_fuse_context_projfs()->fdtable,
-				      fi->fh, fuse_get_context()->pid);
+				      fi->fh, get_fuse_context_tgid());
 	}
 
 	return res == -1 ? -err : 0;
@@ -687,8 +745,8 @@ static int projfs_op_create(char const *path, mode_t mode,
 	if (has_write_mode(fi)) {
 		// do not report table realloc errors after successful open op
 		(void)fdtable_insert(get_fuse_context_projfs()->fdtable,
-				     fd, fuse_get_context()->pid);
-	}
+				     fd, get_fuse_context_tgid());
+	 }
 
 	// do not report event handler errors after successful open op
 	(void)send_notify_event(PROJFS_CREATE, 0, path, NULL);
@@ -729,7 +787,7 @@ static int projfs_op_open(char const *path, struct fuse_file_info *fi)
 	if (has_write_mode(fi)) {
 		// do not report table realloc errors after successful open op
 		(void)fdtable_insert(get_fuse_context_projfs()->fdtable,
-				     fd, fuse_get_context()->pid);
+				     fd, get_fuse_context_tgid());
 	}
 
 	fi->fh = fd;
