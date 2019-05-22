@@ -634,7 +634,8 @@ static int project_file(const char *op, const char *path,
 	 * which we want to ignore, and request a write mode so we receive
 	 * EISDIR if path is a directory.
 	 */
-	res = acquire_proj_state_lock(&state_lock, path, O_RDWR | O_NOFOLLOW);
+	res = acquire_proj_state_lock(&state_lock, path,
+				      O_RDWR | O_NOFOLLOW | O_NONBLOCK);
 	if (res != 0) {
 		if (res == ELOOP)
 			return 0;
@@ -1990,7 +1991,7 @@ static int iter_attrs(struct projfs *fs, const char *path,
 	if (nattrs == 0)
 		return 0;
 
-	fd = openat(fs->lowerdir_fd, path, O_RDONLY | O_NOFOLLOW);
+	fd = openat(fs->lowerdir_fd, path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
 	if (fd == -1)
 		return errno;
 
