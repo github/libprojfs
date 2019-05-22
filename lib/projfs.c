@@ -588,7 +588,7 @@ static int project_dir(const char *op, const char *path, int parent)
 		return errno;
 
 	res = acquire_proj_state_lock(&state_lock, lock_path,
-				      O_RDONLY | O_DIRECTORY);
+				      O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
 	if (res != 0)
 		goto out;
 
@@ -1911,7 +1911,8 @@ int projfs_create_proj_dir(struct projfs *fs, const char *path, mode_t mode,
 	if (mkdirat(fs->lowerdir_fd, path, mode) == -1)
 		return errno;
 
-	fd = openat(fs->lowerdir_fd, path, O_RDONLY);
+	fd = openat(fs->lowerdir_fd, path,
+		    O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
 	if (fd == -1)
 		return errno;
 
@@ -1989,7 +1990,7 @@ static int iter_attrs(struct projfs *fs, const char *path,
 	if (nattrs == 0)
 		return 0;
 
-	fd = openat(fs->lowerdir_fd, path, O_RDONLY);
+	fd = openat(fs->lowerdir_fd, path, O_RDONLY | O_NOFOLLOW);
 	if (fd == -1)
 		return errno;
 
