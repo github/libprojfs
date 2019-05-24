@@ -26,10 +26,11 @@
 #include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
-#include <limits.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <pthread.h>
 #include <signal.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -37,7 +38,6 @@
 #include <sys/syscall.h>
 #include <attr/xattr.h>
 #include <unistd.h>
-#include <stddef.h>
 
 #include "fdtable.h"
 #include "projfs.h"
