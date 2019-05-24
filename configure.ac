@@ -39,24 +39,6 @@ AC_SYS_LARGEFILE
 
 AX_COMPILER_FLAGS()
 
-AC_ARG_ENABLE([debug],
-  [AS_HELP_STRING([--enable-debug],
-    [Enable libprojfs debugging output])]
-)dnl
-
-AS_IF([test ":$enable_debug" = ":yes"],
-  [AC_DEFINE(PROJFS_DEBUG, 1, [Enable libprojfs debugging output])]
-)dnl
-
-AC_ARG_ENABLE([fuse_debug],
-  [AS_HELP_STRING([--enable-fuse-debug],
-    [Enable FUSE library debugging output])]
-)dnl
-
-AS_IF([test ":$enable_fuse_debug" = ":yes"],
-  [AC_DEFINE(PROJFS_FUSE_DEBUG, 1, [Enable FUSE library debugging output])]
-)dnl
-
 AC_CHECK_PROGS([DIFF], [diff])
 AC_ARG_VAR([DIFF], [File comparison tool])
 

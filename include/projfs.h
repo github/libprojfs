@@ -104,7 +104,8 @@ struct projfs_handlers {
  */
 struct projfs *projfs_new(const char *lowerdir, const char *mountdir,
 			  const struct projfs_handlers *handlers,
-			  size_t handlers_size, void *user_data);
+			  size_t handlers_size, void *user_data,
+			  int argc, const char **argv);
 
 /**
  * Retrieve the private user data from a projfs handle.

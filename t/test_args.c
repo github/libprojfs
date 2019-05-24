@@ -24,15 +24,17 @@
 
 #include "test_common.h"
 
-int main(int argc, char *const argv[])
+int main(int argc, const char **argv)
 {
-	const char *lower_path, *mount_path;
 	struct projfs *fs;
-
-	test_parse_mount_opts(argc, argv, TEST_OPT_NONE,
-			      &lower_path, &mount_path);
-
-	fs = test_start_mount(lower_path, mount_path, NULL, 0, NULL, 0, NULL);
+	if (argc < 3) {
+		fprintf(stderr, "usage: %s [OPTIONS ...] "
+				"<lower-path> <mount-path>\n", argv[0]);
+		exit(EXIT_FAILURE);
+	}
+	
+	fs = test_start_mount(argv[argc - 2], argv[argc - 1], NULL, 0, NULL,
+	                      argc - 3, argv + 1);
 	test_wait_signal();
 	test_stop_mount(fs);
 

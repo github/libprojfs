@@ -62,7 +62,8 @@ unsigned int test_get_opts(unsigned int opt_flags, ...);
 
 struct projfs *test_start_mount(const char *lowerdir, const char *mountdir,
 				const struct projfs_handlers *handlers,
-				size_t handlers_size, void *user_data);
+				size_t handlers_size, void *user_data,
+				int argc, const char **argv);
 
 void *test_stop_mount(struct projfs *fs);
 
