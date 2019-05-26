@@ -507,12 +507,13 @@ static void release_proj_state_lock(struct proj_state_lock *state_lock)
  * provider succeeds, updates the projection state on the path.
  *
  * @param state_lock current projection state and lock held on inode
+ * @param fd file descriptor of inode whose projection state should be updated
  * @param path the path of the inode whose projection state should be updated
  * @param isdir 1 if the path is a directory; 0 otherwise
  * @param state projection state to which the inode should be updated
  * @return 0 or an errno
  */
-static int project_locked_path(struct proj_state_lock *state_lock,
+static int project_locked_path(struct proj_state_lock *state_lock, int fd,
 			       const char *path, int isdir,
 			       enum proj_state state)
 {
@@ -523,7 +524,7 @@ static int project_locked_path(struct proj_state_lock *state_lock,
 
 		if (isdir)
 			event_mask |= PROJFS_ONDIR;
-		res = send_proj_event(event_mask, path, state_lock->lock_fd);
+		res = send_proj_event(event_mask, path, fd);
 	} else {
 		res = send_perm_event(PROJFS_OPEN_PERM, path, NULL);
 	}
@@ -532,10 +533,9 @@ static int project_locked_path(struct proj_state_lock *state_lock,
 		return -res;
 
 	if (state == PROJ_STATE_POPULATED) {
-		res = set_proj_state_xattr(state_lock->lock_fd, state,
-					   XATTR_REPLACE);
+		res = set_proj_state_xattr(fd, state, XATTR_REPLACE);
 	} else {
-		res = set_proj_state_xattr(state_lock->lock_fd, state, 0);
+		res = set_proj_state_xattr(fd, state, 0);
 	}
 
 	if (res == -1)
@@ -596,8 +596,8 @@ static int project_dir(const char *op, const char *path, int parent)
 		goto out_release;
 
 	// directories skip intermediate state; either empty or fully local
-	res = project_locked_path(&state_lock, lock_path, 1,
-				  PROJ_STATE_MODIFIED);
+	res = project_locked_path(&state_lock, state_lock.lock_fd, lock_path,
+				  1, PROJ_STATE_MODIFIED);
 	log = (res == 0);
 
 out_release:
@@ -615,6 +615,10 @@ out:
 	return res;
 }
 
+#define PROC_SELF_FD_PATH_FMT "/proc/self/fd/%d"
+#define MAX_PROC_SELF_FD_PATH_LEN \
+	(sizeof(PROC_SELF_FD_PATH_FMT) + INT_FMT_LEN - 3)
+
 /**
  * Project a file. Takes the lower path.
  *
@@ -626,16 +630,17 @@ out:
 static int project_file(const char *op, const char *path,
 			enum proj_state state)
 {
+	char self_fd_path[MAX_PROC_SELF_FD_PATH_LEN + 1];
 	struct proj_state_lock state_lock;
+	struct stat st;
 	int log = 0;
-	int res;
+	int fd, res;
 
 	/* Pass O_NOFOLLOW so we receive ELOOP if path is an existing symlink,
-	 * which we want to ignore, and request a write mode so we receive
-	 * EISDIR if path is a directory.
+	 * which we want to ignore.
 	 */
 	res = acquire_proj_state_lock(&state_lock, path,
-				      O_RDWR | O_NOFOLLOW | O_NONBLOCK);
+				      O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
 	if (res != 0) {
 		if (res == ELOOP)
 			return 0;
@@ -643,18 +648,33 @@ static int project_file(const char *op, const char *path,
 			return res;
 	}
 
+	if (fstat(state_lock.lock_fd, &st) == -1) {
+		res = errno;
+		goto out_release;
+	}
+	else if (!S_ISREG(st.st_mode)) {
+		if (S_ISDIR(st.st_mode))
+			res = EISDIR;
+		else
+			res = 0;
+		goto out_release;
+	}
+
+	// TODO: for non-Linux, may need to use other technique to reopen file
+	sprintf(self_fd_path, PROC_SELF_FD_PATH_FMT, state_lock.lock_fd);
+	fd = open(self_fd_path, O_WRONLY | O_NONBLOCK);
+	if (fd == -1) {
+		res = errno;
+		goto out_release;
+	}
+
 	// hydrate empty placeholder file
 	if (state_lock.state == PROJ_STATE_EMPTY) {
-		struct stat st;
-		int reset_mtime;
-
-		reset_mtime = (fstat(state_lock.lock_fd, &st) == 0);
-
-		res = project_locked_path(&state_lock, path, 0,
+		res = project_locked_path(&state_lock, fd, path, 0,
 					  PROJ_STATE_POPULATED);
 		log = (res == 0);
 
-		if (res == 0 && reset_mtime) {
+		if (res == 0) {
 			struct timespec times[2];
 
 			times[0].tv_nsec = UTIME_OMIT;
@@ -667,10 +687,13 @@ static int project_file(const char *op, const char *path,
 	// if requested, convert hydrated file to fully local, modified file
 	if (res == 0 && state_lock.state == PROJ_STATE_POPULATED &&
 	    state == PROJ_STATE_MODIFIED) {
-		res = project_locked_path(&state_lock, path, 0, state);
+		res = project_locked_path(&state_lock, fd, path, 0, state);
 		log = (res == 0);
 	}
 
+	close(fd);
+
+out_release:
 	release_proj_state_lock(&state_lock);
 
 	if (log) {
