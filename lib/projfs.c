@@ -483,6 +483,7 @@ retry_flock:
 
 out_close:
 	close(state_lock->lock_fd);
+	state_lock->lock_fd = -1;
 	return err;
 }
 
