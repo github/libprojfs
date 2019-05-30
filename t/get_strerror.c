@@ -30,7 +30,8 @@ int main(int argc, char *const argv[])
 	char *errsym;
 	int errval;
 
-	test_parse_opts(argc, argv, TEST_OPT_NONE, 1, 1, &errsym, "<errsym>");
+	test_parse_opts(argc, argv, TEST_OPT_NONE, 1, 1, &errsym, NULL,
+			"<errsym>");
 
 	if (test_parse_retsym(errsym, &errval) < 0 || errval > 0)
 		test_exit_error(argv[0], "invalid errno symbol: %s", errsym);

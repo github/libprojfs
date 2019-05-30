@@ -24,7 +24,7 @@ Check that arguments are interpeted and passed through correctly.
 
 HELPER_LOG='test_simple.log'
 
-projfs_start test_args source target --log="$HELPER_LOG" || exit 1
+projfs_start test_simple source target --log="$HELPER_LOG" || exit 1
 ls target
 projfs_stop || exit 1
 
@@ -32,7 +32,7 @@ test_expect_success 'mount without initial option not projected on read' '
 	test_must_be_empty "$HELPER_LOG"
 '
 
-projfs_start test_args source target --log="$HELPER_LOG" --initial || exit 1
+projfs_start test_simple source target --log="$HELPER_LOG" --initial || exit 1
 ls target
 projfs_stop || exit 1
 

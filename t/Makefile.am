@@ -27,14 +27,12 @@ test_common = test_common.c \
 	      $(top_srcdir)/include/projfs_notify.h
 
 check_PROGRAMS = get_strerror \
-		 test_args \
 		 test_fdtable \
 		 test_handlers \
 		 test_simple \
 		 wait_mount
 
 get_strerror_SOURCES = get_strerror.c $(test_common)
-test_args_SOURCES = test_args.c $(test_common)
 test_fdtable_SOURCES = test_fdtable.c $(test_common) \
 		       ../lib/fdtable.c ../lib/fdtable.h
 test_handlers_SOURCES = test_handlers.c $(test_common)
