@@ -724,21 +724,21 @@ test_match_signal () {
 # and the mount point of the projected upper filesystem, in "$2" and "$3",
 # with any options for the helper program in the remaining arguments.
 # Any output from the helper program will be captured in a file
-# with the basename from "$1" and the extension ".log", and any errors
+# with the basename from "$1" and the extension ".out", and any errors
 # in a file with the basename from "$1" and the extension ".err".
 projfs_start () {
 	helper="$TEST_DIRECTORY/$1"; shift
 	lower_path="$TRASH_DIRECTORY/$1"; shift
 	mount_path="$TRASH_DIRECTORY/$1"; shift
 
-	helper_log=$(basename "$helper").log
+	helper_out=$(basename "$helper").out
 	helper_err=$(basename "$helper").err
 
 	$MKDIR_P "$lower_path" "$mount_path" &&
 	lower_dev=$(stat -c %D "$mount_path") || exit 1
 
 	"$helper" "$@" "$lower_path" "$mount_path" \
-		>"$helper_log" 2>"$helper_err" &
+		>"$helper_out" 2>"$helper_err" &
 	projfs_pid=$!
 
 	"$TEST_DIRECTORY"/wait_mount --timeout $PROJFS_TIMEOUT \
@@ -768,36 +768,48 @@ projfs_stop () {
 }
 
 EXEC_PID="exec.pid"
-EXEC_LOG="exec.log"
+EXEC_OUT="exec.out"
 EXEC_ERR="exec.err"
 
 EXEC_PID_MARK="##PID##"
 
-# Execute a command, capturing its process ID, and then append messages
-# interpolated with the command's pid into a log file and an optional error
-# file.  The log file should be given in "$1", the log messages in "$2",
-# the error file in "$3", the error messages in "$4", and the command in
-# the remaining arguments.
-# To skip logging to an error file, "$3" should be an empty string.
-# Note that command arguments with internal spaces must have single quotes
-# passed in the argument, e.g., "'foo bar'".
-# Output and errors from the command will be appended to "$EXEC_OUT" and
-# "$EXEC_ERR", respectively.
+# Execute a command, capturing its process ID, and then append formatted
+# messages interpolated with the command's pid into files, for comparison
+# with the actual output of the command.
+# One file will contain the messages that are expected to be written to
+# standard output by the command, and an optional second file will contain
+# the error log messages that are expected to be logged by the command.
+#
+# The expected-output file should be given in "$1", the output message
+# format in "$2", the expected-error-log file in "$3", the error log message
+# format in "$4", and the command itself in the remaining arguments.
+# To skip generation of the second file of expected error messages, "$3"
+# should be an empty string.
+# Note that any arguments to the command itself that have internal spaces
+# must be single-quoted, e.g., "'foo bar'".
+#
+# The standard output and standard error output from the execution of
+# the command will be appended to "$EXEC_OUT" and "$EXEC_ERR", respectively.
+# The contents of the "$EXEC_OUT" file may then be compared with the
+# contents of the expected-output file.  The "$EXEC_ERR" file should be
+# empty unless an unexpected error occurred.  Any expected errors logged
+# by the command to its own log file may be compared with the contents
+# of the expected-error-log file.
 projfs_log_exec () {
+	exec_out="$1"; shift
+	out_msgs="$1"; shift
 	exec_log="$1"; shift
 	log_msgs="$1"; shift
-	exec_err="$1"; shift
-	err_msgs="$1"; shift
 
 	# Do not chain because we want to proceed in the case of errors
 	$SHELL_PATH -c "echo -n \$\$ >$EXEC_PID && exec $*" \
-		>>"$EXEC_LOG" 2>>"$EXEC_ERR"; ret=$?
+		>>"$EXEC_OUT" 2>>"$EXEC_ERR"; ret=$?
 
 	pid=$(cat "$EXEC_PID") &&
-	echo "$log_msgs" | sed "s/$EXEC_PID_MARK/$pid/g" >>"$exec_log" &&
-	if test ":$exec_err" != ":"
+	echo "$out_msgs" | sed "s/$EXEC_PID_MARK/$pid/g" >>"$exec_out" &&
+	if test ":$exec_log" != ":"
 	then
-		echo "$err_msgs" | sed "s/$EXEC_PID_MARK/$pid/g" >> "$exec_err"
+		echo "$log_msgs" | sed "s/$EXEC_PID_MARK/$pid/g" >> "$exec_log"
 	fi
 
 	return $ret

@@ -25,7 +25,7 @@ events respond to handler errors.
 . "$TEST_DIRECTORY"/test-lib-event.sh
 
 projfs_start test_handlers source target --retval-file retval \
-	--log=test_projfs.log || exit 1
+	--log=test_handlers.log || exit 1
 echo ENOMEM > retval
 
 # TODO: we expect mkdir to create a dir despite the handler error and
@@ -85,15 +85,15 @@ rm retval
 projfs_stop || exit 1
 
 test_expect_success 'check all event notifications' '
-	test_cmp test_handlers.log "$EVENT_LOG"
-'
-
-test_expect_success 'check no event error messages' '
-	test_must_be_empty test_handlers.err
+	test_cmp test_handlers.out "$EVENT_OUT"
 '
 
 test_expect_success 'check all event log messages' '
-	test_cmp test_projfs.log "$EVENT_ERR"
+	test_cmp test_handlers.log "$EVENT_LOG"
+'
+
+test_expect_success 'check no unexpected error output' '
+	test_must_be_empty test_handlers.err
 '
 
 test_done
