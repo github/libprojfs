@@ -223,12 +223,16 @@ static int send_event(projfs_handler_t handler, uint64_t mask, pid_t pid,
 
 	err = handler(&event);
 	if (err < 0) {
-		// TODO: replace with log output and only when log option set
-		fprintf(stderr, "projfs: event handler failed: %s; "
-		                "event mask 0x%04" PRIx64 "-%08" PRIx64 ", "
-		                "pid %d, path %s, target path %s\n",
-		        strerror(-err), mask >> 32, mask & 0xFFFFFFFF, pid,
-		        path, (target_path == NULL) ? "" : target_path);
+		log_printf_fuse_context("event handler failed: %s; "
+					"mask 0x%04" PRIx64 "-%08" PRIx64 ", "
+					"pid %d, path %s%s%s",
+					strerror(-err),
+					mask >> 32, mask & 0xFFFFFFFF,
+					pid, path,
+					(target_path == NULL)
+						? "" : ", target path ",
+					(target_path == NULL)
+						? "" : target_path);
 	}
 	else if (perm) {
 		err = (err == PROJFS_ALLOW) ? 0 : -EPERM;

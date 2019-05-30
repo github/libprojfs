@@ -21,7 +21,7 @@ EVENT_ERR="expect.event.err"
 event_msg_notify="test event notification for"
 event_msg_perm="test permission request for"
 
-event_msg_err="projfs: event handler failed"
+event_msg_err="event handler failed"
 
 event_rename_dir="0x0000-400000c0"
 event_create_dir="0x0000-40000100"
@@ -37,7 +37,8 @@ NL=$(printf "\nx")
 NL="${NL%%x}"
 
 LOG_FMT='  %s %s%s: %s, %s'
-ERR_FMT='%s: %s; event mask %s, pid %s, path %s, target path %s'
+ERR_FMT='%s: %s; mask %s, pid %s, path %s%s'
+ERR_TARGET_FMT=', target path %s'
 
 # Format into "$event_log_msgs" and "$event_err_msgs" log and error messages
 # matching those output by the test mount helper programs.
@@ -74,9 +75,15 @@ projfs_event_printf () {
 
 	if test ":$err" != ":"
 	then
+		if test ":$4" = ":"
+		then
+			err_target=""
+		else
+			err_target=$(printf "$ERR_TARGET_FMT" "$4")
+		fi
 		err_msg=$(printf "$ERR_FMT" \
 			"$event_msg_err" "$err" "$code" "$EXEC_PID_MARK" \
-			"$3" "$4")
+			"$3" "$err_target")
 
 		event_err_msgs="${event_err_msgs:+$event_err_msgs$NL}$err_msg"
 	fi
