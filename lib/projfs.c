@@ -30,6 +30,7 @@
 #include <limits.h>
 #include <pthread.h>
 #include <signal.h>
+#include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -49,12 +50,21 @@
 
 struct projfs_config {
 	int initial;
+	int log;
+	char *log_path;
 };
 
 #define PROJFS_OPT(t, p, v) { t, offsetof(struct projfs_config, p), v }
 
 static struct fuse_opt projfs_opts[] = {
 	PROJFS_OPT("initial",	initial, 1),
+	PROJFS_OPT("--initial",	initial, 1),
+
+	PROJFS_OPT("log=",	log, 1),
+	PROJFS_OPT("log=%s",	log_path, 0),
+	PROJFS_OPT("--log=",	log, 1),
+	PROJFS_OPT("--log=%s",	log_path, 0),
+
 	FUSE_OPT_END
 };
 
@@ -63,14 +73,15 @@ struct projfs {
 	char *mountdir;
 	struct projfs_handlers handlers;
 	void *user_data;
+	struct fuse_args args;
+	struct projfs_config config;
 	pthread_mutex_t mutex;
 	struct fuse_session *session;
+	FILE *log_file;
 	int lowerdir_fd;
 	pthread_t thread_id;
 	struct fdtable *fdtable;
 	int error;
-	struct fuse_args args;
-	struct projfs_config config;
 };
 
 typedef int (*projfs_handler_t)(struct projfs_event *);
@@ -147,6 +158,44 @@ static pid_t get_fuse_context_tgid(void)
 	}
 
 	return pid;
+}
+
+// NOTE: only functional within a FUSE file operation!
+static void log_printf_fuse_context(const char *fmt, ...)
+{
+	FILE *log_file;
+	va_list ap;
+
+	log_file = get_fuse_context_projfs()->log_file;
+	if (log_file == NULL)
+		return;
+
+	va_start(ap, fmt);
+	vfprintf(log_file, fmt, ap);
+	va_end(ap);
+
+	fprintf(log_file, "\n");
+}
+
+static int log_open(struct projfs *fs)
+{
+	if (!fs->config.log || fs->config.log_path == NULL)
+		return 0;
+
+	fs->log_file = fopen(fs->config.log_path, "a");
+	if (fs->log_file == NULL) {
+		fprintf(stderr, "projfs: error opening log file: %s: %s\n",
+		        strerror(errno), fs->config.log_path);
+		return -1;
+	}
+
+	return 0;
+}
+
+static void log_close(struct projfs *fs)
+{
+	if (fs->log_file != NULL)
+		fclose(fs->log_file);
 }
 
 /**
@@ -481,10 +530,9 @@ static char *get_path_parent(char const *path)
 static int project_dir(const char *op, const char *path, int parent)
 {
 	struct proj_state_lock state_lock;
-	int res;
 	char *lock_path;
-
-	(void)op;
+	int log = 0;
+	int res;
 
 	if (parent)
 		lock_path = get_path_parent(path);
@@ -504,9 +552,16 @@ static int project_dir(const char *op, const char *path, int parent)
 	// directories skip intermediate state; either empty or fully local
 	res = project_locked_path(&state_lock, lock_path, 1,
 				  PROJ_STATE_MODIFIED);
+	log = (res == 0);
 
 out_release:
 	release_proj_state_lock(&state_lock);
+
+	if (log) {
+		log_printf_fuse_context("directory projected to "
+					"'modified' state in '%s' op: %s",
+					op, lock_path);
+	}
 
 out:
 	free(lock_path);
@@ -526,9 +581,8 @@ static int project_file(const char *op, const char *path,
 			enum proj_state state)
 {
 	struct proj_state_lock state_lock;
+	int log = 0;
 	int res;
-
-	(void)op;
 
 	/* Pass O_NOFOLLOW so we receive ELOOP if path is an existing symlink,
 	 * which we want to ignore, and request a write mode so we receive
@@ -551,6 +605,7 @@ static int project_file(const char *op, const char *path,
 
 		res = project_locked_path(&state_lock, path, 0,
 					  PROJ_STATE_POPULATED);
+		log = (res == 0);
 
 		if (res == 0 && reset_mtime) {
 			struct timespec times[2];
@@ -566,9 +621,18 @@ static int project_file(const char *op, const char *path,
 	if (res == 0 && state_lock.state == PROJ_STATE_POPULATED &&
 	    state == PROJ_STATE_MODIFIED) {
 		res = project_locked_path(&state_lock, path, 0, state);
+		log = (res == 0);
 	}
 
 	release_proj_state_lock(&state_lock);
+
+	if (log) {
+		log_printf_fuse_context("file projected to '%s' state "
+					"in '%s' op: %s",
+					(state == PROJ_STATE_POPULATED)
+						? "populated" : "modified",
+					op, path);
+	}
 
 	return res;
 }
@@ -1619,6 +1683,9 @@ int projfs_start(struct projfs *fs)
 	pthread_t thread_id;
 	int res;
 
+	if (log_open(fs) != 0)
+		return -1;
+
 	// TODO: override stack size per fuse_start_thread()?
 
 	// TODO: defer all signal handling to user, once we remove FUSE
@@ -1638,12 +1705,15 @@ int projfs_start(struct projfs *fs)
 	if (res != 0) {
 		fprintf(stderr, "projfs: error creating thread: %s\n",
 		        strerror(res));
-		return -1;
+		goto out_close;
 	}
 
 	fs->thread_id = thread_id;
-
 	return 0;
+
+out_close:
+	log_close(fs);
+	return -1;
 }
 
 void *projfs_stop(struct projfs *fs)
@@ -1674,6 +1744,8 @@ void *projfs_stop(struct projfs *fs)
 		fprintf(stderr, "projfs: error from event loop: %d\n",
 		        fs->error);
 	}
+
+	log_close(fs);
 
 	fuse_opt_free_args(&fs->args);
 
