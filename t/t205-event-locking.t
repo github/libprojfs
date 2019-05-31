@@ -31,7 +31,7 @@ test_expect_success 'test concurrent access does not trigger failure' '
 
 projfs_stop || exit 1
 
-test_expect_success 'check no event error messages' '
+test_expect_success 'check no unexpected error output' '
 	test_must_be_empty test_handlers.err
 '
 

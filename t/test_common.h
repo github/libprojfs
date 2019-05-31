@@ -44,6 +44,11 @@
 #define TEST_FILE_EXIST		0x0002
 #define TEST_FILE_VALID		0x0004
 
+struct test_mount_args {
+	int argc;
+	const char **argv;
+};
+
 void test_exit_error(const char *argv0, const char *fmt, ...);
 
 long int test_parse_long(const char *arg, int base);
@@ -52,18 +57,22 @@ int test_parse_retsym(const char *retsym, int *retval);
 
 void test_parse_opts(int argc, char *const argv[], unsigned int opt_flags,
 		     int min_args, int max_args, char *args[],
+		     struct test_mount_args *mount_args,
 		     const char *args_usage);
 
 void test_parse_mount_opts(int argc, char *const argv[],
 			   unsigned int opt_flags,
-			   const char **lower_path, const char **mount_path);
+			   const char **lower_path, const char **mount_path,
+			   struct test_mount_args *mount_args);
 
 unsigned int test_get_opts(unsigned int opt_flags, ...);
+
+void test_free_opts(struct test_mount_args *mount_args);
 
 struct projfs *test_start_mount(const char *lowerdir, const char *mountdir,
 				const struct projfs_handlers *handlers,
 				size_t handlers_size, void *user_data,
-				int argc, const char **argv);
+				struct test_mount_args *mount_args);
 
 void *test_stop_mount(struct projfs *fs);
 

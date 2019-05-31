@@ -22,21 +22,23 @@ Check that arguments are interpeted and passed through correctly.
 
 . ./test-lib.sh
 
-projfs_start test_args source target || exit 1
+HELPER_LOG='test_simple.log'
 
-test_expect_success 'mount without args does not mark initial' '
-	test_must_fail getfattr -n user.projection.empty source
-'
-
+projfs_start test_simple source target --log="$HELPER_LOG" || exit 1
+ls target
 projfs_stop || exit 1
 
-projfs_start test_args source target -o initial || exit 1
-
-test_expect_success 'mount with initial arg does mark initial' '
-	getfattr -n user.projection.empty source
+test_expect_success 'mount without initial option not projected on read' '
+	test_must_be_empty "$HELPER_LOG"
 '
 
+projfs_start test_simple source target --log="$HELPER_LOG" --initial || exit 1
+ls target
 projfs_stop || exit 1
+
+test_expect_success 'mount with initial option projected on read' '
+	grep "directory projected .*: \.$" "$HELPER_LOG"
+'
 
 test_done
 

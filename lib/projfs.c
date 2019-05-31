@@ -30,6 +30,7 @@
 #include <limits.h>
 #include <pthread.h>
 #include <signal.h>
+#include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -49,12 +50,18 @@
 
 struct projfs_config {
 	int initial;
+	char *log;
 };
 
 #define PROJFS_OPT(t, p, v) { t, offsetof(struct projfs_config, p), v }
 
 static struct fuse_opt projfs_opts[] = {
 	PROJFS_OPT("initial",	initial, 1),
+	PROJFS_OPT("--initial",	initial, 1),
+
+	PROJFS_OPT("log=%s",	log, 0),
+	PROJFS_OPT("--log=%s",	log, 0),
+
 	FUSE_OPT_END
 };
 
@@ -63,14 +70,15 @@ struct projfs {
 	char *mountdir;
 	struct projfs_handlers handlers;
 	void *user_data;
+	struct fuse_args args;
+	struct projfs_config config;
 	pthread_mutex_t mutex;
 	struct fuse_session *session;
+	FILE *log_file;
 	int lowerdir_fd;
 	pthread_t thread_id;
 	struct fdtable *fdtable;
 	int error;
-	struct fuse_args args;
-	struct projfs_config config;
 };
 
 typedef int (*projfs_handler_t)(struct projfs_event *);
@@ -149,6 +157,87 @@ static pid_t get_fuse_context_tgid(void)
 	return pid;
 }
 
+enum log_stderr_opt {
+	LOG_STDERR_NONE,
+	LOG_STDERR_ONLY,
+	LOG_STDERR_BOTH,
+	LOG_STDERR_FALLBACK
+};
+
+static void log_file_printf(FILE *file, const char *fmt, va_list ap)
+{
+	if (file == stderr)
+		fprintf(file, "projfs: ");
+	vfprintf(file, fmt, ap);
+	fprintf(file, "\n");
+}
+
+static void log_printf(struct projfs *fs, enum log_stderr_opt stderr_opt,
+		       const char *fmt, ...)
+{
+	FILE *log_file = NULL;
+	int use_stderr = (stderr_opt != LOG_STDERR_NONE);
+	va_list ap;
+
+	if (fs == NULL || fs->log_file == NULL) {
+		if (!use_stderr)
+			return;
+	} else if (stderr_opt != LOG_STDERR_ONLY) {
+		log_file = fs->log_file;
+		if (stderr_opt == LOG_STDERR_FALLBACK)
+			use_stderr = 0;
+	}
+
+	if (log_file != NULL) {
+		va_start(ap, fmt);
+		log_file_printf(log_file, fmt, ap);
+		va_end(ap);
+	}
+
+	if (use_stderr) {
+		va_start(ap, fmt);
+		log_file_printf(stderr, fmt, ap);
+		va_end(ap);
+	}
+}
+
+// NOTE: only functional within a FUSE file operation!
+static void log_printf_fuse_context(const char *fmt, ...)
+{
+	FILE *log_file;
+	va_list ap;
+
+	log_file = get_fuse_context_projfs()->log_file;
+	if (log_file == NULL)
+		return;
+
+	va_start(ap, fmt);
+	log_file_printf(log_file, fmt, ap);
+	va_end(ap);
+}
+
+static int log_open(struct projfs *fs)
+{
+	if (fs->config.log == NULL)
+		return 0;
+
+	fs->log_file = fopen(fs->config.log, "a");
+	if (fs->log_file == NULL) {
+		log_printf(fs, LOG_STDERR_ONLY,
+			   "error opening log file: %s: %s",
+			   strerror(errno), fs->config.log);
+		return -1;
+	}
+
+	return 0;
+}
+
+static void log_close(struct projfs *fs)
+{
+	if (fs->log_file != NULL)
+		fclose(fs->log_file);
+}
+
 /**
  * @return 0 or a negative errno
  */
@@ -174,12 +263,16 @@ static int send_event(projfs_handler_t handler, uint64_t mask, pid_t pid,
 
 	err = handler(&event);
 	if (err < 0) {
-		// TODO: replace with log output and only when log option set
-		fprintf(stderr, "projfs: event handler failed: %s; "
-		                "event mask 0x%04" PRIx64 "-%08" PRIx64 ", "
-		                "pid %d, path %s, target path %s\n",
-		        strerror(-err), mask >> 32, mask & 0xFFFFFFFF, pid,
-		        path, (target_path == NULL) ? "" : target_path);
+		log_printf_fuse_context("event handler failed: %s; "
+					"mask 0x%04" PRIx64 "-%08" PRIx64 ", "
+					"pid %d, path %s%s%s",
+					strerror(-err),
+					mask >> 32, mask & 0xFFFFFFFF,
+					pid, path,
+					(target_path == NULL)
+						? "" : ", target path ",
+					(target_path == NULL)
+						? "" : target_path);
 	}
 	else if (perm) {
 		err = (err == PROJFS_ALLOW) ? 0 : -EPERM;
@@ -481,10 +574,9 @@ static char *get_path_parent(char const *path)
 static int project_dir(const char *op, const char *path, int parent)
 {
 	struct proj_state_lock state_lock;
-	int res;
 	char *lock_path;
-
-	(void)op;
+	int log = 0;
+	int res;
 
 	if (parent)
 		lock_path = get_path_parent(path);
@@ -504,9 +596,16 @@ static int project_dir(const char *op, const char *path, int parent)
 	// directories skip intermediate state; either empty or fully local
 	res = project_locked_path(&state_lock, lock_path, 1,
 				  PROJ_STATE_MODIFIED);
+	log = (res == 0);
 
 out_release:
 	release_proj_state_lock(&state_lock);
+
+	if (log) {
+		log_printf_fuse_context("directory projected to "
+					"'modified' state in '%s' op: %s",
+					op, lock_path);
+	}
 
 out:
 	free(lock_path);
@@ -526,9 +625,8 @@ static int project_file(const char *op, const char *path,
 			enum proj_state state)
 {
 	struct proj_state_lock state_lock;
+	int log = 0;
 	int res;
-
-	(void)op;
 
 	/* Pass O_NOFOLLOW so we receive ELOOP if path is an existing symlink,
 	 * which we want to ignore, and request a write mode so we receive
@@ -551,6 +649,7 @@ static int project_file(const char *op, const char *path,
 
 		res = project_locked_path(&state_lock, path, 0,
 					  PROJ_STATE_POPULATED);
+		log = (res == 0);
 
 		if (res == 0 && reset_mtime) {
 			struct timespec times[2];
@@ -566,9 +665,18 @@ static int project_file(const char *op, const char *path,
 	if (res == 0 && state_lock.state == PROJ_STATE_POPULATED &&
 	    state == PROJ_STATE_MODIFIED) {
 		res = project_locked_path(&state_lock, path, 0, state);
+		log = (res == 0);
 	}
 
 	release_proj_state_lock(&state_lock);
+
+	if (log) {
+		log_printf_fuse_context("file projected to '%s' state "
+					"in '%s' op: %s",
+					(state == PROJ_STATE_POPULATED)
+						? "populated" : "modified",
+					op, path);
+	}
 
 	return res;
 }
@@ -1350,37 +1458,40 @@ struct projfs *projfs_new(const char *lowerdir, const char *mountdir,
 		size_t handlers_size, void *user_data,
 		int argc, const char **argv)
 {
-	struct projfs *fs;
+	struct projfs *fs = NULL;
 	size_t len;
 	int i;
 
 	// TODO: prevent failure with relative lowerdir
 	if (lowerdir == NULL) {
-		fprintf(stderr, "projfs: no lowerdir specified\n");
+		log_printf(fs, LOG_STDERR_ONLY, "no lowerdir specified");
 		goto out;
 	}
 
 	// TODO: debug failure to exit when given a relative mountdir
 	if (mountdir == NULL) {
-		fprintf(stderr, "projfs: no mountdir specified\n");
+		log_printf(fs, LOG_STDERR_ONLY, "no mountdir specified");
 		goto out;
 	}
 
 	if (sizeof(struct projfs_handlers) < handlers_size) {
-		fprintf(stderr, "projfs: warning: library too old, "
-				"some handlers may be ignored\n");
+		log_printf(fs, LOG_STDERR_ONLY,
+			   "warning: library too old, some handlers "
+			   "may be ignored");
 		handlers_size = sizeof(struct projfs_handlers);
 	}
 
 	fs = calloc(1, sizeof(struct projfs));
 	if (fs == NULL) {
-		fprintf(stderr, "projfs: failed to allocate projfs object\n");
+		log_printf(fs, LOG_STDERR_ONLY,
+			   "failed to allocate projfs object");
 		goto out;
 	}
 
 	fs->lowerdir = strdup(lowerdir);
 	if (fs->lowerdir == NULL) {
-		fprintf(stderr, "projfs: failed to allocate lower path\n");
+		log_printf(fs, LOG_STDERR_ONLY,
+			   "failed to allocate lower path");
 		goto out_handle;
 	}
 	len = strlen(fs->lowerdir);
@@ -1389,7 +1500,8 @@ struct projfs *projfs_new(const char *lowerdir, const char *mountdir,
 
 	fs->mountdir = strdup(mountdir);
 	if (fs->mountdir == NULL) {
-		fprintf(stderr, "projfs: failed to allocate mount path\n");
+		log_printf(fs, LOG_STDERR_ONLY,
+			   "failed to allocate mount path");
 		goto out_lower;
 	}
 	len = strlen(fs->mountdir);
@@ -1406,26 +1518,28 @@ struct projfs *projfs_new(const char *lowerdir, const char *mountdir,
 
 	fs->fdtable = fdtable_create();
 	if (fs->fdtable == NULL) {
-		fprintf(stderr, "projfs: failed to allocate "
-				 "file descriptor table\n");
+		log_printf(fs, LOG_STDERR_ONLY,
+			   "failed to allocate file descriptor table");
 		goto out_mutex;
 	}
 
 	if (fuse_opt_add_arg(&fs->args, "projfs") != 0) {
-		fprintf(stderr, "projfs: failed to allocate argument\n");
+		log_printf(fs, LOG_STDERR_ONLY,
+			   "failed to allocate argument");
 		goto out_fdtable;
 	}
 
 	for (i = 0; i < argc; ++i) {
 		if (fuse_opt_add_arg(&fs->args, argv[i]) != 0) {
-			fprintf(stderr, "projfs: failed to allocate "
-					"argument\n");
+			log_printf(fs, LOG_STDERR_ONLY,
+				   "failed to allocate argument");
 			goto out_fdtable;
 		}
 	}
 
 	if (fuse_opt_parse(&fs->args, &fs->config, projfs_opts, NULL) == -1) {
-		fprintf(stderr, "projfs: unable to parse arguments\n");
+		log_printf(fs, LOG_STDERR_ONLY,
+			   "unable to parse arguments");
 		goto out_fdtable;
 	}
 
@@ -1524,16 +1638,17 @@ static void *projfs_loop(void *data)
 	 */
 	fs->lowerdir_fd = open(fs->lowerdir, O_DIRECTORY | O_NOFOLLOW);
 	if (fs->lowerdir_fd == -1) {
-		fprintf(stderr, "projfs: failed to open lowerdir: %s: %s\n",
-			fs->lowerdir, strerror(errno));
+		log_printf(fs, LOG_STDERR_FALLBACK,
+			   "failed to open lowerdir: %s: %s",
+			   fs->lowerdir, strerror(errno));
 		res = 1;
 		goto out;
 	}
 
 	if (get_proj_state_xattr(fs->lowerdir_fd) == PROJ_STATE_ERROR &&
 	    errno == ENOTSUP) {
-		fprintf(stderr, "projfs: xattr support check on lowerdir "
-		                "failed: %s: %s\n",
+		log_printf(fs, LOG_STDERR_FALLBACK,
+			   "xattr support check on lowerdir failed: %s: %s",
 			fs->lowerdir, strerror(errno));
 		res = 2;
 		goto out_close;
@@ -1541,23 +1656,27 @@ static void *projfs_loop(void *data)
 
 	res = test_sparse_support(fs->lowerdir_fd);
 	if (res == -1) {
-		fprintf(stderr, "projfs: unable to test sparse file support: "
-				"%s/%s: %s\n",
-			fs->lowerdir, SPARSE_TEST_FILENAME, strerror(errno));
+		log_printf(fs, LOG_STDERR_FALLBACK,
+			   "unable to test sparse file support: %s/%s: %s",
+			   fs->lowerdir, SPARSE_TEST_FILENAME,
+			   strerror(errno));
 		res = 3;
 		goto out_close;
-	} else if (res == 0)
-		fprintf(stderr, "projfs: sparse files may not be supported by "
-		                "lower filesystem: %s\n", fs->lowerdir);
-	else if (res == 1)
+	} else if (res == 0) {
+		log_printf(fs, LOG_STDERR_FALLBACK,
+			   "sparse files may not be supported by "
+			   "lower filesystem: %s", fs->lowerdir);
+	} else if (res == 1) {
 		res = 0;
+	}
 
 	if (fs->config.initial == 1) {
 		if (set_proj_state_xattr(fs->lowerdir_fd,
 					 PROJ_STATE_EMPTY, 0) == -1) {
-			fprintf(stderr, "projfs: could not set projection "
-					"flag xattr: %s: %s\n",
-				fs->lowerdir, strerror(errno));
+			log_printf(fs, LOG_STDERR_FALLBACK,
+				   "could not set projection flag "
+				   "xattr: %s: %s",
+				   fs->lowerdir, strerror(errno));
 			res = 4;
 			goto out_close;
 		}
@@ -1590,8 +1709,10 @@ static void *projfs_loop(void *data)
 
 	// TODO: output strsignal() only for dev purposes
 	if ((err = fuse_loop_mt(fuse, &loop)) != 0) {
-		if (err > 0)
-			fprintf(stderr, "projfs: %s signal\n", strsignal(err));
+		if (err > 0) {
+			log_printf(fs, LOG_STDERR_FALLBACK, "%s signal",
+				   strsignal(err));
+		}
 		res = 8;
 	}
 
@@ -1602,9 +1723,11 @@ out_session:
 	projfs_set_session(fs, NULL);
 	fuse_session_destroy(se);
 out_close:
-	if (close(fs->lowerdir_fd) == -1)
-		fprintf(stderr, "projfs: failed to close lowerdir: %s: %s\n",
-			fs->lowerdir, strerror(errno));
+	if (close(fs->lowerdir_fd) == -1) {
+		log_printf(fs, LOG_STDERR_FALLBACK,
+			   "failed to close lowerdir: %s: %s",
+			   fs->lowerdir, strerror(errno));
+	}
 	fs->lowerdir_fd = 0;
 out:
 	fs->error = res;
@@ -1618,6 +1741,9 @@ int projfs_start(struct projfs *fs)
 	sigset_t newset;
 	pthread_t thread_id;
 	int res;
+
+	if (log_open(fs) != 0)
+		return -1;
 
 	// TODO: override stack size per fuse_start_thread()?
 
@@ -1636,14 +1762,17 @@ int projfs_start(struct projfs *fs)
 	pthread_sigmask(SIG_SETMASK, &oldset, NULL);
 
 	if (res != 0) {
-		fprintf(stderr, "projfs: error creating thread: %s\n",
-		        strerror(res));
-		return -1;
+		log_printf(fs, LOG_STDERR_FALLBACK,
+			   "error creating thread: %s", strerror(res));
+		goto out_close;
 	}
 
 	fs->thread_id = thread_id;
-
 	return 0;
+
+out_close:
+	log_close(fs);
+	return -1;
 }
 
 void *projfs_stop(struct projfs *fs)
@@ -1671,9 +1800,11 @@ void *projfs_stop(struct projfs *fs)
 
 	if (fs->error > 0) {
 		// TODO: translate projfs_loop() codes into messages
-		fprintf(stderr, "projfs: error from event loop: %d\n",
-		        fs->error);
+		log_printf(fs, LOG_STDERR_ONLY, "error from event loop: %d",
+			   fs->error);
 	}
+
+	log_close(fs);
 
 	fuse_opt_free_args(&fs->args);
 

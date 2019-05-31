@@ -73,6 +73,13 @@ static const struct option all_long_opts[] = {
 	{ "lock-file", required_argument, NULL, TEST_OPT_NUM_LOCKFILE },
 };
 
+static const char *const all_mount_opts[] = {
+	"--debug",
+	"--initial",
+	"--log=",
+	NULL
+};
+
 struct opt_usage {
 	const char *usage;
 	int req;
@@ -266,8 +273,47 @@ static struct option *get_long_opts(unsigned int opt_flags)
 	return long_opts;
 }
 
+static int check_valid_mount_opt(const char *opt)
+{
+	int i = 0;
+
+	while (all_mount_opts[i] != NULL) {
+		if (strncmp(opt, all_mount_opts[i],
+			    strlen(all_mount_opts[i])) == 0) {
+			return 1;
+		}
+		++i;
+	}
+
+	return 0;
+}
+
+static void add_mount_arg(const char *argv0,
+			  struct test_mount_args *mount_args,
+			  const char *mount_arg)
+{
+	int argc = mount_args->argc + 1;
+	const char **argv;
+
+	if (mount_args->argv == NULL)
+		argv = malloc(argc * sizeof(char*));
+	else
+		argv = realloc(mount_args->argv, argc * sizeof(char*));
+
+	if (argv == NULL) {
+		test_exit_error(argv0,
+				"unable to allocate mount options array");
+	}
+
+	argv[argc - 1] = mount_arg;
+
+	mount_args->argc = argc;
+	mount_args->argv = argv;
+}
+
 void test_parse_opts(int argc, char *const argv[], unsigned int opt_flags,
 		     int min_args, int max_args, char *args[],
+		     struct test_mount_args *mount_args,
 		     const char *args_usage)
 {
 	struct option *long_opts;
@@ -319,12 +365,19 @@ void test_parse_opts(int argc, char *const argv[], unsigned int opt_flags,
 			break;
 
 		case '?':
-			if (optopt > 0)
-				test_exit_error(argv[0],
-						"invalid option: -%c",
+			if (optopt > 0) {
+				test_exit_error(argv[0], "invalid option: -%c",
 						optopt);
-			test_exit_error(argv[0], "invalid option: %s",
-					argv[optind - 1]);
+			}
+			else if (mount_args != NULL &&
+				 check_valid_mount_opt(argv[optind - 1])) {
+				add_mount_arg(argv[0], mount_args,
+					      argv[optind - 1]);
+			} else {
+				test_exit_error(argv[0], "invalid option: %s",
+						argv[optind - 1]);
+			}
+			break;
 
 		default:
 			test_exit_error(argv[0], "unknown getopt code: %d",
@@ -346,11 +399,16 @@ void test_parse_opts(int argc, char *const argv[], unsigned int opt_flags,
 
 void test_parse_mount_opts(int argc, char *const argv[],
 			   unsigned int opt_flags,
-			   const char **lower_path, const char **mount_path)
+			   const char **lower_path, const char **mount_path,
+			   struct test_mount_args *mount_args)
 {
 	char *args[2];
 
-	test_parse_opts(argc, argv, opt_flags, 2, 2, args, MOUNT_ARGS_USAGE);
+	mount_args->argc = 0;
+	mount_args->argv = NULL;
+
+	test_parse_opts(argc, argv, opt_flags, 2, 2, args, mount_args,
+			MOUNT_ARGS_USAGE);
 
 	*lower_path = args[0];
 	*mount_path = args[1];
@@ -423,15 +481,21 @@ unsigned int test_get_opts(unsigned int opt_flags, ...)
 	return ret_flags;
 }
 
+void test_free_opts(struct test_mount_args *mount_args)
+{
+	if (mount_args->argv != NULL)
+		free(mount_args->argv);
+}
+
 struct projfs *test_start_mount(const char *lowerdir, const char *mountdir,
 				const struct projfs_handlers *handlers,
 				size_t handlers_size, void *user_data,
-				int argc, const char **argv)
+				struct test_mount_args *mount_args)
 {
 	struct projfs *fs;
 
 	fs = projfs_new(lowerdir, mountdir, handlers, handlers_size,
-			user_data, argc, argv);
+			user_data, mount_args->argc, mount_args->argv);
 
 	if (fs == NULL)
 		errx(EXIT_FAILURE, "unable to create filesystem");

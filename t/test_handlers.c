@@ -104,22 +104,26 @@ static int test_perm_event(struct projfs_event *event)
 int main(int argc, char *const argv[])
 {
 	const char *lower_path, *mount_path;
+	struct test_mount_args mount_args;
 	struct projfs *fs;
 	struct projfs_handlers handlers = { 0 };
 
 	test_parse_mount_opts(argc, argv,
 			      (TEST_OPT_RETVAL | TEST_OPT_RETFILE |
 			       TEST_OPT_TIMEOUT | TEST_OPT_LOCKFILE),
-			      &lower_path, &mount_path);
+			      &lower_path, &mount_path, &mount_args);
 
 	handlers.handle_proj_event = &test_proj_event;
 	handlers.handle_notify_event = &test_notify_event;
 	handlers.handle_perm_event = &test_perm_event;
 
 	fs = test_start_mount(lower_path, mount_path,
-			      &handlers, sizeof(handlers), NULL, 0, NULL);
+			      &handlers, sizeof(handlers), NULL,
+			      &mount_args);
 	test_wait_signal();
 	test_stop_mount(fs);
+
+	test_free_opts(&mount_args);
 
 	exit(EXIT_SUCCESS);
 }

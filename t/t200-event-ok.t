@@ -103,10 +103,10 @@ rm retval
 projfs_stop || exit 1
 
 test_expect_success 'check all event notifications' '
-	test_cmp test_handlers.log "$EVENT_LOG"
+	test_cmp test_handlers.out "$EVENT_OUT"
 '
 
-test_expect_success 'check no event error messages' '
+test_expect_success 'check no unexpected error output' '
 	test_must_be_empty test_handlers.err
 '
 

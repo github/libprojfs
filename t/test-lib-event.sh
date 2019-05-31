@@ -15,13 +15,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see http://www.gnu.org/licenses/ .
 
+EVENT_OUT="expect.event.out"
 EVENT_LOG="expect.event.log"
-EVENT_ERR="expect.event.err"
 
 event_msg_notify="test event notification for"
 event_msg_perm="test permission request for"
 
-event_msg_err="projfs: event handler failed"
+event_msg_err="event handler failed"
 
 event_rename_dir="0x0000-400000c0"
 event_create_dir="0x0000-40000100"
@@ -36,70 +36,76 @@ event_link_file="0x1000-00000100"
 NL=$(printf "\nx")
 NL="${NL%%x}"
 
-LOG_FMT='  %s %s%s: %s, %s'
-ERR_FMT='%s: %s; event mask %s, pid %s, path %s, target path %s'
+OUT_FMT='  %s %s%s: %s, %s'
+LOG_FMT='%s: %s; mask %s, pid %s, path %s%s'
+LOG_TARGET_FMT=', target path %s'
 
-# Format into "$event_log_msgs" and "$event_err_msgs" log and error messages
-# matching those output by the test mount helper programs.
-# If an error is expected, "$1" should be "error" and "$2" should contain
-# the errno name, e.g., "ENOMEM".  The next arguments (starting at either
-# "$3" or "$1", depending on whether an error is expected or not) should be
-# the category of event (e.g., "notify" or "perm"), the type of event
-# (e.g., "create_dir" or "delete_file"), the file path
+# Format into "$event_out_msgs" and "$event_log_msgs" the standard output
+# and logged error messages expected from the test mount helper programs.
+# If logged errors are expected, "$1" should be "error" and "$2" should
+# contain the errno name, e.g., "ENOMEM".  The next arguments (starting at
+# either "$3" or "$1", depending on whether logged error messages are
+# expected or not) should be the category of event (e.g., "notify" or "perm"),
+# the type of event (e.g., "create_dir" or "delete_file"), the file path
 # (relative to the projfs mount point) on which the event is expected,
 # and optionally the target file path of the event if one is expected.
 projfs_event_printf () {
-	if test ":$1" = ":error"
+	if test "$1" = error
 	then
 		shift
 		err=$("$TEST_DIRECTORY"/get_strerror "$1"); shift
 	else
 		err=""
-		err_msg=""
 	fi
 
 	eval msg=\$event_msg_"$1"
 	eval code=\$event_"$2"
 
-	if test ":$4" = ":"
+	if test -z "$4"
 	then
-		target=""
+		target_msg=""
 	else
-		target=", $4"
+		target_msg=", $4"
 	fi
-	log_msg=$(printf "$LOG_FMT" \
-		"$msg" "$3" "$target" "$code" "$EXEC_PID_MARK")
+	out_msg=$(printf "$OUT_FMT" \
+		"$msg" "$3" "$target_msg" "$code" "$EXEC_PID_MARK")
 
-	event_log_msgs="${event_log_msgs:+$event_log_msgs$NL}$log_msg"
+	event_out_msgs="${event_out_msgs:+$event_out_msgs$NL}$out_msg"
 
-	if test ":$err" != ":"
+	if test -n "$err"
 	then
-		err_msg=$(printf "$ERR_FMT" \
+		if test -z "$4"
+		then
+			target_msg=""
+		else
+			target_msg=$(printf "$LOG_TARGET_FMT" "$4")
+		fi
+		log_msg=$(printf "$LOG_FMT" \
 			"$event_msg_err" "$err" "$code" "$EXEC_PID_MARK" \
-			"$3" "$4")
+			"$3" "$target_msg")
 
-		event_err_msgs="${event_err_msgs:+$event_err_msgs$NL}$err_msg"
+		event_log_msgs="${event_log_msgs:+$event_log_msgs$NL}$log_msg"
 	fi
 }
 
 # Execute a command, capturing its process ID, then format the pid into
 # messages as expected from the test mount helper programs.  The messages
-# are appended to "$EVENT_LOG" and, if an error is expected, into
-# "$EVENT_ERR".
+# are appended to "$EVENT_OUT" and, if a logged error message is expected,
+# into "$EVENT_LOG".
 # Requires that projfs_event_printf has been called first to format the
 # expected messages (without the pid) and flag whether an error is expected.
 projfs_event_exec () {
-	if test ":$event_err_msgs" = ":"
+	if test -z "$event_log_msgs"
 	then
-		event_err=""
+		event_log=""
 	else
-		event_err="$EVENT_ERR"
+		event_log="$EVENT_LOG"
 	fi &&
-	projfs_log_exec "$EVENT_LOG" "$event_log_msgs" \
-		"$event_err" "$event_err_msgs" "$@"; ret=$?
+	projfs_log_exec "$EVENT_OUT" "$event_out_msgs" \
+		"$event_log" "$event_log_msgs" "$@"; ret=$?
 
+	event_out_msgs=""
 	event_log_msgs=""
-	event_err_msgs=""
 
 	return $ret
 }
