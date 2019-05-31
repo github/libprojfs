@@ -807,7 +807,7 @@ projfs_log_exec () {
 
 	pid=$(cat "$EXEC_PID") &&
 	echo "$out_msgs" | sed "s/$EXEC_PID_MARK/$pid/g" >>"$exec_out" &&
-	if test ":$exec_log" != ":"
+	if test -n "$exec_log"
 	then
 		echo "$log_msgs" | sed "s/$EXEC_PID_MARK/$pid/g" >> "$exec_log"
 	fi

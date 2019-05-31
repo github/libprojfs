@@ -50,7 +50,7 @@ LOG_TARGET_FMT=', target path %s'
 # (relative to the projfs mount point) on which the event is expected,
 # and optionally the target file path of the event if one is expected.
 projfs_event_printf () {
-	if test ":$1" = ":error"
+	if test "$1" = error
 	then
 		shift
 		err=$("$TEST_DIRECTORY"/get_strerror "$1"); shift
@@ -61,7 +61,7 @@ projfs_event_printf () {
 	eval msg=\$event_msg_"$1"
 	eval code=\$event_"$2"
 
-	if test ":$4" = ":"
+	if test -z "$4"
 	then
 		target_msg=""
 	else
@@ -72,9 +72,9 @@ projfs_event_printf () {
 
 	event_out_msgs="${event_out_msgs:+$event_out_msgs$NL}$out_msg"
 
-	if test ":$err" != ":"
+	if test -n "$err"
 	then
-		if test ":$4" = ":"
+		if test -z "$4"
 		then
 			target_msg=""
 		else
@@ -95,7 +95,7 @@ projfs_event_printf () {
 # Requires that projfs_event_printf has been called first to format the
 # expected messages (without the pid) and flag whether an error is expected.
 projfs_event_exec () {
-	if test ":$event_log_msgs" = ":"
+	if test -z "$event_log_msgs"
 	then
 		event_log=""
 	else

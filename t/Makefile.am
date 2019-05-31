@@ -71,12 +71,12 @@ test: check
 
 .PHONY: prove
 prove: clean-mounts $(check_PROGRAMS)
-	@if test ":$(PROVE)" != ":"; \
+	@if test -n "$(PROVE)"; \
 	then \
 		prove_dir="."; \
 		state_opt=`echo "$(PROJFS_PROVE_OPTS)" | \
 			$(GREP) -- --state=`; \
-		if test ":$$state_opt" != ":" && test -f "$(PROVE_FILE)"; \
+		if test -n "$$state_opt" && test -f "$(PROVE_FILE)"; \
 		then \
 			prove_dir=""; \
 		fi && \
