@@ -50,8 +50,7 @@
 
 struct projfs_config {
 	int initial;
-	int log;
-	char *log_path;
+	char *log;
 };
 
 #define PROJFS_OPT(t, p, v) { t, offsetof(struct projfs_config, p), v }
@@ -60,10 +59,8 @@ static struct fuse_opt projfs_opts[] = {
 	PROJFS_OPT("initial",	initial, 1),
 	PROJFS_OPT("--initial",	initial, 1),
 
-	PROJFS_OPT("log=",	log, 1),
-	PROJFS_OPT("log=%s",	log_path, 0),
-	PROJFS_OPT("--log=",	log, 1),
-	PROJFS_OPT("--log=%s",	log_path, 0),
+	PROJFS_OPT("log=%s",	log, 0),
+	PROJFS_OPT("--log=%s",	log, 0),
 
 	FUSE_OPT_END
 };
@@ -221,14 +218,14 @@ static void log_printf_fuse_context(const char *fmt, ...)
 
 static int log_open(struct projfs *fs)
 {
-	if (!fs->config.log || fs->config.log_path == NULL)
+	if (fs->config.log == NULL)
 		return 0;
 
-	fs->log_file = fopen(fs->config.log_path, "a");
+	fs->log_file = fopen(fs->config.log, "a");
 	if (fs->log_file == NULL) {
 		log_printf(fs, LOG_STDERR_ONLY,
 			   "error opening log file: %s: %s",
-			   strerror(errno), fs->config.log_path);
+			   strerror(errno), fs->config.log);
 		return -1;
 	}
 
