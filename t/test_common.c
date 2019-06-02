@@ -762,10 +762,10 @@ static void add_mount_arg(const char *argv0,
 	mount_args->argv = argv;
 }
 
-void test_parse_opts(int argc, char *const argv[], unsigned int opt_flags,
-		     int min_args, int max_args, char *args[],
+void test_parse_opts(int argc, char *const argv[],
 		     struct test_mount_args *mount_args,
-		     const char *args_usage)
+		     unsigned int opt_flags, int min_args, int max_args,
+		     char *args[], const char *args_usage)
 {
 	struct option *long_opts;
 	int num_args;
@@ -862,20 +862,18 @@ void test_parse_opts(int argc, char *const argv[], unsigned int opt_flags,
 }
 
 void test_parse_mount_opts(int argc, char *const argv[],
-			   unsigned int opt_flags,
-			   const char **lower_path, const char **mount_path,
-			   struct test_mount_args *mount_args)
+			   struct test_mount_args *mount_args,
+			   unsigned int opt_flags)
 {
 	char *args[2];
 
-	mount_args->argc = 0;
-	mount_args->argv = NULL;
+	memset(mount_args, 0, sizeof(*mount_args));
 
-	test_parse_opts(argc, argv, opt_flags, 2, 2, args, mount_args,
+	test_parse_opts(argc, argv, mount_args, opt_flags, 2, 2, args,
 			MOUNT_ARGS_USAGE);
 
-	*lower_path = args[0];
-	*mount_path = args[1];
+	mount_args->lowerdir = args[0];
+	mount_args->mountdir = args[1];
 }
 
 unsigned int test_get_opts(unsigned int opt_flags, ...)
@@ -1006,15 +1004,15 @@ void test_free_mount_opts(struct test_mount_args *mount_args,
 	va_end(ap);
 }
 
-struct projfs *test_start_mount(const char *lowerdir, const char *mountdir,
+struct projfs *test_start_mount(struct test_mount_args *mount_args,
 				const struct projfs_handlers *handlers,
-				size_t handlers_size, void *user_data,
-				struct test_mount_args *mount_args)
+				size_t handlers_size, void *user_data)
 {
 	struct projfs *fs;
 
-	fs = projfs_new(lowerdir, mountdir, handlers, handlers_size,
-			user_data, mount_args->argc, mount_args->argv);
+	fs = projfs_new(mount_args->lowerdir, mount_args->mountdir,
+			handlers, handlers_size, user_data,
+			mount_args->argc, mount_args->argv);
 
 	if (fs == NULL)
 		errx(EXIT_FAILURE, "unable to create filesystem");
@@ -1029,10 +1027,7 @@ void *test_stop_mount(struct projfs *fs, struct test_mount_args *mount_args)
 {
 	void *user_data = projfs_stop(fs);
 
-	if ((opt_set_flags & TEST_OPT_ATTRFILE) != TEST_OPT_NONE) {
-		test_free_mount_opts(mount_args, opt_set_flags,
-				     optval_attrlist);
-	}
+	test_free_mount_opts(mount_args, opt_set_flags, optval_attrlist);
 
 	return user_data;
 }

@@ -30,7 +30,7 @@ int main(int argc, char *const argv[])
 	char *errsym;
 	int errval;
 
-	test_parse_opts(argc, argv, TEST_OPT_NONE, 1, 1, &errsym, NULL,
+	test_parse_opts(argc, argv, NULL, TEST_OPT_NONE, 1, 1, &errsym,
 			"<errsym>");
 
 	if (test_parse_retsym(errsym, &errval) < 0 || errval > 0)

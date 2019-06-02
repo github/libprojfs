@@ -75,8 +75,8 @@ int main(int argc, char *const argv[])
 	struct test_list_entry *attrlist = NULL;
 	const char *attrfile = NULL;
 
-	test_parse_opts(argc, argv, TEST_OPT_ATTRLIST | TEST_OPT_ATTRFILE,
-			0, 0, NULL, NULL, "");
+	test_parse_opts(argc, argv, NULL,
+			TEST_OPT_ATTRLIST | TEST_OPT_ATTRFILE, 0, 0, NULL, "");
 
 	opt_flags = test_get_opts(TEST_OPT_ATTRLIST | TEST_OPT_ATTRFILE,
 				  &attrlist, &attrlist_flags, &attrfile);

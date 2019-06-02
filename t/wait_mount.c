@@ -101,7 +101,7 @@ int main(int argc, char *const argv[])
 	unsigned int opt_flags;
 	time_t max_wait = MOUNT_WAIT_SEC_DEFAULT;
 
-	test_parse_opts(argc, argv, TEST_OPT_TIMEOUT, 2, 2, args, NULL,
+	test_parse_opts(argc, argv, NULL, TEST_OPT_TIMEOUT, 2, 2, args,
 			"<device-id> <mount-path>");
 
 	prior_dev = test_parse_long(args[0], 16);

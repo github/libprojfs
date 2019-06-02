@@ -51,6 +51,8 @@
 struct test_mount_args {
 	int argc;
 	const char **argv;
+	const char *lowerdir;
+	const char *mountdir;
 };
 
 struct test_attr {
@@ -77,15 +79,14 @@ long int test_parse_long(const char *arg, int base);
 
 int test_parse_retsym(const char *retsym, int *retval);
 
-void test_parse_opts(int argc, char *const argv[], unsigned int opt_flags,
-		     int min_args, int max_args, char *args[],
+void test_parse_opts(int argc, char *const argv[],
 		     struct test_mount_args *mount_args,
-		     const char *args_usage);
+		     unsigned int opt_flags, int min_args, int max_args,
+		     char *args[], const char *args_usage);
 
 void test_parse_mount_opts(int argc, char *const argv[],
-			   unsigned int opt_flags,
-			   const char **lower_path, const char **mount_path,
-			   struct test_mount_args *mount_args);
+			   struct test_mount_args *mount_args,
+			   unsigned int opt_flags);
 
 unsigned int test_get_opts(unsigned int opt_flags, ...);
 
@@ -94,10 +95,9 @@ void test_free_opts(unsigned int opt_flags, ...);
 void test_free_mount_opts(struct test_mount_args *mount_args,
 			  unsigned int opt_flags, ...);
 
-struct projfs *test_start_mount(const char *lowerdir, const char *mountdir,
+struct projfs *test_start_mount(struct test_mount_args *mount_args,
 				const struct projfs_handlers *handlers,
-				size_t handlers_size, void *user_data,
-				struct test_mount_args *mount_args);
+				size_t handlers_size, void *user_data);
 
 void *test_stop_mount(struct projfs *fs, struct test_mount_args *mount_args);
 

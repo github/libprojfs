@@ -26,15 +26,12 @@
 
 int main(int argc, char *const argv[])
 {
-	const char *lower_path, *mount_path;
 	struct test_mount_args mount_args;
 	struct projfs *fs;
 
-	test_parse_mount_opts(argc, argv, TEST_OPT_NONE,
-			      &lower_path, &mount_path, &mount_args);
+	test_parse_mount_opts(argc, argv, &mount_args, TEST_OPT_NONE);
 
-	fs = test_start_mount(lower_path, mount_path, NULL, 0, NULL,
-			      &mount_args);
+	fs = test_start_mount(&mount_args, NULL, 0, NULL);
 	test_wait_signal();
 	test_stop_mount(fs, &mount_args);
 
