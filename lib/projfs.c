@@ -436,12 +436,11 @@ struct proj_state_lock {
  *
  * @param state_lock structure to fill out (zeroed by this function)
  * @param path path relative to lowerdir to lock and open
- * @param mode filemode to open path with; the fd populated in user will have
- *             this mode
+ * @param flags file flags with which to open the locked fd
  * @return 0 or an errno
  */
 static int acquire_proj_state_lock(struct proj_state_lock *state_lock,
-				   const char *path, mode_t mode)
+				   const char *path, int flags)
 {
 	enum proj_state state;
 	int err, wait_ms;
@@ -450,7 +449,7 @@ static int acquire_proj_state_lock(struct proj_state_lock *state_lock,
 	memset(state_lock, 0, sizeof(*state_lock));
 
 	state_lock->lock_fd = openat(get_fuse_context_lowerdir_fd(),
-				     path, mode);
+				     path, flags);
 	if (state_lock->lock_fd == -1)
 		return errno;
 
