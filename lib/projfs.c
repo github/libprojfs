@@ -563,6 +563,21 @@ static char *get_path_parent(char const *path)
 		return strndup(path, last - path);
 }
 
+/*
+ * Returns 1 if file descriptor's mode was changed; 0 otherwise.
+ */
+static int fchmod_user_write(int fd, struct stat *st, int set)
+{
+	mode_t mode = st->st_mode;
+
+	if (geteuid() != st->st_uid || mode & S_IWUSR)
+		return 0;
+	mode = set ? (mode | S_IWUSR) : (mode & ~S_IWUSR);
+	if (fchmod(fd, mode) == -1)
+		return 0;
+	return 1;
+}
+
 /**
  * Project a directory. Takes the path, and a flag indicating whether the
  * directory is the parent of the path, or the path itself.
@@ -577,6 +592,8 @@ static int project_dir(const char *op, const char *path, int parent)
 {
 	struct proj_state_lock state_lock;
 	char *lock_path;
+	struct stat st;
+	int reset_mode;
 	int log = 0;
 	int res;
 
@@ -595,10 +612,20 @@ static int project_dir(const char *op, const char *path, int parent)
 	if (state_lock.state != PROJ_STATE_EMPTY)
 		goto out_release;
 
+	// fsetxattr() requires S_IWUSR, so check and temporarily set if needed
+	if (fstat(state_lock.lock_fd, &st) == -1) {
+		res = errno;
+		goto out_release;
+	}
+	reset_mode = fchmod_user_write(state_lock.lock_fd, &st, 1);
+
 	// directories skip intermediate state; either empty or fully local
 	res = project_locked_path(&state_lock, state_lock.lock_fd, lock_path,
 				  1, PROJ_STATE_MODIFIED);
 	log = (res == 0);
+
+	if (reset_mode)
+		 fchmod_user_write(state_lock.lock_fd, &st, 0);
 
 out_release:
 	release_proj_state_lock(&state_lock);
@@ -633,6 +660,7 @@ static int project_file(const char *op, const char *path,
 	char self_fd_path[MAX_PROC_SELF_FD_PATH_LEN + 1];
 	struct proj_state_lock state_lock;
 	struct stat st;
+	int reset_mode = 0;
 	int log = 0;
 	int fd, res;
 
@@ -665,7 +693,14 @@ static int project_file(const char *op, const char *path,
 	fd = open(self_fd_path, O_WRONLY | O_NONBLOCK);
 	if (fd == -1) {
 		res = errno;
-		goto out_release;
+		reset_mode = fchmod_user_write(state_lock.lock_fd, &st, 1);
+		if (!reset_mode)
+			goto out_release;
+		fd = open(self_fd_path, O_WRONLY | O_NONBLOCK);
+		if (fd == -1) {
+			res = errno;
+			goto out_release;
+		}
 	}
 
 	// hydrate empty placeholder file
@@ -690,6 +725,9 @@ static int project_file(const char *op, const char *path,
 		res = project_locked_path(&state_lock, fd, path, 0, state);
 		log = (res == 0);
 	}
+
+	if (reset_mode)
+		fchmod_user_write(state_lock.lock_fd, &st, 0);	// best effort
 
 	close(fd);
 
