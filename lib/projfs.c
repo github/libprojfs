@@ -664,6 +664,9 @@ static int project_file(const char *op, const char *path,
 	int log = 0;
 	int fd, res;
 
+	if (state != PROJ_STATE_POPULATED && state != PROJ_STATE_MODIFIED)
+		return EINVAL;
+
 	/* Pass O_NOFOLLOW so we receive ELOOP if path is an existing symlink,
 	 * which we want to ignore.
 	 */
@@ -685,6 +688,12 @@ static int project_file(const char *op, const char *path,
 			res = EISDIR;
 		else
 			res = 0;
+		goto out_release;
+	}
+
+	// check after fstat() because we need to return EISDIR if not a file
+	if (state_lock.state == state ||
+	    state_lock.state == PROJ_STATE_MODIFIED) {
 		goto out_release;
 	}
 
