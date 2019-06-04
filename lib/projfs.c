@@ -883,6 +883,8 @@ static int projfs_op_fsync(char const *path, int datasync,
 	return res == -1 ? -errno : 0;
 }
 
+#define enforce_user_read(m) ((m) | S_IRUSR);
+
 static int projfs_op_mknod(char const *path, mode_t mode, dev_t rdev)
 {
 	int res;
@@ -893,6 +895,8 @@ static int projfs_op_mknod(char const *path, mode_t mode, dev_t rdev)
 	res = project_dir("mknod", path, 1);
 	if (res)
 		return -res;
+
+	mode = enforce_user_read(mode);
 	if (S_ISFIFO(mode))
 		res = mkfifoat(get_fuse_context_lowerdir_fd(), path, mode);
 	else
@@ -933,8 +937,9 @@ static int projfs_op_create(char const *path, mode_t mode,
 	res = project_file("create", path, PROJ_STATE_POPULATED);
 	if (res && res != ENOENT)
 		return -res;
-	fd = openat(get_fuse_context_lowerdir_fd(), path, flags, mode);
 
+	mode = enforce_user_read(mode);
+	fd = openat(get_fuse_context_lowerdir_fd(), path, flags, mode);
 	if (fd == -1)
 		return -errno;
 	fi->fh = fd;
@@ -1086,6 +1091,8 @@ static int projfs_op_mkdir(char const *path, mode_t mode)
 	res = project_dir("mkdir", path, 1);
 	if (res)
 		return -res;
+
+	mode = enforce_user_read(mode);
 	res = mkdirat(get_fuse_context_lowerdir_fd(), path, mode);
 	if (res == -1)
 		return -errno;
@@ -1260,6 +1267,9 @@ static int projfs_op_chmod(char const *path, mode_t mode,
                            struct fuse_file_info *fi)
 {
 	int res;
+
+	mode = enforce_user_read(mode);
+
 	if (fi)
 		res = fchmod(fi->fh, mode);
 	else {
@@ -1979,6 +1989,7 @@ int projfs_create_proj_dir(struct projfs *fs, const char *path, mode_t mode,
 	if (!check_safe_rel_path(path))
 		return EINVAL;
 
+	mode = enforce_user_read(mode);
 	if (mkdirat(fs->lowerdir_fd, path, mode) == -1)
 		return errno;
 
@@ -2009,6 +2020,7 @@ int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
 	if (!check_safe_rel_path(path))
 		return EINVAL;
 
+	mode = enforce_user_read(mode);
 	fd = openat(fs->lowerdir_fd, path, O_WRONLY | O_CREAT | O_EXCL, mode);
 	if (fd == -1)
 		return errno;
