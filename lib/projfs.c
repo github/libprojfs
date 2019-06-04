@@ -566,16 +566,21 @@ static char *get_path_parent(char const *path)
 /*
  * Returns 1 if file descriptor's mode was changed; 0 otherwise.
  */
-static int fchmod_user_write(int fd, struct stat *st, int set)
+static int fchmod_user_write(int fd, mode_t mode, int set)
 {
-	mode_t mode = st->st_mode;
-
-	if (geteuid() != st->st_uid || mode & S_IWUSR)
+	if (mode & S_IWUSR)
 		return 0;
 	mode = set ? (mode | S_IWUSR) : (mode & ~S_IWUSR);
 	if (fchmod(fd, mode) == -1)
 		return 0;
 	return 1;
+}
+
+static int fchmod_user_write_stat(int fd, struct stat *st, int set)
+{
+	if (st->st_uid != geteuid())
+		return 0;
+	return fchmod_user_write(fd, st->st_mode, set);
 }
 
 /**
@@ -593,8 +598,8 @@ static int project_dir(const char *op, const char *path, int parent)
 	struct proj_state_lock state_lock;
 	char *lock_path;
 	struct stat st;
-	int reset_mode;
 	int log = 0;
+	int reset_mode, lock_fd;
 	int res;
 
 	if (parent)
@@ -613,19 +618,20 @@ static int project_dir(const char *op, const char *path, int parent)
 		goto out_release;
 
 	// fsetxattr() requires S_IWUSR, so check and temporarily set if needed
-	if (fstat(state_lock.lock_fd, &st) == -1) {
+	lock_fd = state_lock.lock_fd;
+	if (fstat(lock_fd, &st) == -1) {
 		res = errno;
 		goto out_release;
 	}
-	reset_mode = fchmod_user_write(state_lock.lock_fd, &st, 1);
+	reset_mode = fchmod_user_write_stat(lock_fd, &st, 1);
 
 	// directories skip intermediate state; either empty or fully local
-	res = project_locked_path(&state_lock, state_lock.lock_fd, lock_path,
-				  1, PROJ_STATE_MODIFIED);
+	res = project_locked_path(&state_lock, lock_fd, lock_path, 1,
+				  PROJ_STATE_MODIFIED);
 	log = (res == 0);
 
 	if (reset_mode)
-		 fchmod_user_write(state_lock.lock_fd, &st, 0);
+		 fchmod_user_write_stat(lock_fd, &st, 0);
 
 out_release:
 	release_proj_state_lock(&state_lock);
@@ -662,6 +668,7 @@ static int project_file(const char *op, const char *path,
 	struct stat st;
 	int reset_mode = 0;
 	int log = 0;
+	int lock_fd;
 	int fd, res;
 
 	if (state != PROJ_STATE_POPULATED && state != PROJ_STATE_MODIFIED)
@@ -679,7 +686,8 @@ static int project_file(const char *op, const char *path,
 			return res;
 	}
 
-	if (fstat(state_lock.lock_fd, &st) == -1) {
+	lock_fd = state_lock.lock_fd;
+	if (fstat(lock_fd, &st) == -1) {
 		res = errno;
 		goto out_release;
 	}
@@ -698,11 +706,11 @@ static int project_file(const char *op, const char *path,
 	}
 
 	// TODO: for non-Linux, may need to use other technique to reopen file
-	sprintf(self_fd_path, PROC_SELF_FD_PATH_FMT, state_lock.lock_fd);
+	sprintf(self_fd_path, PROC_SELF_FD_PATH_FMT, lock_fd);
 	fd = open(self_fd_path, O_WRONLY | O_NONBLOCK);
 	if (fd == -1) {
 		res = errno;
-		reset_mode = fchmod_user_write(state_lock.lock_fd, &st, 1);
+		reset_mode = fchmod_user_write_stat(lock_fd, &st, 1);
 		if (!reset_mode)
 			goto out_release;
 		fd = open(self_fd_path, O_WRONLY | O_NONBLOCK);
@@ -724,7 +732,7 @@ static int project_file(const char *op, const char *path,
 			times[0].tv_nsec = UTIME_OMIT;
 			memcpy(&times[1], &st.st_mtim, sizeof(times[1]));
 
-			futimens(state_lock.lock_fd, times);	// best effort
+			futimens(lock_fd, times);		// best effort
 		}
 	}
 
@@ -736,7 +744,7 @@ static int project_file(const char *op, const char *path,
 	}
 
 	if (reset_mode)
-		fchmod_user_write(state_lock.lock_fd, &st, 0);	// best effort
+		fchmod_user_write_stat(lock_fd, &st, 0);	// best effort
 
 	close(fd);
 
@@ -1984,6 +1992,7 @@ static int iter_user_xattrs(int fd, struct projfs_attr *attrs,
 int projfs_create_proj_dir(struct projfs *fs, const char *path, mode_t mode,
 			   struct projfs_attr *attrs, unsigned int nattrs)
 {
+	int reset_mode;
 	int fd, res;
 
 	if (!check_safe_rel_path(path))
@@ -1998,15 +2007,18 @@ int projfs_create_proj_dir(struct projfs *fs, const char *path, mode_t mode,
 	if (fd == -1)
 		return errno;
 
+	reset_mode = fchmod_user_write(fd, mode, 1);
 	if (set_proj_state_xattr(fd, PROJ_STATE_EMPTY, XATTR_CREATE) == -1) {
 		res = errno;
-		goto out_close;
+		goto out_mode;
 	}
 
 	res = iter_user_xattrs(fd, attrs, nattrs,
 			       PROJ_XATTR_WRITE | PROJ_XATTR_CREATE);
 
-out_close:
+out_mode:
+	if (reset_mode)
+		reset_mode = fchmod_user_write(fd, mode, 0);
 	close(fd);
 	return res;
 }
@@ -2015,6 +2027,7 @@ int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
 			    mode_t mode, struct projfs_attr *attrs,
 			    unsigned int nattrs)
 {
+	int reset_mode;
 	int fd, res;
 
 	if (!check_safe_rel_path(path))
@@ -2030,14 +2043,18 @@ int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
 		goto out_close;
 	}
 
+	reset_mode = fchmod_user_write(fd, mode, 1);
 	if (set_proj_state_xattr(fd, PROJ_STATE_EMPTY, XATTR_CREATE) == -1) {
 		res = errno;
-		goto out_close;
+		goto out_mode;
 	}
 
 	res = iter_user_xattrs(fd, attrs, nattrs,
 			       PROJ_XATTR_WRITE | PROJ_XATTR_CREATE);
 
+out_mode:
+	if (reset_mode)
+		reset_mode = fchmod_user_write(fd, mode, 0);
 out_close:
 	close(fd);
 	if (res > 0)
