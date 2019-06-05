@@ -512,6 +512,22 @@ instead of in kernel mode.
 
 ![Diagram of phase 1 of the Linux implementation](images/phase1.png)
 
+One caveat with the use of a user-space filesystem is the requirement
+of user read and write file permissions in order to check and update
+the extended attributes which maintain the projection state of a given
+file or directory.
+
+Whereas an in-kernel implementation may read and set attributes in
+the `trusted.*` namespace, and do so at will, a user-space filesystem
+is restricted to the use of the `user.*` extended attribute namespace,
+and, further, can only read and change attributes as allowed by the file
+permission modes of a given inode.  Thus in order to test whether
+a given file or directory is a placeholder, the user must have read
+permission, so a write-only file mode like `0222` can not be permitted.
+And user write permissions must be assigned to any read-only files or
+directories, at least temporarily, in order to convert them from the
+placeholder state to another (i.e., hydrated or full).
+
 ### Phase 2 – Hybrid
 
 The second development phase adds an in-kernel projfs module which, at first,
