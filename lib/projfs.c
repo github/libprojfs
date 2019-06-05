@@ -713,6 +713,8 @@ static int project_file(const char *op, const char *path,
 		reset_mode = fchmod_user_write_stat(lock_fd, &st, 1);
 		if (!reset_mode)
 			goto out_release;
+		res = 0;
+
 		fd = open(self_fd_path, O_WRONLY | O_NONBLOCK);
 		if (fd == -1) {
 			res = errno;
