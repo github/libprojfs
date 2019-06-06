@@ -31,10 +31,6 @@
 
 #include "projfs_notify.h"
 
-// TODO: remove when not needed
-#define FUSE_USE_VERSION 32
-#include <fuse3/fuse_lowlevel.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif

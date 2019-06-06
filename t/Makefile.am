@@ -47,6 +47,7 @@ TESTS = t000-mirror-read.t \
 	t005-mirror-links.t \
 	t006-mirror-statfs.t \
 	t007-mirror-attrs.t \
+	t008-mirror-perms.t \
 	t100-fdtable-fill.t \
 	t200-event-ok.t \
 	t201-event-err.t \

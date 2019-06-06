@@ -43,7 +43,9 @@
 #include "fdtable.h"
 #include "projfs.h"
 
+#define FUSE_USE_VERSION 32
 #include <fuse3/fuse.h>
+#include <fuse3/fuse_lowlevel.h>
 
 // TODO: make this value configurable
 #define PROJ_WAIT_MSEC 5000
@@ -434,12 +436,11 @@ struct proj_state_lock {
  *
  * @param state_lock structure to fill out (zeroed by this function)
  * @param path path relative to lowerdir to lock and open
- * @param mode filemode to open path with; the fd populated in user will have
- *             this mode
+ * @param flags file flags with which to open the locked fd
  * @return 0 or an errno
  */
 static int acquire_proj_state_lock(struct proj_state_lock *state_lock,
-				   const char *path, mode_t mode)
+				   const char *path, int flags)
 {
 	enum proj_state state;
 	int err, wait_ms;
@@ -448,7 +449,7 @@ static int acquire_proj_state_lock(struct proj_state_lock *state_lock,
 	memset(state_lock, 0, sizeof(*state_lock));
 
 	state_lock->lock_fd = openat(get_fuse_context_lowerdir_fd(),
-				     path, mode);
+				     path, flags);
 	if (state_lock->lock_fd == -1)
 		return errno;
 
@@ -482,6 +483,7 @@ retry_flock:
 
 out_close:
 	close(state_lock->lock_fd);
+	state_lock->lock_fd = -1;
 	return err;
 }
 
@@ -505,12 +507,13 @@ static void release_proj_state_lock(struct proj_state_lock *state_lock)
  * provider succeeds, updates the projection state on the path.
  *
  * @param state_lock current projection state and lock held on inode
+ * @param fd file descriptor of inode whose projection state should be updated
  * @param path the path of the inode whose projection state should be updated
  * @param isdir 1 if the path is a directory; 0 otherwise
  * @param state projection state to which the inode should be updated
  * @return 0 or an errno
  */
-static int project_locked_path(struct proj_state_lock *state_lock,
+static int project_locked_path(struct proj_state_lock *state_lock, int fd,
 			       const char *path, int isdir,
 			       enum proj_state state)
 {
@@ -521,7 +524,7 @@ static int project_locked_path(struct proj_state_lock *state_lock,
 
 		if (isdir)
 			event_mask |= PROJFS_ONDIR;
-		res = send_proj_event(event_mask, path, state_lock->lock_fd);
+		res = send_proj_event(event_mask, path, fd);
 	} else {
 		res = send_perm_event(PROJFS_OPEN_PERM, path, NULL);
 	}
@@ -530,10 +533,9 @@ static int project_locked_path(struct proj_state_lock *state_lock,
 		return -res;
 
 	if (state == PROJ_STATE_POPULATED) {
-		res = set_proj_state_xattr(state_lock->lock_fd, state,
-					   XATTR_REPLACE);
+		res = set_proj_state_xattr(fd, state, XATTR_REPLACE);
 	} else {
-		res = set_proj_state_xattr(state_lock->lock_fd, state, 0);
+		res = set_proj_state_xattr(fd, state, 0);
 	}
 
 	if (res == -1)
@@ -561,6 +563,26 @@ static char *get_path_parent(char const *path)
 		return strndup(path, last - path);
 }
 
+/*
+ * Returns 1 if file descriptor's mode was changed; 0 otherwise.
+ */
+static int fchmod_user_write(int fd, mode_t mode, int set)
+{
+	if (mode & S_IWUSR)
+		return 0;
+	mode = set ? (mode | S_IWUSR) : (mode & ~S_IWUSR);
+	if (fchmod(fd, mode) == -1)
+		return 0;
+	return 1;
+}
+
+static int fchmod_user_write_stat(int fd, struct stat *st, int set)
+{
+	if (st->st_uid != geteuid())
+		return 0;
+	return fchmod_user_write(fd, st->st_mode, set);
+}
+
 /**
  * Project a directory. Takes the path, and a flag indicating whether the
  * directory is the parent of the path, or the path itself.
@@ -575,7 +597,9 @@ static int project_dir(const char *op, const char *path, int parent)
 {
 	struct proj_state_lock state_lock;
 	char *lock_path;
+	struct stat st;
 	int log = 0;
+	int reset_mode, lock_fd;
 	int res;
 
 	if (parent)
@@ -586,17 +610,28 @@ static int project_dir(const char *op, const char *path, int parent)
 		return errno;
 
 	res = acquire_proj_state_lock(&state_lock, lock_path,
-				      O_RDONLY | O_DIRECTORY);
+				      O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
 	if (res != 0)
 		goto out;
 
 	if (state_lock.state != PROJ_STATE_EMPTY)
 		goto out_release;
 
+	// fsetxattr() requires S_IWUSR, so check and temporarily set if needed
+	lock_fd = state_lock.lock_fd;
+	if (fstat(lock_fd, &st) == -1) {
+		res = errno;
+		goto out_release;
+	}
+	reset_mode = fchmod_user_write_stat(lock_fd, &st, 1);
+
 	// directories skip intermediate state; either empty or fully local
-	res = project_locked_path(&state_lock, lock_path, 1,
+	res = project_locked_path(&state_lock, lock_fd, lock_path, 1,
 				  PROJ_STATE_MODIFIED);
 	log = (res == 0);
+
+	if (reset_mode)
+		 fchmod_user_write_stat(lock_fd, &st, 0);
 
 out_release:
 	release_proj_state_lock(&state_lock);
@@ -613,6 +648,10 @@ out:
 	return res;
 }
 
+#define PROC_SELF_FD_PATH_FMT "/proc/self/fd/%d"
+#define MAX_PROC_SELF_FD_PATH_LEN \
+	(sizeof(PROC_SELF_FD_PATH_FMT) + INT_FMT_LEN - 3)
+
 /**
  * Project a file. Takes the lower path.
  *
@@ -624,15 +663,22 @@ out:
 static int project_file(const char *op, const char *path,
 			enum proj_state state)
 {
+	char self_fd_path[MAX_PROC_SELF_FD_PATH_LEN + 1];
 	struct proj_state_lock state_lock;
+	struct stat st;
+	int reset_mode = 0;
 	int log = 0;
-	int res;
+	int lock_fd;
+	int fd, res;
+
+	if (state != PROJ_STATE_POPULATED && state != PROJ_STATE_MODIFIED)
+		return EINVAL;
 
 	/* Pass O_NOFOLLOW so we receive ELOOP if path is an existing symlink,
-	 * which we want to ignore, and request a write mode so we receive
-	 * EISDIR if path is a directory.
+	 * which we want to ignore.
 	 */
-	res = acquire_proj_state_lock(&state_lock, path, O_RDWR | O_NOFOLLOW);
+	res = acquire_proj_state_lock(&state_lock, path,
+				      O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
 	if (res != 0) {
 		if (res == ELOOP)
 			return 0;
@@ -640,34 +686,71 @@ static int project_file(const char *op, const char *path,
 			return res;
 	}
 
+	lock_fd = state_lock.lock_fd;
+	if (fstat(lock_fd, &st) == -1) {
+		res = errno;
+		goto out_release;
+	}
+	else if (!S_ISREG(st.st_mode)) {
+		if (S_ISDIR(st.st_mode))
+			res = EISDIR;
+		else
+			res = 0;
+		goto out_release;
+	}
+
+	// check after fstat() because we need to return EISDIR if not a file
+	if (state_lock.state == state ||
+	    state_lock.state == PROJ_STATE_MODIFIED) {
+		goto out_release;
+	}
+
+	// TODO: for non-Linux, may need to use other technique to reopen file
+	sprintf(self_fd_path, PROC_SELF_FD_PATH_FMT, lock_fd);
+	fd = open(self_fd_path, O_WRONLY | O_NONBLOCK);
+	if (fd == -1) {
+		res = errno;
+		reset_mode = fchmod_user_write_stat(lock_fd, &st, 1);
+		if (!reset_mode)
+			goto out_release;
+		res = 0;
+
+		fd = open(self_fd_path, O_WRONLY | O_NONBLOCK);
+		if (fd == -1) {
+			res = errno;
+			goto out_release;
+		}
+	}
+
 	// hydrate empty placeholder file
 	if (state_lock.state == PROJ_STATE_EMPTY) {
-		struct stat st;
-		int reset_mtime;
-
-		reset_mtime = (fstat(state_lock.lock_fd, &st) == 0);
-
-		res = project_locked_path(&state_lock, path, 0,
+		res = project_locked_path(&state_lock, fd, path, 0,
 					  PROJ_STATE_POPULATED);
 		log = (res == 0);
 
-		if (res == 0 && reset_mtime) {
+		if (res == 0) {
 			struct timespec times[2];
 
 			times[0].tv_nsec = UTIME_OMIT;
 			memcpy(&times[1], &st.st_mtim, sizeof(times[1]));
 
-			futimens(state_lock.lock_fd, times);	// best effort
+			futimens(lock_fd, times);		// best effort
 		}
 	}
 
 	// if requested, convert hydrated file to fully local, modified file
 	if (res == 0 && state_lock.state == PROJ_STATE_POPULATED &&
 	    state == PROJ_STATE_MODIFIED) {
-		res = project_locked_path(&state_lock, path, 0, state);
+		res = project_locked_path(&state_lock, fd, path, 0, state);
 		log = (res == 0);
 	}
 
+	if (reset_mode)
+		fchmod_user_write_stat(lock_fd, &st, 0);	// best effort
+
+	close(fd);
+
+out_release:
 	release_proj_state_lock(&state_lock);
 
 	if (log) {
@@ -810,6 +893,8 @@ static int projfs_op_fsync(char const *path, int datasync,
 	return res == -1 ? -errno : 0;
 }
 
+#define enforce_user_read(m) ((m) | S_IRUSR);
+
 static int projfs_op_mknod(char const *path, mode_t mode, dev_t rdev)
 {
 	int res;
@@ -820,6 +905,8 @@ static int projfs_op_mknod(char const *path, mode_t mode, dev_t rdev)
 	res = project_dir("mknod", path, 1);
 	if (res)
 		return -res;
+
+	mode = enforce_user_read(mode);
 	if (S_ISFIFO(mode))
 		res = mkfifoat(get_fuse_context_lowerdir_fd(), path, mode);
 	else
@@ -860,8 +947,9 @@ static int projfs_op_create(char const *path, mode_t mode,
 	res = project_file("create", path, PROJ_STATE_POPULATED);
 	if (res && res != ENOENT)
 		return -res;
-	fd = openat(get_fuse_context_lowerdir_fd(), path, flags, mode);
 
+	mode = enforce_user_read(mode);
+	fd = openat(get_fuse_context_lowerdir_fd(), path, flags, mode);
 	if (fd == -1)
 		return -errno;
 	fi->fh = fd;
@@ -1013,6 +1101,8 @@ static int projfs_op_mkdir(char const *path, mode_t mode)
 	res = project_dir("mkdir", path, 1);
 	if (res)
 		return -res;
+
+	mode = enforce_user_read(mode);
 	res = mkdirat(get_fuse_context_lowerdir_fd(), path, mode);
 	if (res == -1)
 		return -errno;
@@ -1187,6 +1277,9 @@ static int projfs_op_chmod(char const *path, mode_t mode,
                            struct fuse_file_info *fi)
 {
 	int res;
+
+	mode = enforce_user_read(mode);
+
 	if (fi)
 		res = fchmod(fi->fh, mode);
 	else {
@@ -1636,7 +1729,8 @@ static void *projfs_loop(void *data)
 	/* open lower directory file descriptor to resolve relative paths
 	 * in file ops
 	 */
-	fs->lowerdir_fd = open(fs->lowerdir, O_DIRECTORY | O_NOFOLLOW);
+	fs->lowerdir_fd = open(fs->lowerdir,
+			       O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
 	if (fs->lowerdir_fd == -1) {
 		log_printf(fs, LOG_STDERR_FALLBACK,
 			   "failed to open lowerdir: %s: %s",
@@ -1900,27 +1994,33 @@ static int iter_user_xattrs(int fd, struct projfs_attr *attrs,
 int projfs_create_proj_dir(struct projfs *fs, const char *path, mode_t mode,
 			   struct projfs_attr *attrs, unsigned int nattrs)
 {
+	int reset_mode;
 	int fd, res;
 
 	if (!check_safe_rel_path(path))
 		return EINVAL;
 
+	mode = enforce_user_read(mode);
 	if (mkdirat(fs->lowerdir_fd, path, mode) == -1)
 		return errno;
 
-	fd = openat(fs->lowerdir_fd, path, O_RDONLY);
+	fd = openat(fs->lowerdir_fd, path,
+		    O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
 	if (fd == -1)
 		return errno;
 
+	reset_mode = fchmod_user_write(fd, mode, 1);
 	if (set_proj_state_xattr(fd, PROJ_STATE_EMPTY, XATTR_CREATE) == -1) {
 		res = errno;
-		goto out_close;
+		goto out_mode;
 	}
 
 	res = iter_user_xattrs(fd, attrs, nattrs,
 			       PROJ_XATTR_WRITE | PROJ_XATTR_CREATE);
 
-out_close:
+out_mode:
+	if (reset_mode)
+		reset_mode = fchmod_user_write(fd, mode, 0);
 	close(fd);
 	return res;
 }
@@ -1929,11 +2029,13 @@ int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
 			    mode_t mode, struct projfs_attr *attrs,
 			    unsigned int nattrs)
 {
+	int reset_mode;
 	int fd, res;
 
 	if (!check_safe_rel_path(path))
 		return EINVAL;
 
+	mode = enforce_user_read(mode);
 	fd = openat(fs->lowerdir_fd, path, O_WRONLY | O_CREAT | O_EXCL, mode);
 	if (fd == -1)
 		return errno;
@@ -1943,14 +2045,18 @@ int projfs_create_proj_file(struct projfs *fs, const char *path, off_t size,
 		goto out_close;
 	}
 
+	reset_mode = fchmod_user_write(fd, mode, 1);
 	if (set_proj_state_xattr(fd, PROJ_STATE_EMPTY, XATTR_CREATE) == -1) {
 		res = errno;
-		goto out_close;
+		goto out_mode;
 	}
 
 	res = iter_user_xattrs(fd, attrs, nattrs,
 			       PROJ_XATTR_WRITE | PROJ_XATTR_CREATE);
 
+out_mode:
+	if (reset_mode)
+		reset_mode = fchmod_user_write(fd, mode, 0);
 out_close:
 	close(fd);
 	if (res > 0)
@@ -1965,7 +2071,7 @@ int projfs_create_proj_symlink(struct projfs *fs, const char *path,
 
 	if (!check_safe_rel_path(path))
 		return EINVAL;
-	
+
 	res = symlinkat(target, fs->lowerdir_fd, path);
 	if (res == -1)
 		return errno;
@@ -1986,7 +2092,7 @@ static int iter_attrs(struct projfs *fs, const char *path,
 	if (nattrs == 0)
 		return 0;
 
-	fd = openat(fs->lowerdir_fd, path, O_RDONLY);
+	fd = openat(fs->lowerdir_fd, path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
 	if (fd == -1)
 		return errno;
 
