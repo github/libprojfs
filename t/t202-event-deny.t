@@ -40,36 +40,36 @@ test_expect_success 'test event handler on file creation' '
 	test_path_is_file target/f1.txt
 '
 
-projfs_event_printf notify rename_dir d1 d1a
-test_expect_success 'test event handler on directory rename' '
-	projfs_event_exec mv target/d1 target/d1a &&
-	test_path_is_missing target/d1 &&
-	test_path_is_dir target/d1a
+projfs_event_printf perm rename_dir d1 d1a
+test_expect_success 'test permission request denied on directory rename' '
+	test_must_fail projfs_event_exec mv target/d1 target/d1a &&
+	test_path_is_missing target/d1a &&
+	test_path_is_dir target/d1
 '
 
-projfs_event_printf notify rename_file f1.txt f1a.txt
-test_expect_success 'test event handler on file rename' '
-	projfs_event_exec mv target/f1.txt target/f1a.txt &&
-	test_path_is_missing target/f1.txt &&
-	test_path_is_file target/f1a.txt
+projfs_event_printf perm rename_file f1.txt f1a.txt
+test_expect_success 'test permission request denied on file rename' '
+	test_must_fail projfs_event_exec mv target/f1.txt target/f1a.txt &&
+	test_path_is_missing target/f1a.txt &&
+	test_path_is_file target/f1.txt
 '
 
-projfs_event_printf notify link_file f1a.txt l1a.txt
+projfs_event_printf notify link_file f1.txt l1.txt
 test_expect_success 'test event handler on file hard link' '
-	projfs_event_exec ln target/f1a.txt target/l1a.txt &&
-	test_path_is_file target/l1a.txt
+	projfs_event_exec ln target/f1.txt target/l1.txt &&
+	test_path_is_file target/l1.txt
 '
 
-projfs_event_printf perm delete_file f1a.txt
+projfs_event_printf perm delete_file f1.txt
 test_expect_success 'test permission request denied on file deletion' '
-	test_must_fail projfs_event_exec rm target/f1a.txt &&
-	test_path_is_file target/f1a.txt
+	test_must_fail projfs_event_exec rm target/f1.txt &&
+	test_path_is_file target/f1.txt
 '
 
-projfs_event_printf perm delete_dir d1a
+projfs_event_printf perm delete_dir d1
 test_expect_success 'test permission request denied on directory deletion' '
-	test_must_fail projfs_event_exec rmdir target/d1a &&
-	test_path_is_dir target/d1a
+	test_must_fail projfs_event_exec rmdir target/d1 &&
+	test_path_is_dir target/d1
 '
 
 rm retval

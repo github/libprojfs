@@ -40,6 +40,7 @@ test_expect_success 'test event handler on file creation' '
 	test_path_is_file target/f1.txt
 '
 
+projfs_event_printf perm rename_dir d1 d1a
 projfs_event_printf notify rename_dir d1 d1a
 test_expect_success 'test event handler on directory rename' '
 	projfs_event_exec mv target/d1 target/d1a &&
@@ -47,6 +48,7 @@ test_expect_success 'test event handler on directory rename' '
 	test_path_is_dir target/d1a
 '
 
+projfs_event_printf perm rename_file f1.txt f1a.txt
 projfs_event_printf notify rename_file f1.txt f1a.txt
 test_expect_success 'test event handler on file rename' '
 	projfs_event_exec mv target/f1.txt target/f1a.txt &&
@@ -61,12 +63,14 @@ test_expect_success 'test event handler on file hard link' '
 '
 
 projfs_event_printf perm delete_file f1a.txt
+projfs_event_printf notify delete_file f1a.txt
 test_expect_success 'test permission request allowed on file deletion' '
 	projfs_event_exec rm target/f1a.txt &&
 	test_path_is_missing target/f1a.txt
 '
 
 projfs_event_printf perm delete_dir d1a
+projfs_event_printf notify delete_dir d1a
 test_expect_success 'test permission request allowed on directory deletion' '
 	projfs_event_exec rmdir target/d1a &&
 	test_path_is_missing target/d1a

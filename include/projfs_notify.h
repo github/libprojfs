@@ -39,8 +39,11 @@ extern "C" {
 #define PROJFS_CLOSE_WRITE	0x00000008	/* Writable file closed */
 #define PROJFS_MOVE		0x000000C0	/* File/dir moved (TO+FROM) */
 #define PROJFS_CREATE		0x00000100	/* File/dir created */
+#define PROJFS_DELETE		0x00000200	/* File/dir deleted */
 #define PROJFS_OPEN_PERM	0x00010000	/* File open perm (wr only) */
-#define PROJFS_DELETE_PERM	himask(0x0001)	/* Delete permission */
+						/* Create perm (future) */
+#define PROJFS_DELETE_PERM	himask(0x0002)	/* Delete permission */
+#define PROJFS_MOVE_PERM	himask(0x0004)	/* Move permission */
 
 /** Filesystem event flags */
 #define PROJFS_ONDIR		0x40000000	/* Event occurred on dir */
@@ -78,6 +81,7 @@ extern "C" {
 #if (PROJFS_CLOSE_WRITE	!= IN_CLOSE_WRITE ||	\
      PROJFS_MOVE	!= IN_MOVE ||	\
      PROJFS_CREATE	!= IN_CREATE ||	\
+     PROJFS_DELETE	!= IN_DELETE ||	\
      PROJFS_ONDIR	!= IN_ISDIR)
 #error "Projfs notification API out of sync with sys/inotify.h API"
 #endif

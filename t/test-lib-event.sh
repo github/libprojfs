@@ -23,15 +23,21 @@ event_msg_perm="test permission request for"
 
 event_msg_err="event handler failed"
 
-event_rename_dir="0x0000-400000c0"
-event_create_dir="0x0000-40000100"
-event_delete_dir="0x0001-40000000"
+event_notify_close_file="0x0000-00000008"
+event_notify_rename_file="0x0000-000000c0"
+event_notify_create_file="0x0000-00000100"
+event_notify_delete_file="0x0000-00000200"
+event_notify_link_file="0x1000-00000100"
 
-event_close_file="0x0000-00000008"
-event_rename_file="0x0000-000000c0"
-event_create_file="0x0000-00000100"
-event_delete_file="0x0001-00000000"
-event_link_file="0x1000-00000100"
+event_notify_rename_dir="0x0000-400000c0"
+event_notify_create_dir="0x0000-40000100"
+event_notify_delete_dir="0x0000-40000200"
+
+event_perm_delete_file="0x0002-00000000"
+event_perm_rename_file="0x0004-00000000"
+
+event_perm_delete_dir="0x0002-40000000"
+event_perm_rename_dir="0x0004-40000000"
 
 NL=$(printf "\nx")
 NL="${NL%%x}"
@@ -59,7 +65,7 @@ projfs_event_printf () {
 	fi
 
 	eval msg=\$event_msg_"$1"
-	eval code=\$event_"$2"
+	eval code=\$event_"$1"_"$2"
 
 	if test -z "$4"
 	then
