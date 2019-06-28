@@ -1090,7 +1090,12 @@ static int projfs_op_unlink(char const *path)
 		return -res;
 
 	res = unlinkat(get_fuse_context_lowerdir_fd(), path, 0);
-	return res == -1 ? -errno : 0;
+	if (res == -1)
+		return -errno;
+
+	// do not report event handler errors after successful unlink op
+	(void)send_notify_event(PROJFS_DELETE, 0, path, NULL);
+	return 0;
 }
 
 static int projfs_op_mkdir(char const *path, mode_t mode)
@@ -1125,13 +1130,18 @@ static int projfs_op_rmdir(char const *path)
 		return -res;
 
 	res = unlinkat(get_fuse_context_lowerdir_fd(), path, AT_REMOVEDIR);
-	return res == -1 ? -errno : 0;
+	if (res == -1)
+		return -errno;
+
+	// do not report event handler errors after successful rmdir op
+	(void)send_notify_event(PROJFS_DELETE | PROJFS_ONDIR, 0, path, NULL);
+	return 0;
 }
 
 static int projfs_op_rename(char const *src, char const *dst,
                             unsigned int flags)
 {
-	uint64_t mask = PROJFS_MOVE;
+	uint64_t dir_mask = 0;
 	int lowerdir_fd;
 	int res;
 
@@ -1142,7 +1152,7 @@ static int projfs_op_rename(char const *src, char const *dst,
 	// always convert to fully local file before renaming
 	res = project_file("rename", src, PROJ_STATE_MODIFIED);
 	if (res == EISDIR)
-		mask |= PROJFS_ONDIR;
+		dir_mask = PROJFS_ONDIR;
 	else if (res)
 		return -res;
 
@@ -1150,6 +1160,10 @@ static int projfs_op_rename(char const *src, char const *dst,
 	res = project_dir("rename2", dst, 1);
 	if (res)
 		return -res;
+
+	res = send_perm_event(PROJFS_MOVE_PERM | dir_mask, src, dst);
+	if (res < 0)
+		return res;
 
 	// TODO: for non Linux, use renameat(); fail if flags != 0
 	lowerdir_fd = get_fuse_context_lowerdir_fd();
@@ -1159,7 +1173,7 @@ static int projfs_op_rename(char const *src, char const *dst,
 		return -errno;
 
 	// do not report event handler errors after successful rename op
-	(void)send_notify_event(mask, 0, src, dst);
+	(void)send_notify_event(PROJFS_MOVE | dir_mask, 0, src, dst);
 	return 0;
 }
 
